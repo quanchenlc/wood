@@ -240,6 +240,13 @@ function exportExternalGltf(destAssets, glbName, outStem) {
 
   // 源 GLB 已由 .gltf 替代，删掉减小分包（保留 data/anim 等无贴图 GLB）
   rmSync(glb, { force: true });
+  // 校验：贴图必须是外部 uri，禁止再嵌进 bufferView（否则真机会走 Blob）
+  const finalGltf = JSON.parse(readFileSync(join(destAssets, `${outStem}.gltf`), "utf8"));
+  for (const img of finalGltf.images || []) {
+    if (!img.uri || img.bufferView != null) {
+      throw new Error(`[build] ${outStem}.gltf image must be external uri, got ${JSON.stringify(img)}`);
+    }
+  }
   console.log(`[build] exported ${outStem}.gltf (+ external jpg/bin)`);
 }
 

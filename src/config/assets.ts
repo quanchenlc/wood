@@ -6,12 +6,18 @@
  * 路径用 getter 惰性求值，方便启动时先 loadSubpackage / 设远程根再读。
  */
 
-import { assetUrl, isMinigame } from "../platform/env";
+import { assetUrl } from "../platform/env";
 
 const href = (path: string) => assetUrl(path);
 
 const range = (prefix: string, n: number) =>
   Array.from({ length: n }, (_, i) => `${prefix}${i + 1}`);
+
+/**
+ * 仅看构建期 MODE：esbuild 小游戏打包 define 为 "minigame"，
+ * 编译期折叠后包里只剩 .gltf 路径，不会再去加载嵌图 GLB。
+ */
+const USE_EXTERNAL_GLTF = import.meta.env.MODE === "minigame";
 
 export const TEXTURES = {
   get barkColor() {
@@ -36,8 +42,8 @@ export const TEXTURES = {
 
 export const MODELS = {
   get stump() {
-    // 小游戏：.gltf + 分包内独立 jpg，避免 GLB 嵌图走 Blob/btoa
-    return isMinigame()
+    // 小游戏：.gltf + 分包内独立 jpg（≤1024），禁止嵌图 GLB / Blob / btoa
+    return USE_EXTERNAL_GLTF
       ? href("/assets/stump.gltf")
       : href("/assets/stump_v02_mesh_warm_ktx2_2048.glb");
   },
@@ -45,7 +51,7 @@ export const MODELS = {
     return href("/assets/stump_v02_data.glb");
   },
   get axe() {
-    return isMinigame()
+    return USE_EXTERNAL_GLTF
       ? href("/assets/axe.gltf")
       : href("/assets/ax_v01_reduced_compressed.glb");
   },

@@ -15,6 +15,7 @@ let ktx2: KTX2Loader | null = null;
  */
 export function createGltfLoader(renderer: THREE.WebGLRenderer): GLTFLoader {
   if (isMinigame()) {
+    // 小游戏：外置 jpg 用 TextureLoader + Image.src；勿走 ImageBitmapLoader(Blob)
     return new GLTFLoader();
   }
 

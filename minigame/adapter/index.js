@@ -52,6 +52,16 @@ function installCommonPolyfills(canvas) {
     /* ignore */
   }
   injectGlobals({ Worker: undefined });
+
+  // 禁用 createImageBitmap：three ImageBitmapLoader 会 fetch→Blob→createObjectURL，
+  // 真机大贴图极易把内存打到数百 MB 并卡在「加载 100%」。改走 Image.src 路径加载。
+  try {
+    delete globalThis.createImageBitmap;
+  } catch {
+    /* ignore */
+  }
+  injectGlobals({ createImageBitmap: undefined });
+
   installBlobPolyfill();
 
   injectGlobals({

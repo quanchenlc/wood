@@ -1,6 +1,6 @@
 {
   "appid": "wx3371f99b1b0e73d1",
-  "mainPackageBytes": 1099192,
+  "mainPackageBytes": 1100711,
   "mainPackage": "1.05 MB",
   "mainUnder4MB": true,
   "assetsSubpackageBytes": 4114372,
@@ -32,11 +32,11 @@
       "size": "0.00 MB"
     },
     {
-      "file": "adapter/assets-loader.js",
+      "file": "adapter/blob.js",
       "size": "0.00 MB"
     },
     {
-      "file": "adapter/blob.js",
+      "file": "adapter/assets-loader.js",
       "size": "0.00 MB"
     }
   ]

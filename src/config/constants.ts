@@ -11,7 +11,11 @@ export const INCH = 0.0254;
 export const FOOT = 0.3048;
 
 /** 小游戏 UA 不含 Mobi，一律按移动端档；Web 仍靠 UA 判断 */
-export const IS_MINIGAME = isMinigame();
+export const IS_MINIGAME =
+  (typeof import.meta !== "undefined" &&
+    import.meta.env &&
+    import.meta.env.MODE === "minigame") ||
+  isMinigame();
 export const IS_MOBILE =
   IS_MINIGAME || /Mobi|Android|iPhone|iPad|WeChat MiniGame/i.test(navigator.userAgent);
 
