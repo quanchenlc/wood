@@ -9,7 +9,7 @@ let ktx2: KTX2Loader | null = null;
 /**
  * GLTF 加载器。
  *
- * 小游戏：树桩等已离线解成 JPG 嵌进 GLB，不挂 KTX2Loader
+ * 小游戏：树桩/斧头导出为 .gltf + 独立 jpg，不挂 KTX2Loader
  * （真机无 Blob/Worker；esbuild 用 stubs/KTX2Loader.js 替换本 import）。
  * Web：KTX2Loader + basis transcoder。
  */

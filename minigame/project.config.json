@@ -29,6 +29,14 @@
       {
         "type": "suffix",
         "value": ".map"
+      },
+      {
+        "type": "suffix",
+        "value": ".cjs"
+      },
+      {
+        "type": "file",
+        "value": "app.config.cjs"
       }
     ]
   },

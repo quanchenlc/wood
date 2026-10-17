@@ -1,8 +1,9 @@
-const config = require("../app.config.cjs");
+const config = require("../app.config.js");
 
 /**
  * 加载素材分包，并按需把大文件从远程拉到本地用户目录。
  * 返回最终素材根路径（末尾带 /），供 __FIREWOOD_ASSET_BASE__ 使用。
+ * 远程下载完成后返回本地缓存路径，不再返回 CDN 地址。
  */
 function loadSubpackage(name) {
   return new Promise((resolve, reject) => {
@@ -40,40 +41,51 @@ function downloadRemoteFile(url, filePath) {
   });
 }
 
+function ensureDir(fs, dir) {
+  try {
+    fs.accessSync(dir);
+  } catch {
+    try {
+      fs.mkdirSync(dir, true);
+    } catch {
+      try {
+        fs.mkdirSync(dir);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
+
 async function ensureRemoteAssets(localBase) {
   const remoteBase = (config.REMOTE_ASSET_BASE || "").trim();
   if (!remoteBase) return localBase;
 
   const files = config.REMOTE_ASSET_FILES || [];
-  if (!files.length) return remoteBase.endsWith("/") ? remoteBase : `${remoteBase}/`;
+  if (!files.length) {
+    // 配置了远程根但没有文件列表：仍返回本地分包根（不直接指 CDN）
+    return localBase;
+  }
 
-  // 下载到用户目录后，素材根改为用户目录下的镜像
   const userRoot =
     typeof wx !== "undefined" && wx.env && wx.env.USER_DATA_PATH
       ? `${wx.env.USER_DATA_PATH}/firewood_assets`
       : null;
 
   if (!userRoot) {
-    // 无用户目录时直接用远程 URL 作为根（XHR/fetch 走 http）
-    return remoteBase.endsWith("/") ? remoteBase : `${remoteBase}/`;
+    console.warn("[assets] USER_DATA_PATH missing; keep local subpackage base");
+    return localBase;
   }
 
   const fs = wx.getFileSystemManager();
-  try {
-    fs.accessSync(userRoot);
-  } catch {
-    fs.mkdirSync(userRoot, true);
-  }
+  ensureDir(fs, userRoot);
 
   for (const rel of files) {
-    const url = `${remoteBase.replace(/\/$/, "")}/${rel.replace(/^\//, "")}`;
-    const dest = `${userRoot}/${rel.replace(/^\//, "")}`;
+    const clean = rel.replace(/^\//, "");
+    const url = `${remoteBase.replace(/\/$/, "")}/${clean}`;
+    const dest = `${userRoot}/${clean}`;
     const dir = dest.replace(/\/[^/]+$/, "");
-    try {
-      fs.accessSync(dir);
-    } catch {
-      fs.mkdirSync(dir, true);
-    }
+    ensureDir(fs, dir);
     let exists = false;
     try {
       fs.accessSync(dest);
@@ -82,14 +94,13 @@ async function ensureRemoteAssets(localBase) {
       exists = false;
     }
     if (!exists) {
-      console.log("[assets] downloading", url);
+      console.log("[assets] downloading", url, "→", dest);
       await downloadRemoteFile(url, dest);
     }
   }
 
-  // 远程只覆盖大文件；其余仍走分包。返回分包根，大文件路径由调用方按需改写。
-  // 简化：若配置了远程，把整个根指到远程（纹理/音频也走 CDN）。
-  return remoteBase.endsWith("/") ? remoteBase : `${remoteBase}/`;
+  // 关键：返回本地用户目录镜像根，loader 用本地路径读缓存文件
+  return userRoot.endsWith("/") ? userRoot : `${userRoot}/`;
 }
 
 async function prepareAssets() {

@@ -6,7 +6,7 @@
  * 路径用 getter 惰性求值，方便启动时先 loadSubpackage / 设远程根再读。
  */
 
-import { assetUrl } from "../platform/env";
+import { assetUrl, isMinigame } from "../platform/env";
 
 const href = (path: string) => assetUrl(path);
 
@@ -36,13 +36,18 @@ export const TEXTURES = {
 
 export const MODELS = {
   get stump() {
-    return href("/assets/stump_v02_mesh_warm_ktx2_2048.glb");
+    // 小游戏：.gltf + 分包内独立 jpg，避免 GLB 嵌图走 Blob/btoa
+    return isMinigame()
+      ? href("/assets/stump.gltf")
+      : href("/assets/stump_v02_mesh_warm_ktx2_2048.glb");
   },
   get stumpData() {
     return href("/assets/stump_v02_data.glb");
   },
   get axe() {
-    return href("/assets/ax_v01_reduced_compressed.glb");
+    return isMinigame()
+      ? href("/assets/axe.gltf")
+      : href("/assets/ax_v01_reduced_compressed.glb");
   },
   get axeAnimation() {
     return href("/assets/ax_anim_v03_glb.glb");

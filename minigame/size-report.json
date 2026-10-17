@@ -1,10 +1,10 @@
 {
   "appid": "wx3371f99b1b0e73d1",
-  "mainPackageBytes": 1088592,
-  "mainPackage": "1.04 MB",
+  "mainPackageBytes": 1099192,
+  "mainPackage": "1.05 MB",
   "mainUnder4MB": true,
-  "assetsSubpackageBytes": 5678956,
-  "assetsSubpackage": "5.42 MB",
+  "assetsSubpackageBytes": 4114372,
+  "assetsSubpackage": "3.92 MB",
   "bundle": "1.00 MB",
   "largestMain": [
     {
@@ -12,19 +12,23 @@
       "size": "1.00 MB"
     },
     {
+      "file": "adapter/index.js",
+      "size": "0.01 MB"
+    },
+    {
       "file": "adapter/fetch.js",
-      "size": "0.00 MB"
+      "size": "0.01 MB"
     },
     {
       "file": "adapter/document.js",
       "size": "0.00 MB"
     },
     {
-      "file": "adapter/xhr.js",
+      "file": "adapter/audio.js",
       "size": "0.00 MB"
     },
     {
-      "file": "adapter/index.js",
+      "file": "adapter/xhr.js",
       "size": "0.00 MB"
     },
     {
@@ -33,10 +37,6 @@
     },
     {
       "file": "adapter/blob.js",
-      "size": "0.00 MB"
-    },
-    {
-      "file": "adapter/window.js",
       "size": "0.00 MB"
     }
   ]

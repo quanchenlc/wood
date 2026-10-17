@@ -20,19 +20,28 @@ const MIME = {
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".glb": "model/gltf-binary",
+  ".gltf": "model/gltf+json",
+  ".bin": "application/octet-stream",
   ".wasm": "application/wasm",
   ".mp3": "audio/mpeg",
   ".map": "application/json",
   ".ktx2": "application/octet-stream",
+  ".ico": "image/x-icon",
 };
 
 const server = createServer((req, res) => {
   const url = new URL(req.url || "/", `http://127.0.0.1:${PORT}`);
   let pathname = decodeURIComponent(url.pathname);
   if (pathname === "/") pathname = "/harness/index.html";
+  if (pathname === "/favicon.ico") {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
 
   const file = normalize(join(ROOT, pathname.replace(/^\//, "")));
   if (!file.startsWith(ROOT) || !existsSync(file) || !statSync(file).isFile()) {
+    console.warn("[harness-404]", pathname);
     res.writeHead(404);
     res.end("not found " + pathname);
     return;

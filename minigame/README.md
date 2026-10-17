@@ -5,9 +5,11 @@
 
 ## 换 AppID
 
-只改 [`app.config.cjs`](./app.config.cjs) 里的 `WECHAT_APPID`，然后重新执行构建；`project.config.json` 会自动同步。当前为正式号 `wx3371f99b1b0e73d1`。
+只改 [`app.config.cjs`](./app.config.cjs) 里的 `WECHAT_APPID`，然后重新执行构建。构建会：
+- 同步 `project.config.json`
+- **生成**运行时用的 `app.config.js`（微信只认 `.js`，不要在适配层 `require('*.cjs')`）
 
-可选：设置 `REMOTE_ASSET_BASE` 把大 GLB 等放到 CDN。
+当前为正式号 `wx3371f99b1b0e73d1`。可选：设置 `REMOTE_ASSET_BASE` 把大文件放到 CDN（下载后返回本地缓存路径）。
 
 ## 构建
 

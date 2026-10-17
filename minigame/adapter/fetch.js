@@ -113,17 +113,31 @@ function fsRead(url) {
   });
 }
 
+function decodeBase64(payload) {
+  // 不依赖全局 atob（harness / 真机都可能缺失）
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  const clean = String(payload).replace(/[^A-Za-z0-9+/]/g, "");
+  const out = [];
+  for (let i = 0; i < clean.length; i += 4) {
+    const a = chars.indexOf(clean[i]);
+    const b = chars.indexOf(clean[i + 1]);
+    const c = chars.indexOf(clean[i + 2]);
+    const d = chars.indexOf(clean[i + 3]);
+    out.push((a << 2) | (b >> 4));
+    if (clean[i + 2] && clean[i + 2] !== "=") out.push(((b & 15) << 4) | (c >> 2));
+    if (clean[i + 3] && clean[i + 3] !== "=") out.push(((c & 3) << 6) | d);
+  }
+  return new Uint8Array(out);
+}
+
 function decodeDataUrl(url) {
   const m = String(url).match(/^data:([^;,]+)?((?:;[^;,]+)*)?(;base64)?,([\s\S]*)$/);
   if (!m) return Promise.reject(new TypeError("invalid data URL"));
-  const mime = m[1] || "application/octet-stream";
   const isB64 = Boolean(m[3]);
   const payload = m[4] || "";
   let bytes;
   if (isB64) {
-    const bin = atob(payload);
-    bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    bytes = decodeBase64(payload);
   } else {
     bytes = new TextEncoder().encode(decodeURIComponent(payload));
   }

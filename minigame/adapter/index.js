@@ -9,8 +9,14 @@ const { createXMLHttpRequest } = require("./xhr");
 const { installTouchBridge } = require("./touch");
 const { createFetch } = require("./fetch");
 const { createRafPair } = require("./raf");
-const { installAudioContext, createInnerAudio } = require("./audio");
+const {
+  installAudioContext,
+  createInnerAudio,
+  releaseInner,
+  installAudioLifecycle,
+} = require("./audio");
 const { installBlobPolyfill } = require("./blob");
+const { installTextCodecs } = require("./text");
 
 function injectGlobals(map) {
   for (const [k, v] of Object.entries(map)) {
@@ -32,12 +38,14 @@ function injectGlobals(map) {
 }
 
 function installCommonPolyfills(canvas) {
+  installTextCodecs();
+
   const { requestAnimationFrame: raf, cancelAnimationFrame: caf } = createRafPair(canvas);
   const fetchFn = createFetch();
   const AudioCtor = installAudioContext();
   const XHR = createXMLHttpRequest();
 
-  // Worker 保持缺失（KTX2 已去掉）。Blob 用最小 polyfill 供 GLTF 嵌图。
+  // Worker 保持缺失（KTX2 已去掉）。Blob 用文件路径 polyfill（无 btoa）。
   try {
     delete globalThis.Worker;
   } catch {
@@ -57,6 +65,12 @@ function installCommonPolyfills(canvas) {
   });
 
   globalThis.__wxCreateInnerAudio = createInnerAudio;
+  globalThis.__wxReleaseInnerAudio = releaseInner;
+  installAudioLifecycle(() => {
+    const get = globalThis.__FIREWOOD_AUDIO_MANAGERS__;
+    return typeof get === "function" ? get() : [];
+  });
+
   globalThis.__FIREWOOD_ADAPTER_INSTALLED__ = true;
   globalThis.__FIREWOOD_RUNTIME__ = "minigame";
 }
@@ -78,6 +92,39 @@ function installHarnessSoft(canvas) {
   } catch {
     /* ignore */
   }
+
+  // harness 也走 wx 触摸 → pointer，禁止依赖浏览器原生点击旁路
+  const winProxy = {
+    dispatchEvent(event) {
+      try {
+        if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+          let pe = event;
+          if (typeof PointerEvent === "function" && event && event.type) {
+            try {
+              pe = new PointerEvent(event.type, {
+                bubbles: true,
+                cancelable: true,
+                clientX: event.clientX,
+                clientY: event.clientY,
+                pageX: event.pageX,
+                pageY: event.pageY,
+                pointerId: event.pointerId || 1,
+                pointerType: "touch",
+                buttons: event.buttons,
+                button: event.button || 0,
+              });
+            } catch {
+              pe = event;
+            }
+          }
+          window.dispatchEvent(pe);
+        }
+      } catch {
+        /* ignore */
+      }
+    },
+  };
+  installTouchBridge(canvas, winProxy);
 
   return canvas;
 }

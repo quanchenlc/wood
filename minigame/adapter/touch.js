@@ -9,6 +9,17 @@ function installTouchBridge(canvas, win) {
   const origAdd = canvas.addEventListener ? canvas.addEventListener.bind(canvas) : null;
   const origRemove = canvas.removeEventListener ? canvas.removeEventListener.bind(canvas) : null;
 
+  // 仿真触摸没有浏览器 Pointer 实体，setPointerCapture 会抛错并卡住 pointerId
+  const safeCapture = () => {};
+  const safeHasCapture = () => false;
+  try {
+    canvas.setPointerCapture = safeCapture;
+    canvas.releasePointerCapture = safeCapture;
+    canvas.hasPointerCapture = safeHasCapture;
+  } catch {
+    /* ignore */
+  }
+
   canvas.addEventListener = (type, fn) => {
     if (String(type).startsWith("pointer") || String(type).startsWith("touch")) {
       canvasListeners.on(type, fn);

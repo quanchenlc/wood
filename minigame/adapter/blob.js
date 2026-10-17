@@ -1,30 +1,50 @@
 /**
- * 最小 Blob + URL.createObjectURL polyfill。
- * three GLTFLoader 解嵌图会 `new Blob` + createObjectURL；
- * 不实现 Worker 用的完整 Blob，只够贴图 / 音频 arrayBuffer。
+ * Blob / createObjectURL：不走 btoa。
+ * 真机把二进制写到 USER_DATA_PATH 临时文件，返回可给 Image 用的本地路径。
+ * harness 同样写临时文件（经 wx 文件系统 shim），禁止依赖浏览器 Blob/btoa。
  */
 
-function installBlobPolyfill() {
-  // harness：直接恢复浏览器原生 Blob/URL，避免 dataURL 被 LoadingManager 拼成相对路径
-  const native = globalThis.__HARNESS_NATIVE__;
-  if (native && native.Blob && native.URL) {
+let seq = 0;
+
+function ensureDir(fs, dir) {
+  try {
+    fs.accessSync(dir);
+  } catch {
     try {
-      globalThis.Blob = native.Blob;
-      globalThis.URL = native.URL;
+      fs.mkdirSync(dir, true);
     } catch {
-      /* ignore */
+      try {
+        fs.mkdirSync(dir);
+      } catch {
+        /* ignore */
+      }
     }
-    return;
   }
+}
 
-  if (typeof Blob === "function" && typeof URL !== "undefined" && URL.createObjectURL) {
-    return;
+function writeTempFile(bytes, mime) {
+  if (typeof wx === "undefined" || !wx.getFileSystemManager || !wx.env || !wx.env.USER_DATA_PATH) {
+    throw new Error("blob polyfill: USER_DATA_PATH unavailable");
   }
+  const fs = wx.getFileSystemManager();
+  const dir = `${wx.env.USER_DATA_PATH}/fw_blob`;
+  ensureDir(fs, dir);
+  const ext = /png/i.test(mime) ? "png" : /jpeg|jpg/i.test(mime) ? "jpg" : "bin";
+  const path = `${dir}/t${Date.now()}_${seq++}.${ext}`;
+  const data = bytes.buffer
+    ? bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+    : bytes;
+  fs.writeFileSync(path, data);
+  return path;
+}
 
+function installBlobPolyfill() {
   class MiniBlob {
     constructor(parts = [], options = {}) {
       const chunks = (parts || []).map((p) => {
-        if (typeof p === "string") return new TextEncoder().encode(p);
+        if (typeof p === "string") {
+          return new TextEncoder().encode(p);
+        }
         if (p instanceof ArrayBuffer) return new Uint8Array(p);
         if (ArrayBuffer.isView(p)) return new Uint8Array(p.buffer, p.byteOffset, p.byteLength);
         if (p && p._data) return p._data;
@@ -44,7 +64,9 @@ function installBlobPolyfill() {
     }
 
     arrayBuffer() {
-      return Promise.resolve(this._data.buffer.slice(this._data.byteOffset, this._data.byteOffset + this._data.byteLength));
+      return Promise.resolve(
+        this._data.buffer.slice(this._data.byteOffset, this._data.byteOffset + this._data.byteLength),
+      );
     }
 
     text() {
@@ -63,33 +85,35 @@ function installBlobPolyfill() {
   }
 
   const gURL = globalThis.URL || function URL() {};
-  const prevCreate = typeof URL !== "undefined" && URL.createObjectURL ? URL.createObjectURL.bind(URL) : null;
-  const prevRevoke = typeof URL !== "undefined" && URL.revokeObjectURL ? URL.revokeObjectURL.bind(URL) : null;
+  const objectUrls = new Map();
 
   gURL.createObjectURL = function createObjectURL(obj) {
     if (obj && obj._data instanceof Uint8Array) {
-      const mime = obj.type || "application/octet-stream";
-      // 大贴图用 data URL；真机 Image 可吃 data: / 本地临时文件
-      let binary = "";
-      const data = obj._data;
-      const chunk = 0x8000;
-      for (let i = 0; i < data.length; i += chunk) {
-        binary += String.fromCharCode.apply(null, data.subarray(i, i + chunk));
-      }
-      return `data:${mime};base64,${btoa(binary)}`;
+      const path = writeTempFile(obj._data, obj.type || "application/octet-stream");
+      objectUrls.set(path, true);
+      return path;
     }
-    if (prevCreate) return prevCreate(obj);
-    throw new Error("URL.createObjectURL: unsupported object");
+    throw new Error("URL.createObjectURL: only MiniBlob supported (no browser Blob/btoa)");
   };
 
   gURL.revokeObjectURL = function revokeObjectURL(url) {
-    if (prevRevoke && url && !String(url).startsWith("data:")) prevRevoke(url);
+    if (!objectUrls.has(url)) return;
+    objectUrls.delete(url);
+    try {
+      wx.getFileSystemManager().unlinkSync(url);
+    } catch {
+      /* ignore */
+    }
   };
 
   try {
     globalThis.URL = gURL;
   } catch {
-    /* ignore */
+    try {
+      Object.defineProperty(globalThis, "URL", { configurable: true, writable: true, value: gURL });
+    } catch {
+      /* ignore */
+    }
   }
 }
 

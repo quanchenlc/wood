@@ -1,6 +1,7 @@
 /**
  * 浏览器端 wx API 仿真（加严版）：
- * - 先抠掉浏览器自带的 fetch / AudioContext / Blob / Worker，逼适配层自己补
+ * - 先抠掉浏览器自带的 fetch / AudioContext / Blob / Worker / btoa / atob / createObjectURL
+ * - 逼适配层自己补；Blob 必须走 USER_DATA_PATH 临时文件
  * - wx.request / 文件系统内部用保存的原生 fetch 读静态服务器
  */
 (function installWxShim(global) {
@@ -13,9 +14,13 @@
   const NativeBlob = global.Blob;
   const NativeWorker = global.Worker;
   const NativeURL = global.URL;
+  const NativeBtoa = global.btoa;
+  const NativeAtob = global.atob;
+
+  const userDataRoot = "/tmp/firewood_userdata";
+  const memFs = new Map(); // path -> Uint8Array | string marker for dirs
 
   function strip(name) {
-    // 可被适配层再次赋值；初始为 undefined，模拟真机缺失
     let value;
     try {
       delete global[name];
@@ -47,105 +52,109 @@
   strip("webkitAudioContext");
   strip("Blob");
   strip("Worker");
+  strip("btoa");
+  strip("atob");
+
+  // 保留 URL 构造，但禁用原生 createObjectURL / revokeObjectURL
+  try {
+    const proto = NativeURL && NativeURL.prototype;
+    if (proto) {
+      // no-op placeholder until adapter overwrites
+    }
+    Object.defineProperty(global, "URL", {
+      configurable: true,
+      enumerable: true,
+      writable: true,
+      value: class HarnessURL extends NativeURL {
+        static createObjectURL() {
+          throw new Error(
+            "harness: URL.createObjectURL stripped — adapter must use USER_DATA_PATH files",
+          );
+        }
+        static revokeObjectURL() {}
+      },
+    });
+    // 静态方法在某些引擎不继承，再挂一层
+    global.URL.createObjectURL = function createObjectURL() {
+      throw new Error(
+        "harness: URL.createObjectURL stripped — adapter must use USER_DATA_PATH files",
+      );
+    };
+    global.URL.revokeObjectURL = function revokeObjectURL() {};
+  } catch (e) {
+    console.warn("[wx-shim] failed to strip createObjectURL", e);
+  }
 
   let mainCanvasGiven = false;
   const touchHandlers = { start: [], move: [], end: [], cancel: [] };
   const showListeners = [];
   const hideListeners = [];
 
-  function bindDomTouch() {
-    const fire = (kind, ev) => {
-      const list = touchHandlers[kind];
-      if (!list.length) return;
-      const rect = canvas.getBoundingClientRect();
-      const toTouch = (t) => ({
-        identifier: t.identifier,
-        clientX: t.clientX,
-        clientY: t.clientY,
-        pageX: t.pageX,
-        pageY: t.pageY,
-        x: t.clientX - rect.left,
-        y: t.clientY - rect.top,
-      });
-      const touches = Array.from(ev.touches || []).map(toTouch);
-      const changedTouches = Array.from(ev.changedTouches || [ev]).map((t) =>
-        t.clientX !== undefined
-          ? toTouch(t)
-          : toTouch({
-              identifier: 1,
-              clientX: ev.clientX,
-              clientY: ev.clientY,
-              pageX: ev.pageX,
-              pageY: ev.pageY,
-            }),
-      );
-      const payload = { touches, changedTouches, timeStamp: ev.timeStamp };
-      for (const fn of list) fn(payload);
-    };
+  function fireTouch(kind, payload) {
+    const list = touchHandlers[kind];
+    for (const fn of list) fn(payload);
+  }
 
-    let down = false;
-    canvas.addEventListener("pointerdown", (ev) => {
-      down = true;
-      canvas.setPointerCapture(ev.pointerId);
-      fire("start", {
-        touches: [ev],
-        changedTouches: [ev],
-        timeStamp: ev.timeStamp,
-        clientX: ev.clientX,
-        clientY: ev.clientY,
-        pageX: ev.pageX,
-        pageY: ev.pageY,
-      });
-    });
-    canvas.addEventListener("pointermove", (ev) => {
-      if (!down) return;
-      fire("move", {
-        touches: [ev],
-        changedTouches: [ev],
-        timeStamp: ev.timeStamp,
-        clientX: ev.clientX,
-        clientY: ev.clientY,
-        pageX: ev.pageX,
-        pageY: ev.pageY,
-      });
-    });
-    const up = (ev) => {
-      if (!down) return;
-      down = false;
-      fire("end", {
-        touches: [],
-        changedTouches: [ev],
-        timeStamp: ev.timeStamp,
-        clientX: ev.clientX,
-        clientY: ev.clientY,
-        pageX: ev.pageX,
-        pageY: ev.pageY,
-      });
+  /** 录屏 / 测试专用：只走 wx 触摸通道 */
+  function simulateTouch(kind, x, y, identifier = 1) {
+    const touch = {
+      identifier,
+      clientX: x,
+      clientY: y,
+      pageX: x,
+      pageY: y,
+      x,
+      y,
     };
-    canvas.addEventListener("pointerup", up);
-    canvas.addEventListener("pointercancel", (ev) => {
-      down = false;
-      fire("cancel", {
-        touches: [],
-        changedTouches: [ev],
-        timeStamp: ev.timeStamp,
-        clientX: ev.clientX,
-        clientY: ev.clientY,
-        pageX: ev.pageX,
-        pageY: ev.pageY,
+    if (kind === "start") {
+      fireTouch("start", {
+        touches: [touch],
+        changedTouches: [touch],
+        timeStamp: Date.now(),
       });
-    });
+    } else if (kind === "move") {
+      fireTouch("move", {
+        touches: [touch],
+        changedTouches: [touch],
+        timeStamp: Date.now(),
+      });
+    } else if (kind === "end" || kind === "cancel") {
+      fireTouch(kind, {
+        touches: [],
+        changedTouches: [touch],
+        timeStamp: Date.now(),
+      });
+    }
   }
 
   function resolveLocalUrl(filePath) {
     let p = String(filePath || "");
+    // USER_DATA_PATH 内存文件不走 HTTP
+    if (p.startsWith(userDataRoot)) return null;
     if (p.startsWith("/")) return p;
     return "/" + p.replace(/^\.\//, "");
   }
 
+  function ensureMemDir(dir) {
+    memFs.set(dir, "__dir__");
+  }
+
   const fs = {
     readFile({ filePath, encoding, success, fail }) {
+      if (memFs.has(filePath) && memFs.get(filePath) !== "__dir__") {
+        const data = memFs.get(filePath);
+        const out =
+          encoding === "utf8" || encoding === "utf-8"
+            ? new TextDecoder().decode(data)
+            : data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+        success && success({ data: out });
+        return;
+      }
       const url = resolveLocalUrl(filePath);
+      if (!url) {
+        fail && fail(new Error("readFile missing " + filePath));
+        return;
+      }
       nativeFetch(url)
         .then(async (r) => {
           if (!r.ok) throw new Error("readFile " + url + " " + r.status);
@@ -156,7 +165,14 @@
         .catch((e) => fail && fail(e));
     },
     readFileSync(filePath, encoding) {
+      if (memFs.has(filePath) && memFs.get(filePath) !== "__dir__") {
+        const data = memFs.get(filePath);
+        return encoding === "utf8" || encoding === "utf-8"
+          ? new TextDecoder().decode(data)
+          : data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+      }
       const url = resolveLocalUrl(filePath);
+      if (!url) throw new Error("readFileSync missing " + filePath);
       const xhr = new XMLHttpRequest();
       xhr.open("GET", url, false);
       if (encoding !== "utf8" && encoding !== "utf-8") xhr.responseType = "arraybuffer";
@@ -164,10 +180,48 @@
       if (xhr.status !== 200 && xhr.status !== 0) throw new Error("readFileSync " + url);
       return encoding === "utf8" || encoding === "utf-8" ? xhr.responseText : xhr.response;
     },
-    accessSync() {
-      throw new Error("missing");
+    writeFileSync(filePath, data) {
+      let bytes;
+      if (typeof data === "string") {
+        bytes = new TextEncoder().encode(data);
+      } else if (data instanceof ArrayBuffer) {
+        bytes = new Uint8Array(data);
+      } else if (ArrayBuffer.isView(data)) {
+        bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+      } else {
+        bytes = new Uint8Array(0);
+      }
+      const dir = String(filePath).replace(/\/[^/]+$/, "");
+      ensureMemDir(dir);
+      memFs.set(filePath, bytes);
+      // 同步写到真实 /tmp，方便 Image.src 用 HTTP 映射加载
+      try {
+        // 通过特殊 URL 暴露：harness server 会映射 USER_DATA_PATH
+        global.__HARNESS_MEMFS__ = memFs;
+      } catch {
+        /* ignore */
+      }
     },
-    mkdirSync() {},
+    unlinkSync(filePath) {
+      memFs.delete(filePath);
+    },
+    accessSync(filePath) {
+      if (memFs.has(filePath)) return;
+      // 包内路径：用 sync XHR 探测
+      const url = resolveLocalUrl(filePath);
+      if (!url) throw new Error("missing");
+      const xhr = new XMLHttpRequest();
+      xhr.open("HEAD", url, false);
+      try {
+        xhr.send(null);
+      } catch {
+        throw new Error("missing");
+      }
+      if (xhr.status !== 200 && xhr.status !== 0) throw new Error("missing");
+    },
+    mkdirSync(dir) {
+      ensureMemDir(dir);
+    },
   };
 
   const wx = {
@@ -181,7 +235,31 @@
     },
     createImage() {
       const real = global.__HARNESS_DOCUMENT__ || document;
-      return real.createElement("img");
+      const img = real.createElement("img");
+      // 拦截 USER_DATA_PATH：转成 harness 可 fetch 的 memfs URL
+      const desc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, "src");
+      Object.defineProperty(img, "src", {
+        configurable: true,
+        enumerable: true,
+        get() {
+          return this.__fwSrc || "";
+        },
+        set(v) {
+          const s = String(v || "");
+          this.__fwSrc = s;
+          if (s.startsWith(userDataRoot) && memFs.has(s)) {
+            const bytes = memFs.get(s);
+            const blob = new NativeBlob([bytes]);
+            const obj = NativeURL.createObjectURL(blob);
+            if (desc && desc.set) desc.set.call(this, obj);
+            else HTMLImageElement.prototype.setAttribute.call(this, "src", obj);
+            return;
+          }
+          if (desc && desc.set) desc.set.call(this, s);
+          else HTMLImageElement.prototype.setAttribute.call(this, "src", s);
+        },
+      });
+      return img;
     },
     createInnerAudioContext() {
       const audio = new Audio();
@@ -226,7 +304,22 @@
     },
     createWebAudioContext() {
       if (!NativeAudioContext) throw new Error("no native AudioContext for harness shim");
-      return new NativeAudioContext();
+      // 模拟真机：decodeAudioData 只支持回调，不返回 Promise
+      const ctx = new NativeAudioContext();
+      const nativeDecode = ctx.decodeAudioData.bind(ctx);
+      ctx.decodeAudioData = function decodeAudioData(arrayBuffer, success, error) {
+        nativeDecode(arrayBuffer).then(
+          (buf) => {
+            if (typeof success === "function") success(buf);
+          },
+          (err) => {
+            if (typeof error === "function") error(err);
+          },
+        );
+        // 故意不返回 Promise，逼适配层兼容回调
+        return undefined;
+      };
+      return ctx;
     },
     getSystemInfoSync() {
       return {
@@ -252,8 +345,14 @@
     },
     downloadFile({ url, filePath, success, fail }) {
       nativeFetch(url)
-        .then((r) => r.arrayBuffer())
-        .then(() => success && success({ statusCode: 200, tempFilePath: filePath || url }))
+        .then((r) => {
+          if (!r.ok) throw new Error("download " + r.status);
+          return r.arrayBuffer();
+        })
+        .then((buf) => {
+          if (filePath) fs.writeFileSync(filePath, buf);
+          success && success({ statusCode: 200, tempFilePath: filePath || url });
+        })
         .catch((e) => fail && fail(e));
     },
     request({ url, method = "GET", responseType, header, success, fail }) {
@@ -268,7 +367,6 @@
         .catch((e) => fail && fail(e));
     },
     requestAnimationFrame: (cb) => {
-      // 用 canvas 的 rAF，避免被我们剥离/覆盖的全局
       if (typeof canvas.requestAnimationFrame === "function") return canvas.requestAnimationFrame(cb);
       return setTimeout(() => cb(Date.now()), 1000 / 60);
     },
@@ -299,11 +397,11 @@
     showToast(o) {
       console.log("[wx.showToast]", o && o.title);
     },
-    env: { USER_DATA_PATH: "/tmp/firewood_userdata" },
+    env: { USER_DATA_PATH: userDataRoot },
+    __simulateTouch: simulateTouch,
   };
 
   global.wx = wx;
-  // 不暴露浏览器 WebAssembly 给业务误用 basis；真机应走 WXWebAssembly
   global.WXWebAssembly = global.WebAssembly;
   global.__HARNESS_DOCUMENT__ = document;
   global.__HARNESS_CANVAS__ = canvas;
@@ -314,11 +412,14 @@
     Blob: NativeBlob,
     Worker: NativeWorker,
     URL: NativeURL,
+    btoa: NativeBtoa,
+    atob: NativeAtob,
   };
-  // harness 专属：打开 __fw 调试钩子
   global.__FIREWOOD_ENABLE_DEBUG__ = true;
+  global.__HARNESS_MEMFS__ = memFs;
 
-  bindDomTouch();
+  // 不再把 DOM pointer 自动转成 wx 触摸：录屏必须显式走 __simulateTouch
+  // （避免 capture 误用 mouse.click 旁路）
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") showListeners.forEach((f) => f({}));

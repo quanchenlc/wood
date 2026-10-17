@@ -9,16 +9,22 @@ type InnerAudio = {
   volume: number;
   play: () => void;
   stop: () => void;
+  pause?: () => void;
   destroy: () => void;
   onEnded?: (fn: () => void) => void;
+  onError?: (fn: (err?: unknown) => void) => void;
+  offEnded?: (fn?: () => void) => void;
+  offError?: (fn?: () => void) => void;
 };
+
+const managers = new Set<AudioManager>();
 
 /**
  * 音效。
  *
  * Web：THREE.Audio + AudioContext。
- * 小游戏：优先 wx.createWebAudioContext 驱动 THREE.Audio；
- * 背景音乐改用 InnerAudioContext。整段初始化包 try/catch，失败不挡游戏。
+ * 小游戏：WebAudio（若可用）+ InnerAudio 对象池播 SFX；BGM 用独立 InnerAudio。
+ * 初始化失败不挡游戏。
  */
 export class AudioManager {
   private listener: THREE.AudioListener | null = null;
@@ -26,6 +32,7 @@ export class AudioManager {
   private readonly lastIndex = new Map<SoundGroup, number>();
   private background: THREE.Audio | null = null;
   private backgroundInner: InnerAudio | null = null;
+  private bgVolume = 0.25;
   private unlocked = false;
   private disabled = false;
   private readonly bgUrl: string | null;
@@ -34,6 +41,7 @@ export class AudioManager {
 
   constructor(camera: THREE.Camera, onProgress?: ProgressFn) {
     this.bgUrl = SOUNDS.bg[0] ?? null;
+    managers.add(this);
     try {
       this.listener = new THREE.AudioListener();
       camera.add(this.listener);
@@ -42,13 +50,13 @@ export class AudioManager {
       console.warn("音频初始化失败，本局静音:", err);
       this.disabled = true;
       this.listener = null;
-      // 进度条仍要走完音效份额，避免卡在 loading
       this.ready = this.skipProgress(onProgress);
     }
 
     window.addEventListener("pointerdown", this.unlock, { once: true });
     document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible" && this.unlocked) this.resume();
+      if (document.visibilityState === "visible" && this.unlocked) this.resumeFromBackground();
+      if (document.visibilityState === "hidden") this.suspend();
     });
   }
 
@@ -64,12 +72,12 @@ export class AudioManager {
     const groups = Object.entries(SOUNDS) as Array<[SoundGroup, readonly string[]]>;
     await Promise.all(
       groups.map(async ([group, urls]) => {
-        // 小游戏 BGM 走 InnerAudio，不必解码进 AudioBuffer
         if (isMinigame() && group === "bg") {
           urls.forEach(() => onProgress?.());
           this.buffers.set(group, []);
           return;
         }
+        // 小游戏优先走 InnerAudio 池播 SFX，可不预解码；仍尝试解码以便 WebAudio 路径
         const loaded = await Promise.all(
           urls.map((url) =>
             loader
@@ -88,13 +96,48 @@ export class AudioManager {
 
   private unlock = () => {
     this.unlocked = true;
-    this.resume();
-    this.playBackground();
+    this.resumeFromBackground();
+    this.playBackground(this.bgVolume);
   };
 
-  private resume() {
+  /** 切后台 */
+  suspend() {
+    try {
+      this.background?.pause?.();
+    } catch {
+      /* ignore */
+    }
+    try {
+      this.backgroundInner?.pause?.();
+    } catch {
+      /* ignore */
+    }
     const ctx = this.listener?.context;
-    if (ctx && ctx.state === "suspended") void ctx.resume();
+    if (ctx && typeof ctx.suspend === "function") void ctx.suspend();
+  }
+
+  /** 回前台：恢复 AudioContext + 背景音乐 */
+  resumeFromBackground() {
+    const ctx = this.listener?.context;
+    if (ctx && ctx.state === "suspended" && typeof ctx.resume === "function") {
+      void ctx.resume();
+    }
+    if (!this.unlocked) return;
+    if (this.backgroundInner) {
+      try {
+        this.backgroundInner.play();
+      } catch {
+        /* ignore */
+      }
+    } else if (this.background) {
+      try {
+        if (!this.background.isPlaying) this.background.play();
+      } catch {
+        /* ignore */
+      }
+    } else {
+      this.playBackground(this.bgVolume);
+    }
   }
 
   private pick(group: SoundGroup): AudioBuffer | null {
@@ -120,24 +163,25 @@ export class AudioManager {
     return list[i];
   }
 
-  private playInner(url: string, volume: number, loop = false) {
+  private playInnerOnce(url: string, volume: number) {
     const factory = (globalThis as { __wxCreateInnerAudio?: () => InnerAudio | null })
       .__wxCreateInnerAudio;
+    const release = (globalThis as { __wxReleaseInnerAudio?: (a: InnerAudio) => void })
+      .__wxReleaseInnerAudio;
     const inner = factory?.() ?? null;
     if (!inner) return null;
     try {
-      inner.src = url;
-      inner.loop = loop;
+      inner.loop = false;
       inner.volume = volume;
+      inner.src = url;
+      const done = () => release?.(inner);
+      if (typeof inner.onEnded === "function") inner.onEnded(done);
+      if (typeof inner.onError === "function") inner.onError(done);
       inner.play();
       return inner;
     } catch (err) {
       console.warn("InnerAudio 播放失败:", err);
-      try {
-        inner.destroy();
-      } catch {
-        /* ignore */
-      }
+      release?.(inner);
       return null;
     }
   }
@@ -163,14 +207,36 @@ export class AudioManager {
     }
 
     const url = this.pickUrl(group);
-    if (url) this.playInner(url, volume, false);
+    if (url) this.playInnerOnce(url, volume);
   }
 
   playBackground(volume = 0.25) {
+    this.bgVolume = volume;
     if (this.background || this.backgroundInner) return;
 
     if (isMinigame() && this.bgUrl) {
-      this.backgroundInner = this.playInner(this.bgUrl, volume, true);
+      const factory = (globalThis as { __wxCreateInnerAudio?: () => InnerAudio | null })
+        .__wxCreateInnerAudio;
+      // BGM 单独实例，不进一次性池归还逻辑：直接 create 并保留
+      const raw =
+        typeof wx !== "undefined" && wx.createInnerAudioContext
+          ? wx.createInnerAudioContext()
+          : factory?.();
+      if (!raw) return;
+      try {
+        raw.loop = true;
+        raw.volume = volume;
+        raw.src = this.bgUrl;
+        raw.play();
+        this.backgroundInner = raw;
+      } catch (err) {
+        console.warn("背景音乐 InnerAudio 失败:", err);
+        try {
+          raw.destroy();
+        } catch {
+          /* ignore */
+        }
+      }
       return;
     }
 
@@ -190,6 +256,7 @@ export class AudioManager {
   }
 
   dispose() {
+    managers.delete(this);
     try {
       this.background?.stop();
     } catch {
@@ -206,3 +273,15 @@ export class AudioManager {
     this.listener?.parent?.remove(this.listener);
   }
 }
+
+declare const wx: {
+  createInnerAudioContext?: () => InnerAudio;
+} | undefined;
+
+/** 给适配层 onShow/onHide 用 */
+export function getAudioManagers(): AudioManager[] {
+  return [...managers];
+}
+
+(globalThis as { __FIREWOOD_AUDIO_MANAGERS__?: () => AudioManager[] }).__FIREWOOD_AUDIO_MANAGERS__ =
+  getAudioManagers;

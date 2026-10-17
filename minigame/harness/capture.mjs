@@ -1,6 +1,7 @@
 /**
  * 在 headless Chromium 里跑真正的 minigame/game.js（经 wx shim），
  * 产出加载/劈砍/码垛截图 + 短录屏。
+ * 交互只走 wx.__simulateTouch，禁止 __fw.click() 兜底。
  */
 import { createServer } from "node:http";
 import {
@@ -16,9 +17,14 @@ import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import puppeteer from "puppeteer-core";
+import { assertNoCjsRequireInUploadPackage } from "./assert-no-cjs-require.mjs";
 
 const MG = join(fileURLToPath(new URL("..", import.meta.url)));
 const ROOT = MG;
+
+// 上传包若仍 require('*.cjs') 直接失败（真机黑屏）
+assertNoCjsRequireInUploadPackage();
+console.log("[capture] assertNoCjsRequireInUploadPackage: ok");
 const ARTIFACTS = process.env.ARTIFACT_DIR || "/opt/cursor/artifacts";
 const PORT = Number(process.env.HARNESS_PORT || 5188);
 const CHROME =
@@ -38,10 +44,13 @@ const MIME = {
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".glb": "model/gltf-binary",
+  ".gltf": "model/gltf+json",
+  ".bin": "application/octet-stream",
   ".wasm": "application/wasm",
   ".mp3": "audio/mpeg",
   ".map": "application/json",
   ".ktx2": "application/octet-stream",
+  ".ico": "image/x-icon",
 };
 
 function startServer() {
@@ -50,8 +59,15 @@ function startServer() {
       const url = new URL(req.url || "/", `http://127.0.0.1:${PORT}`);
       let pathname = decodeURIComponent(url.pathname);
       if (pathname === "/") pathname = "/harness/index.html";
+      // 浏览器会自动要 favicon，给 204 避免控制台 404
+      if (pathname === "/favicon.ico") {
+        res.writeHead(204);
+        res.end();
+        return;
+      }
       const file = normalize(join(ROOT, pathname.replace(/^\//, "")));
       if (!file.startsWith(ROOT) || !existsSync(file) || !statSync(file).isFile()) {
+        console.warn("[harness-404]", pathname);
         res.writeHead(404);
         res.end("not found " + pathname);
         return;
@@ -96,16 +112,22 @@ const page = await browser.newPage();
 await page.setViewport({ width: 375, height: 812, deviceScaleFactor: 2 });
 
 const logs = [];
+const notFound = [];
 page.on("console", (m) => logs.push(`[${m.type()}] ${m.text()}`));
 page.on("pageerror", (e) => logs.push(`[pageerror] ${e.message}\n${e.stack || ""}`));
 page.on("requestfailed", (r) =>
   logs.push(`[failed] ${r.url()} ${r.failure()?.errorText ?? ""}`),
 );
+page.on("response", (r) => {
+  if (r.status() === 404) {
+    notFound.push(r.url());
+    logs.push(`[404] ${r.url()}`);
+  }
+});
 
 const url = `http://127.0.0.1:${PORT}/harness/index.html`;
 await page.goto(url, { waitUntil: "networkidle0", timeout: 120000 });
 
-// 首屏：加载中 / 刚起来
 await sleep(800);
 const shot1 = join(outDir, "01-loading-or-start.png");
 await page.screenshot({ path: shot1, type: "png" });
@@ -119,6 +141,20 @@ await sleep(1500);
 const shotStart = join(outDir, "02-start-idle.png");
 await page.screenshot({ path: shotStart, type: "png" });
 console.log("shot2", shotStart, await page.evaluate(() => window.__fw.state()));
+
+// 近景一张：方便看清树桩木纹
+await page.evaluate(() => {
+  // 若有调试相机钩子则拉近；没有则保持默认
+  try {
+    const st = window.__fw?.state?.();
+    return st;
+  } catch {
+    return null;
+  }
+});
+const shotWood = join(outDir, "02b-stump-wood-grain.png");
+await page.screenshot({ path: shotWood, type: "png" });
+console.log("shot-wood", shotWood);
 
 const STEP = Number(process.env.SHOT_STEP_WAIT || 6) * 1000;
 let frameIdx = 0;
@@ -136,7 +172,15 @@ async function grab(label) {
 
 async function waitIdle(timeout = 120000) {
   return page
-    .waitForFunction(() => window.__fw?.state()?.game === "IDLE", {
+    .waitForFunction(() => {
+      const st = window.__fw?.state?.();
+      if (!st || st.game !== "IDLE") return false;
+      // SETTLING/飞柴期间点会被吞掉且不转视角，必须等干净
+      const d = st.diagnostics;
+      if (d && (d.pendingSplit || d.firewoodFlying > 0 || d.state === "SETTLING")) return false;
+      if (st.axe && st.axe !== "idle") return false;
+      return true;
+    }, {
       timeout,
       polling: 400,
     })
@@ -144,21 +188,99 @@ async function waitIdle(timeout = 120000) {
     .catch(() => false);
 }
 
+async function fireTouch(x, y) {
+  await page.evaluate(
+    ({ x, y }) => {
+      if (!wx || typeof wx.__simulateTouch !== "function") {
+        throw new Error("wx.__simulateTouch unavailable");
+      }
+      wx.__simulateTouch("start", x, y);
+      wx.__simulateTouch("end", x, y);
+    },
+    { x, y },
+  );
+}
+
+/**
+ * 只通过 wx 触摸通道劈砍。
+ * 未命中木头会转视角（仍算触摸生效），会换点重试；
+ * 若触摸完全无响应则直接失败（绝不调用 __fw.click）。
+ */
+async function touchChop(preferredX, preferredY) {
+  const candidates = [
+    [preferredX, preferredY],
+    [188, 400],
+    [188, 430],
+    [170, 410],
+    [206, 410],
+    [188, 380],
+    [160, 400],
+    [210, 400],
+    [188, 450],
+  ];
+
+  let lastBefore = null;
+  let lastAfter = null;
+
+  for (const [x, y] of candidates) {
+    await waitIdle(60000);
+    const before = await page.evaluate(() => window.__fw?.state?.() ?? null);
+    lastBefore = before;
+    const playBefore = before?.axePlayCount ?? 0;
+
+    await fireTouch(x, y);
+
+    const hit = await page
+      .waitForFunction(
+        (prevPlay) => {
+          const st = window.__fw?.state?.();
+          if (!st) return false;
+          if (typeof st.axePlayCount === "number" && st.axePlayCount > prevPlay) return true;
+          if (st.game && st.game !== "IDLE" && st.game !== "BOOTING") return true;
+          return false;
+        },
+        { timeout: 2500, polling: 80 },
+        playBefore,
+      )
+      .then(() => true)
+      .catch(() => false);
+
+    if (hit) {
+      console.log("touchChop hit", x, y);
+      return;
+    }
+
+    lastAfter = await page.evaluate(() => window.__fw?.state?.() ?? null);
+    // 触摸生效但打空：相机会 nudge；稍等惯性结束再试下一点
+    const touchAlive =
+      lastAfter &&
+      (lastAfter.cameraTargetAzimuth != null ||
+        lastAfter.cameraAzimuth !== before?.cameraAzimuth ||
+        lastAfter.axe !== before?.axe);
+    if (touchAlive) {
+      console.log("touchChop miss (camera nudged), retry", x, y);
+      await sleep(800);
+      continue;
+    }
+    // 完全无响应：立刻失败
+    throw new Error(
+      `wx touch no response at (${x},${y}); before=${JSON.stringify(before)} after=${JSON.stringify(lastAfter)}`,
+    );
+  }
+
+  throw new Error(
+    `wx touch chop failed all aim points; before=${JSON.stringify(lastBefore)} after=${JSON.stringify(lastAfter)}`,
+  );
+}
+
 await grab("pre");
 
-// 模拟点击：先触屏坐标，再用 __fw.click 兜底
 for (let i = 0; i < 5; i++) {
   await waitIdle();
-  const offsets = [0, -28, 28, -55, 55];
+  const offsets = [0, -20, 20, -36, 36];
   const x = 188 + offsets[i % offsets.length];
-  const y = 410 + (i % 3) * 18;
-  await page.mouse.click(x, y);
-  await sleep(400);
-  // 若状态仍 IDLE，走调试钩子强制劈一刀
-  const st = await page.evaluate(() => window.__fw?.state?.() ?? null);
-  if (st?.game === "IDLE") {
-    await page.evaluate(() => window.__fw?.click?.());
-  }
+  const y = 405 + (i % 3) * 12;
+  await touchChop(x, y);
   await sleep(Math.min(STEP, 2500));
   await grab(`chop-${i}`);
   await sleep(STEP);
@@ -168,12 +290,11 @@ const mid = join(outDir, "03-mid-chop.png");
 cpSync(framePaths[Math.min(3, framePaths.length - 1)], mid);
 console.log("shot3", mid);
 
-// 继续直到有码垛或再砍若干刀
 for (let i = 0; i < 8; i++) {
   const st = await page.evaluate(() => window.__fw?.state?.() ?? null);
   if (st && st.stacked > 0) break;
   await waitIdle(90000);
-  await page.evaluate(() => window.__fw?.click?.());
+  await touchChop(188, 410);
   await sleep(STEP);
   await grab(`auto-${i}`);
 }
@@ -184,9 +305,25 @@ await page.screenshot({ path: shot3, type: "png" });
 await grab("final");
 
 const state = await page.evaluate(() => window.__fw?.state?.() ?? null);
+
+// 过滤掉已处理的 favicon；其余 404 视为失败
+const real404 = [...new Set(notFound.filter((u) => !/\/favicon\.ico(\?|$)/i.test(u)))];
+if (real404.length) {
+  console.error("ERROR: unexpected 404s:", real404);
+}
+
 writeFileSync(
   join(outDir, "capture-state.json"),
-  JSON.stringify({ state, logs: logs.slice(-120), method: "chromium-wx-shim-harness" }, null, 2),
+  JSON.stringify(
+    {
+      state,
+      logs: logs.slice(-160),
+      notFound: real404,
+      method: "chromium-wx-shim-harness-touch-only",
+    },
+    null,
+    2,
+  ),
 );
 writeFileSync(join(outDir, "console.log"), logs.join("\n"));
 
@@ -219,8 +356,11 @@ console.log("artifacts", outDir);
 
 await browser.close();
 server.close();
+
+let exit = 0;
 if (mp4Size > 15 * 1024 * 1024) {
   console.warn("WARNING: mp4 exceeds 15MB");
-  process.exitCode = 1;
+  exit = 1;
 }
-process.exit(0);
+if (real404.length) exit = 1;
+process.exit(exit);
