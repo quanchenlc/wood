@@ -174,9 +174,7 @@ export class AudioManager {
       inner.loop = false;
       inner.volume = volume;
       inner.src = url;
-      const done = () => release?.(inner);
-      if (typeof inner.onEnded === "function") inner.onEnded(done);
-      if (typeof inner.onError === "function") inner.onError(done);
+      // onEnded/onError 归还由适配层池在「新建时」挂一次，这里不再重复挂
       inner.play();
       return inner;
     } catch (err) {

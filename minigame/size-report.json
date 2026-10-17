@@ -1,6 +1,6 @@
 {
   "appid": "wx3371f99b1b0e73d1",
-  "mainPackageBytes": 1100711,
+  "mainPackageBytes": 1100755,
   "mainPackage": "1.05 MB",
   "mainUnder4MB": true,
   "assetsSubpackageBytes": 4114372,
@@ -20,11 +20,11 @@
       "size": "0.01 MB"
     },
     {
-      "file": "adapter/document.js",
+      "file": "adapter/audio.js",
       "size": "0.00 MB"
     },
     {
-      "file": "adapter/audio.js",
+      "file": "adapter/document.js",
       "size": "0.00 MB"
     },
     {

@@ -116,8 +116,24 @@ async function bundle() {
   });
 }
 
+/** 使用 package.json 锁定的本地 @gltf-transform/cli，禁止 npx 现场拉取 */
+function resolveGltfCli() {
+  // package exports 不暴露 bin 子路径，直接定位 node_modules 内文件
+  const candidates = [
+    join(ROOT, "node_modules/@gltf-transform/cli/bin/cli.js"),
+    join(ROOT, "node_modules/@gltf-transform/cli/bin/cli.cjs"),
+  ];
+  for (const p of candidates) {
+    if (existsSync(p)) return p;
+  }
+  throw new Error(
+    "@gltf-transform/cli not found — run npm ci (devDependency @gltf-transform/cli). Do not use npx.",
+  );
+}
+
 function runGltf(args) {
-  const r = spawnSync("npx", ["--yes", "@gltf-transform/cli@4.5.1", ...args], {
+  const cli = resolveGltfCli();
+  const r = spawnSync(process.execPath, [cli, ...args], {
     cwd: ROOT,
     stdio: "inherit",
     env: process.env,

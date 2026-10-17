@@ -1,7 +1,7 @@
 /**
  * 音频适配：
  * - AudioContext ← wx.createWebAudioContext，并兼容 callback 版 decodeAudioData
- * - InnerAudio 固定大小对象池，用完归还 / onEnded destroy
+ * - InnerAudio 固定大小对象池；onEnded/onError 只在新建时挂一次，回收再取不重复挂
  */
 
 const INNER_POOL_SIZE = 8;
@@ -109,30 +109,14 @@ function releaseInner(inner) {
   }
 }
 
-function createInnerAudio() {
-  let inner = pool.pop() || rawCreateInner();
-  if (!inner) return null;
-  inner.__fwReleased = false;
-  inUse.add(inner);
+/** 新建实例时挂一次归还钩子；从池取出不再重复 onEnded/onError */
+function attachPoolLifecycleOnce(inner) {
+  if (!inner || inner.__fwPoolHooked) return;
+  inner.__fwPoolHooked = true;
 
-  const wrapEnded = (fn) => {
-    const handler = () => {
-      try {
-        fn && fn();
-      } finally {
-        releaseInner(inner);
-      }
-    };
-    if (typeof inner.onEnded === "function") inner.onEnded(handler);
-    if (typeof inner.onError === "function") {
-      inner.onError(() => {
-        releaseInner(inner);
-      });
-    }
-  };
-
-  // 默认挂归还逻辑；调用方可再挂自己的 onEnded
-  wrapEnded(null);
+  const onDone = () => releaseInner(inner);
+  if (typeof inner.onEnded === "function") inner.onEnded(onDone);
+  if (typeof inner.onError === "function") inner.onError(onDone);
 
   const originalDestroy = inner.destroy?.bind(inner);
   inner.destroy = () => {
@@ -141,7 +125,16 @@ function createInnerAudio() {
     if (idx >= 0) pool.splice(idx, 1);
     if (originalDestroy) originalDestroy();
   };
+}
 
+function createInnerAudio() {
+  const fromPool = pool.length > 0;
+  const inner = fromPool ? pool.pop() : rawCreateInner();
+  if (!inner) return null;
+  inner.__fwReleased = false;
+  inUse.add(inner);
+  // 仅新建时挂生命周期；池回收实例已挂过
+  if (!fromPool) attachPoolLifecycleOnce(inner);
   return inner;
 }
 
