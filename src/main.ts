@@ -21,7 +21,7 @@ import { loadStump } from "./world/stump";
 import { createLog } from "./wood/logFactory";
 import { loadWoodMaterials, type WoodMaterials } from "./wood/materials";
 import { warmUpSlicePipeline } from "./wood/warmup";
-import { ensureHud } from "./platform/runtime";
+import { ensureHud, compositeHud } from "./platform/runtime";
 
 const renderer = createRenderer();
 const scene = createScene();
@@ -162,6 +162,8 @@ function frame() {
   gobo.update(dt);
 
   post.composer.render();
+  // 小游戏 loading / 提示叠在 WebGL 之上（canvas 自绘，不用系统 UI）
+  compositeHud(renderer);
 }
 frame();
 

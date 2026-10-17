@@ -392,14 +392,30 @@
     onHide(fn) {
       hideListeners.push(fn);
     },
-    showLoading() {},
-    hideLoading() {},
+    showLoading(o) {
+      const msg = "[forbidden] wx.showLoading " + ((o && o.title) || "");
+      console.error(msg);
+      (global.__HARNESS_FORBIDDEN_UI__ = global.__HARNESS_FORBIDDEN_UI__ || []).push(msg);
+    },
+    hideLoading() {
+      const msg = "[forbidden] wx.hideLoading";
+      console.error(msg);
+      (global.__HARNESS_FORBIDDEN_UI__ = global.__HARNESS_FORBIDDEN_UI__ || []).push(msg);
+    },
     showToast(o) {
-      console.log("[wx.showToast]", o && o.title);
+      const msg = "[forbidden] wx.showToast " + ((o && o.title) || "");
+      console.error(msg);
+      (global.__HARNESS_FORBIDDEN_UI__ = global.__HARNESS_FORBIDDEN_UI__ || []).push(msg);
+    },
+    showModal(o) {
+      const msg = "[forbidden] wx.showModal " + ((o && o.title) || "");
+      console.error(msg);
+      (global.__HARNESS_FORBIDDEN_UI__ = global.__HARNESS_FORBIDDEN_UI__ || []).push(msg);
     },
     env: { USER_DATA_PATH: userDataRoot },
     __simulateTouch: simulateTouch,
   };
+  global.__HARNESS_FORBIDDEN_UI__ = [];
 
   global.wx = wx;
   global.WXWebAssembly = global.WebAssembly;

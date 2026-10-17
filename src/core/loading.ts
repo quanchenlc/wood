@@ -9,6 +9,7 @@ export class LoadingProgress {
   private readonly hud = ensureHud();
 
   constructor(private readonly total: number) {
+    this.hud?.setStatus?.("正在加载");
     this.render();
   }
 

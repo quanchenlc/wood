@@ -54,10 +54,13 @@ export class AudioManager {
     }
 
     window.addEventListener("pointerdown", this.unlock, { once: true });
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible" && this.unlocked) this.resumeFromBackground();
-      if (document.visibilityState === "hidden") this.suspend();
-    });
+    // 小游戏切前后台只走 adapter 的 wx.onHide/onShow，避免与 visibilitychange 双重 pause/play
+    if (!isMinigame()) {
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible" && this.unlocked) this.resumeFromBackground();
+        if (document.visibilityState === "hidden") this.suspend();
+      });
+    }
   }
 
   private async skipProgress(onProgress?: ProgressFn) {

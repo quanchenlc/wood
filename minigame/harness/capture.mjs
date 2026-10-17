@@ -126,9 +126,14 @@ page.on("response", (r) => {
 });
 
 const url = `http://127.0.0.1:${PORT}/harness/index.html`;
-await page.goto(url, { waitUntil: "networkidle0", timeout: 120000 });
-
-await sleep(800);
+// 尽早截 loading（不等 networkidle，避免错过 canvas 进度条）
+const nav = page.goto(url, { waitUntil: "domcontentloaded", timeout: 120000 });
+await sleep(600);
+const shotLoading = join(outDir, "01-loading-canvas.png");
+await page.screenshot({ path: shotLoading, type: "png" });
+console.log("shot-loading", shotLoading);
+await nav;
+await sleep(400);
 const shot1 = join(outDir, "01-loading-or-start.png");
 await page.screenshot({ path: shot1, type: "png" });
 console.log("shot1", shot1);
@@ -302,6 +307,7 @@ await page.screenshot({ path: shot3, type: "png" });
 await grab("final");
 
 const state = await page.evaluate(() => window.__fw?.state?.() ?? null);
+const forbiddenUi = await page.evaluate(() => window.__HARNESS_FORBIDDEN_UI__ || []);
 
 // 过滤掉已处理的 favicon；其余 404 视为失败
 const real404 = [...new Set(notFound.filter((u) => !/\/favicon\.ico(\?|$)/i.test(u)))];
@@ -316,6 +322,7 @@ writeFileSync(
       state,
       logs: logs.slice(-160),
       notFound: real404,
+      forbiddenUi,
       method: "chromium-wx-shim-harness-touch-only",
     },
     null,
@@ -360,11 +367,18 @@ if (audioFails.length) {
   console.error(audioFails.slice(0, 8).join("\n"));
 }
 
-const verLog = logs.find((l) => /\[firewood\].*0\.1\.3/.test(l));
+const verLog = logs.find((l) => /\[firewood\].*0\.1\.4/.test(l));
 if (!verLog) {
-  console.error("ERROR: missing 0.1.3 version log in console");
+  console.error("ERROR: missing 0.1.4 version log in console");
 } else {
   console.log("version log:", verLog);
+}
+
+const forbiddenFromLogs = logs.filter((l) =>
+  /\[forbidden\] wx\.(showLoading|hideLoading|showToast|showModal)/.test(l),
+);
+if (forbiddenUi.length || forbiddenFromLogs.length) {
+  console.error("ERROR: system UI used:", [...forbiddenUi, ...forbiddenFromLogs].slice(0, 10));
 }
 
 let exit = 0;
@@ -375,4 +389,5 @@ if (mp4Size > 15 * 1024 * 1024) {
 if (real404.length) exit = 1;
 if (audioFails.length) exit = 1;
 if (!verLog) exit = 1;
+if (forbiddenUi.length || forbiddenFromLogs.length) exit = 1;
 process.exit(exit);

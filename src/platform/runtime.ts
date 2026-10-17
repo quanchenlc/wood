@@ -1,7 +1,7 @@
-import { ensureHud, disposeHud } from "./hud";
+import { ensureHud, disposeHud, compositeHud } from "./hud";
 import { isMinigame } from "./env";
 
-export { ensureHud, disposeHud };
+export { ensureHud, disposeHud, compositeHud };
 
 export function isMinigameRuntime(): boolean {
   return isMinigame();
