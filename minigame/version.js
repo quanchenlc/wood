@@ -3,5 +3,5 @@ module.exports = {
   VERSION: "0.1.5",
   BUILD_NOTE: "abort-audioparam-harden",
   /** 短提交标识，发版前由提交写入 */
-  BUILD_REV: "pending",
+  BUILD_REV: "93f4848",
 };
