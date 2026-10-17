@@ -17,6 +17,7 @@ const {
 } = require("./audio");
 const { installBlobPolyfill } = require("./blob");
 const { installTextCodecs } = require("./text");
+const { installAbortPolyfill } = require("./abort");
 
 function injectGlobals(map) {
   for (const [k, v] of Object.entries(map)) {
@@ -38,6 +39,8 @@ function injectGlobals(map) {
 }
 
 function installCommonPolyfills(canvas) {
+  // harness 会先剥掉 AbortController；真机 JSCore 本身没有。两边都在此补上。
+  installAbortPolyfill();
   installTextCodecs();
 
   const { requestAnimationFrame: raf, cancelAnimationFrame: caf } = createRafPair(canvas);

@@ -54,6 +54,12 @@
   strip("Worker");
   strip("btoa");
   strip("atob");
+  // 模拟微信 JSCore：无 AbortController / AbortSignal / Request / Headers
+  // （保留原生 Request 会因 polyfill AbortSignal 的 brand check 导致 FileLoader 全挂）
+  strip("AbortController");
+  strip("AbortSignal");
+  strip("Request");
+  strip("Headers");
 
   // 保留 URL 构造，但禁用原生 createObjectURL / revokeObjectURL
   try {
@@ -83,6 +89,120 @@
     global.URL.revokeObjectURL = function revokeObjectURL() {};
   } catch (e) {
     console.warn("[wx-shim] failed to strip createObjectURL", e);
+  }
+
+  /**
+   * 模拟微信 WXAudio：AudioParam ramp/setValue 对 NaN/Infinity/endTime<currentTime 直接抛错。
+   * 适配层必须包一层 sanitize+fallback，否则 three AudioListener.updateMatrixWorld 会让 boot 失败。
+   */
+  function strictifyAudioParam(param, ctx) {
+    if (!param || param.__fwHarnessStrict) return param;
+    param.__fwHarnessStrict = true;
+    const WX_ERR =
+      "WXAudio.AudioParam.setValueAtTime(): Property 'value' or 'endTime' invalid";
+
+    const wrapBinary = (method, { positive = false } = {}) => {
+      if (typeof param[method] !== "function") return;
+      const native = param[method].bind(param);
+      param[method] = function strictAudioParam(value, endTime) {
+        const v = Number(value);
+        const t = Number(endTime);
+        const now = ctx && typeof ctx.currentTime === "number" ? ctx.currentTime : 0;
+        if (!Number.isFinite(v) || !Number.isFinite(t) || t < now) {
+          throw new Error(WX_ERR);
+        }
+        if (positive && v <= 0) throw new Error(WX_ERR);
+        return native(v, t);
+      };
+    };
+
+    wrapBinary("setValueAtTime");
+    wrapBinary("linearRampToValueAtTime");
+    wrapBinary("exponentialRampToValueAtTime", { positive: true });
+
+    if (typeof param.setTargetAtTime === "function") {
+      const native = param.setTargetAtTime.bind(param);
+      param.setTargetAtTime = function (target, startTime, timeConstant) {
+        const v = Number(target);
+        const t = Number(startTime);
+        const c = Number(timeConstant);
+        const now = ctx && typeof ctx.currentTime === "number" ? ctx.currentTime : 0;
+        if (!Number.isFinite(v) || !Number.isFinite(t) || t < now || !Number.isFinite(c) || c <= 0) {
+          throw new Error(WX_ERR);
+        }
+        return native(v, t, c);
+      };
+    }
+    return param;
+  }
+
+  function strictifyNodeParams(node, ctx) {
+    if (!node || node.__fwHarnessNodeStrict) return node;
+    node.__fwHarnessNodeStrict = true;
+    const keys = [
+      "gain",
+      "frequency",
+      "detune",
+      "Q",
+      "delayTime",
+      "pan",
+      "offset",
+      "positionX",
+      "positionY",
+      "positionZ",
+      "orientationX",
+      "orientationY",
+      "orientationZ",
+      "forwardX",
+      "forwardY",
+      "forwardZ",
+      "upX",
+      "upY",
+      "upZ",
+    ];
+    for (const k of keys) {
+      try {
+        if (node[k] && typeof node[k].setValueAtTime === "function") {
+          strictifyAudioParam(node[k], ctx);
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    return node;
+  }
+
+  function strictifyAudioContextParams(ctx) {
+    if (!ctx || ctx.__fwHarnessCtxStrict) return ctx;
+    ctx.__fwHarnessCtxStrict = true;
+    const wrapFactory = (name) => {
+      if (typeof ctx[name] !== "function") return;
+      const native = ctx[name].bind(ctx);
+      ctx[name] = function (...args) {
+        return strictifyNodeParams(native(...args), ctx);
+      };
+    };
+    [
+      "createGain",
+      "createOscillator",
+      "createBiquadFilter",
+      "createDelay",
+      "createPanner",
+      "createStereoPanner",
+      "createConstantSource",
+      "createBufferSource",
+    ].forEach(wrapFactory);
+    try {
+      if (ctx.listener) strictifyNodeParams(ctx.listener, ctx);
+    } catch {
+      /* ignore */
+    }
+    try {
+      if (ctx.destination) strictifyNodeParams(ctx.destination, ctx);
+    } catch {
+      /* ignore */
+    }
+    return ctx;
   }
 
   let mainCanvasGiven = false;
@@ -319,6 +439,8 @@
         // 故意不返回 Promise，逼适配层兼容回调
         return undefined;
       };
+      // 模拟真机：非法 value/endTime 时 linearRamp/setValue 抛与微信相同错误
+      strictifyAudioContextParams(ctx);
       return ctx;
     },
     getSystemInfoSync() {

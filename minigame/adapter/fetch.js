@@ -146,6 +146,15 @@ function decodeDataUrl(url) {
 
 function createFetch() {
   return function fetch(input, init) {
+    // three FileLoader: fetch(new Request(url, { signal }))；signal 直接忽略
+    const reqInit = init && typeof init === "object" ? { ...init } : {};
+    if (input && typeof input === "object" && typeof input.url === "string") {
+      if (reqInit.method === undefined && input.method) reqInit.method = input.method;
+      if (reqInit.headers === undefined && input.headers) reqInit.headers = input.headers;
+    }
+    // 永不把 polyfill AbortSignal 传给原生 fetch / Request
+    if ("signal" in reqInit) delete reqInit.signal;
+
     const url = typeof input === "string" ? input : input && input.url;
     if (!url) return Promise.reject(new TypeError("fetch: invalid url"));
     // ImageBitmapLoader 会对 createObjectURL 得到的 data:/blob: 再 fetch
@@ -153,10 +162,10 @@ function createFetch() {
     if (/^blob:/i.test(url)) {
       // harness 恢复了原生 Blob/URL 时，blob: 只能用原生 fetch 读
       const native = globalThis.__HARNESS_NATIVE__ && globalThis.__HARNESS_NATIVE__.fetch;
-      if (native) return native(url, init || {});
+      if (native) return native(url, reqInit);
       return Promise.reject(new Error("fetch: blob URLs not supported on device polyfill"));
     }
-    if (isRemote(url)) return wxRequest(url, init || {});
+    if (isRemote(url)) return wxRequest(url, reqInit);
     return fsRead(url);
   };
 }

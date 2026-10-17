@@ -367,9 +367,34 @@ if (audioFails.length) {
   console.error(audioFails.slice(0, 8).join("\n"));
 }
 
-const verLog = logs.find((l) => /\[firewood\].*0\.1\.4/.test(l));
+const abortFails = logs.filter((l) => /AbortController/i.test(l));
+if (abortFails.length) {
+  console.error("ERROR: AbortController errors (polyfill missing?):", abortFails.length);
+  console.error(abortFails.slice(0, 8).join("\n"));
+}
+
+const bootFails = logs.filter(
+  (l) =>
+    l.includes("boot failed") ||
+    l.includes("fallback boot failed") ||
+    l.includes("启动失败"),
+);
+if (bootFails.length) {
+  console.error("ERROR: boot failed logs:", bootFails.length);
+  console.error(bootFails.slice(0, 8).join("\n"));
+}
+
+const audioParamFails = logs.filter((l) =>
+  /AudioParam\.(setValueAtTime|linearRamp)|Property 'value' or 'endTime' invalid/i.test(l),
+);
+if (audioParamFails.length) {
+  console.error("ERROR: AudioParam ramp errors (harden missing?):", audioParamFails.length);
+  console.error(audioParamFails.slice(0, 8).join("\n"));
+}
+
+const verLog = logs.find((l) => /\[firewood\].*0\.1\.5/.test(l));
 if (!verLog) {
-  console.error("ERROR: missing 0.1.4 version log in console");
+  console.error("ERROR: missing 0.1.5 version log in console");
 } else {
   console.log("version log:", verLog);
 }
@@ -388,6 +413,9 @@ if (mp4Size > 15 * 1024 * 1024) {
 }
 if (real404.length) exit = 1;
 if (audioFails.length) exit = 1;
+if (abortFails.length) exit = 1;
+if (bootFails.length) exit = 1;
+if (audioParamFails.length) exit = 1;
 if (!verLog) exit = 1;
 if (forbiddenUi.length || forbiddenFromLogs.length) exit = 1;
 process.exit(exit);
