@@ -6,16 +6,16 @@
  */
 const { installAdapter } = require("./adapter/index");
 const { prepareAssets } = require("./adapter/assets-loader");
-const { VERSION, BUILD_NOTE } = require("./version.js");
+const { VERSION, BUILD_NOTE, BUILD_REV } = require("./version.js");
 
 installAdapter();
-console.log("[firewood]", VERSION, BUILD_NOTE);
+console.log("[firewood]", VERSION, BUILD_REV || "", BUILD_NOTE);
 
 prepareAssets()
   .then((assetBase) => {
     globalThis.__FIREWOOD_ASSET_BASE__ = assetBase;
     globalThis.__FIREWOOD_RUNTIME__ = "minigame";
-    console.log("[firewood] asset base =", assetBase, "ver=", VERSION);
+    console.log("[firewood] asset base =", assetBase, "ver=", VERSION, BUILD_REV || "");
     require("./js/game.bundle.js");
   })
   .catch((err) => {

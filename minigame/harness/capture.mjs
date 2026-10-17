@@ -202,9 +202,8 @@ async function fireTouch(x, y) {
 }
 
 /**
- * 只通过 wx 触摸通道劈砍。
- * 未命中木头会转视角（仍算触摸生效），会换点重试；
- * 若触摸完全无响应则直接失败（绝不调用 __fw.click）。
+ * 只通过 wx 触摸通道劈砍（绝不调用 __fw.click）。
+ * 未命中 / 点空地 / 无视角变化：换下一个点重试；全部失败才报错。
  */
 async function touchChop(preferredX, preferredY) {
   const candidates = [
@@ -251,21 +250,19 @@ async function touchChop(preferredX, preferredY) {
     }
 
     lastAfter = await page.evaluate(() => window.__fw?.state?.() ?? null);
-    // 触摸生效但打空：相机会 nudge；稍等惯性结束再试下一点
-    const touchAlive =
+    const nudged =
       lastAfter &&
       (lastAfter.cameraTargetAzimuth != null ||
         lastAfter.cameraAzimuth !== before?.cameraAzimuth ||
         lastAfter.axe !== before?.axe);
-    if (touchAlive) {
+    if (nudged) {
       console.log("touchChop miss (camera nudged), retry", x, y);
       await sleep(800);
-      continue;
+    } else {
+      // 点到空地：可能既不劈也不转视角，换点继续，勿立刻 exit 1
+      console.log("touchChop no visible change, retry next point", x, y);
+      await sleep(400);
     }
-    // 完全无响应：立刻失败
-    throw new Error(
-      `wx touch no response at (${x},${y}); before=${JSON.stringify(before)} after=${JSON.stringify(lastAfter)}`,
-    );
   }
 
   throw new Error(
@@ -357,10 +354,25 @@ console.log("artifacts", outDir);
 await browser.close();
 server.close();
 
+const audioFails = logs.filter((l) => l.includes("音效加载失败"));
+if (audioFails.length) {
+  console.error("ERROR: audio load failures:", audioFails.length);
+  console.error(audioFails.slice(0, 8).join("\n"));
+}
+
+const verLog = logs.find((l) => /\[firewood\].*0\.1\.3/.test(l));
+if (!verLog) {
+  console.error("ERROR: missing 0.1.3 version log in console");
+} else {
+  console.log("version log:", verLog);
+}
+
 let exit = 0;
 if (mp4Size > 15 * 1024 * 1024) {
   console.warn("WARNING: mp4 exceeds 15MB");
   exit = 1;
 }
 if (real404.length) exit = 1;
+if (audioFails.length) exit = 1;
+if (!verLog) exit = 1;
 process.exit(exit);

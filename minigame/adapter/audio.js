@@ -11,35 +11,48 @@ const inUse = new Set();
 function patchDecodeAudioData(ctx) {
   if (!ctx || typeof ctx.decodeAudioData !== "function") return ctx;
   const native = ctx.decodeAudioData.bind(ctx);
+  /**
+   * three AudioLoader 会 decodeAudioData(buf, cb).catch(...)，
+   * 微信回调版返回 undefined → .catch 抛 TypeError。
+   * 统一始终返回 Promise；success/error 与 resolve/reject 各只触发一次。
+   */
   ctx.decodeAudioData = function decodeAudioData(arrayBuffer, success, error) {
-    // 已是 Promise 风格且无回调
-    if (success == null && error == null) {
-      try {
-        const ret = native(arrayBuffer);
-        if (ret && typeof ret.then === "function") return ret;
-        // 某些基础库无回调也不返回 Promise —— 包一层
-        return new Promise((resolve, reject) => {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const ok = (buf) => {
+        if (settled) return;
+        settled = true;
+        if (typeof success === "function") {
           try {
-            native(arrayBuffer, resolve, reject);
-          } catch (e) {
-            reject(e);
+            success(buf);
+          } catch {
+            /* ignore user callback errors */
           }
-        });
+        }
+        resolve(buf);
+      };
+      const fail = (err) => {
+        if (settled) return;
+        settled = true;
+        if (typeof error === "function") {
+          try {
+            error(err);
+          } catch {
+            /* ignore */
+          }
+        }
+        reject(err);
+      };
+      try {
+        const ret = native(arrayBuffer, ok, fail);
+        if (ret && typeof ret.then === "function") {
+          // 原生若同时返回 Promise，只用其结果（settled 防双重回调）
+          ret.then(ok, fail);
+        }
       } catch (e) {
-        return Promise.reject(e);
+        fail(e);
       }
-    }
-    // 回调风格
-    try {
-      const ret = native(arrayBuffer, success, error);
-      if (ret && typeof ret.then === "function") {
-        ret.then(success, error);
-      }
-      return ret;
-    } catch (e) {
-      if (typeof error === "function") error(e);
-      return undefined;
-    }
+    });
   };
   return ctx;
 }
