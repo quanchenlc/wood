@@ -5,10 +5,15 @@
  * 所以下面所有尺寸都写成 `<英寸数> * INCH` 的形式,改起来直观。
  */
 
+import { isMinigame } from "../platform/env";
+
 export const INCH = 0.0254;
 export const FOOT = 0.3048;
 
-export const IS_MOBILE = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+/** 小游戏 UA 不含 Mobi，一律按移动端档；Web 仍靠 UA 判断 */
+export const IS_MINIGAME = isMinigame();
+export const IS_MOBILE =
+  IS_MINIGAME || /Mobi|Android|iPhone|iPad|WeChat MiniGame/i.test(navigator.userAgent);
 
 /** 地面高度。树桩坐在 y=0,草和落地的柴火以此为基准。 */
 export const GROUND_Y = -0.33;
@@ -41,7 +46,8 @@ export const LIGHTING = {
   sunAzimuth: (120 * Math.PI) / 180,
   sunElevation: (30 * Math.PI) / 180,
   sunDistance: 8,
-  shadowMapSize: IS_MOBILE ? 2048 : 4096,
+  /** 小游戏再降一档到 1024；普通手机 Web 2048；桌面 4096 */
+  shadowMapSize: IS_MINIGAME ? 1024 : IS_MOBILE ? 2048 : 4096,
   /** 正交阴影相机半径,刚好罩住树桩 + 柴堆 */
   shadowExtent: 6,
   shadowNear: 0.1,

@@ -3,7 +3,7 @@ import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { BokehPass } from "three/examples/jsm/postprocessing/BokehPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
-import { POST } from "../config/constants";
+import { IS_MINIGAME, POST } from "../config/constants";
 
 export interface Post {
   composer: EffectComposer;
@@ -24,22 +24,27 @@ export function createPost(
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
 
-  const bokeh = new BokehPass(scene, camera, {
-    focus: POST.focus,
-    aperture: POST.aperture,
-    maxblur: POST.maxBlur,
-  });
-
   const hidden: THREE.Object3D[] = [];
-  const originalRender = bokeh.render.bind(bokeh);
-  bokeh.render = (...args: Parameters<typeof originalRender>) => {
-    const wasVisible = hidden.map((o) => o.visible);
-    hidden.forEach((o) => (o.visible = false));
-    originalRender(...args);
-    hidden.forEach((o, i) => (o.visible = wasVisible[i]));
-  };
 
-  composer.addPass(bokeh);
+  // 小游戏默认关 Bokeh 景深；Web（含手机浏览器）保持原行为
+  if (!IS_MINIGAME) {
+    const bokeh = new BokehPass(scene, camera, {
+      focus: POST.focus,
+      aperture: POST.aperture,
+      maxblur: POST.maxBlur,
+    });
+
+    const originalRender = bokeh.render.bind(bokeh);
+    bokeh.render = (...args: Parameters<typeof originalRender>) => {
+      const wasVisible = hidden.map((o) => o.visible);
+      hidden.forEach((o) => (o.visible = false));
+      originalRender(...args);
+      hidden.forEach((o, i) => (o.visible = wasVisible[i]));
+    };
+
+    composer.addPass(bokeh);
+  }
+
   composer.addPass(new OutputPass());
 
   return {

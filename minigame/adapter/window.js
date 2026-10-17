@@ -1,7 +1,10 @@
 const { ListenerList } = require("./event-target");
+const { createRafPair } = require("./raf");
 
 function createWindow(canvas) {
   const listeners = new ListenerList();
+  const { requestAnimationFrame: raf, cancelAnimationFrame: caf } = createRafPair(canvas);
+
   const info =
     typeof wx !== "undefined" && wx.getSystemInfoSync
       ? wx.getSystemInfoSync()
@@ -30,18 +33,15 @@ function createWindow(canvas) {
     clearTimeout,
     setInterval,
     clearInterval,
-    requestAnimationFrame: (cb) =>
-      (typeof requestAnimationFrame === "function"
-        ? requestAnimationFrame
-        : (fn) => setTimeout(() => fn(Date.now()), 1000 / 60))(cb),
-    cancelAnimationFrame: (id) =>
-      (typeof cancelAnimationFrame === "function" ? cancelAnimationFrame : clearTimeout)(id),
+    // 闭包持有原生实现，禁止再读全局（避免注入后递归）
+    requestAnimationFrame: raf,
+    cancelAnimationFrame: caf,
     addEventListener: (type, fn) => listeners.on(type, fn),
     removeEventListener: (type, fn) => listeners.off(type, fn),
     dispatchEvent: (event) => listeners.emit(event.type, event),
     getComputedStyle: () => ({ getPropertyValue: () => "" }),
     matchMedia: (query) => ({
-      matches: String(query).includes("pointer: coarse") ? true : false,
+      matches: String(query).includes("pointer: coarse"),
       media: query,
       addListener() {},
       removeListener() {},
@@ -54,25 +54,12 @@ function createWindow(canvas) {
     HTMLElement: function HTMLElement() {},
     HTMLCanvasElement: canvas.constructor,
     Image: typeof Image !== "undefined" ? Image : undefined,
-    AudioContext:
-      typeof AudioContext !== "undefined"
-        ? AudioContext
-        : typeof webkitAudioContext !== "undefined"
-          ? webkitAudioContext
-          : undefined,
-    webkitAudioContext: typeof webkitAudioContext !== "undefined" ? webkitAudioContext : undefined,
     WebGLRenderingContext: typeof WebGLRenderingContext !== "undefined" ? WebGLRenderingContext : undefined,
     WebGL2RenderingContext:
       typeof WebGL2RenderingContext !== "undefined" ? WebGL2RenderingContext : undefined,
-    URL: typeof URL !== "undefined" ? URL : { createObjectURL: () => "", revokeObjectURL() {} },
-    Blob: typeof Blob !== "undefined" ? Blob : function Blob() {},
-    Worker: typeof Worker !== "undefined" ? Worker : undefined,
-    WebAssembly: typeof WebAssembly !== "undefined" ? WebAssembly : undefined,
-    fetch: typeof fetch !== "undefined" ? fetch.bind(globalThis) : undefined,
     console,
   };
 
-  // 可见性：切前后台
   if (typeof wx !== "undefined") {
     if (wx.onShow) {
       wx.onShow(() => {

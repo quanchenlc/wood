@@ -46,7 +46,7 @@ Harness 会注入 `wx` shim，但**实际执行的是 `minigame/game.js` 入口*
 
 ## 已知风险（真机需再验）
 
-1. **KTX2 / basis WASM**：依赖 Worker + `WebAssembly`；真机需 `WXWebAssembly`，部分基础库对 Blob Worker 不友好。
-2. **WebAudio**：当前仍走 `THREE.Audio`；若某机型无 AudioContext，需改 `wx.createInnerAudioContext`。
-3. **EffectComposer / 浮点纹理**：低端 GPU 可能降级或掉帧。
-4. Harness ≠ 真机：输入、音频策略、包内读文件、WASM 路径都可能不同。
+1. **KTX2 已离线转 JPEG**：构建时用 Chromium 解码树桩 GLB，小游戏包不再含 basis transcoder。
+2. **音频**：SFX 走 `wx.createWebAudioContext` + THREE.Audio；BGM 走 InnerAudio；初始化失败会静音但不挡游戏。
+3. **fetch 适配**：`wx.request` / 包内 `readFile`；harness 已剥离浏览器原生 fetch 以暴露缺口。
+4. Harness ≠ 真机：包路径、音频策略、GPU 能力仍可能不同。

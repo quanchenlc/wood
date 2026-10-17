@@ -21,7 +21,7 @@ import { loadStump } from "./world/stump";
 import { createLog } from "./wood/logFactory";
 import { loadWoodMaterials, type WoodMaterials } from "./wood/materials";
 import { warmUpSlicePipeline } from "./wood/warmup";
-import { ensureHud, isMinigameRuntime } from "./platform/runtime";
+import { ensureHud } from "./platform/runtime";
 
 const renderer = createRenderer();
 const scene = createScene();
@@ -165,8 +165,13 @@ function frame() {
 }
 frame();
 
-// Web 开发模式 + 小游戏（含仿真 harness）都挂调试钩子，方便自动截图/点砍。
-if (import.meta.env.DEV || isMinigameRuntime()) {
+// 仅 Web DEV 或 harness 显式打开调试钩子；正式小游戏构建不挂 __fw。
+const enableDebugHooks =
+  import.meta.env.DEV ||
+  (typeof globalThis !== "undefined" &&
+    Boolean((globalThis as { __FIREWOOD_ENABLE_DEBUG__?: boolean }).__FIREWOOD_ENABLE_DEBUG__));
+
+if (enableDebugHooks) {
   Object.assign(window, {
     __fw: {
       look: (deg: number) => controller.setAzimuth((deg * Math.PI) / 180),

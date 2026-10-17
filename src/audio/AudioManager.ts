@@ -1,43 +1,75 @@
 import * as THREE from "three";
 import { SOUNDS, type SoundGroup } from "../config/assets";
 import type { ProgressFn } from "../core/loading";
+import { isMinigame } from "../platform/env";
+
+type InnerAudio = {
+  src: string;
+  loop: boolean;
+  volume: number;
+  play: () => void;
+  stop: () => void;
+  destroy: () => void;
+  onEnded?: (fn: () => void) => void;
+};
 
 /**
  * 音效。
  *
- * 两件事值得说:
- * 1. 同一组音效连播时不能重样 —— 劈柴连着响三次一模一样的裂声非常出戏,
- *    所以随机取样时记住上一次的下标,强制换一个。
- * 2. 浏览器不允许未经交互就出声,AudioContext 必须等到第一次点击才能 resume。
- *    这里把恢复动作挂在全局首次 pointerdown 上。
+ * Web：THREE.Audio + AudioContext。
+ * 小游戏：优先 wx.createWebAudioContext 驱动 THREE.Audio；
+ * 背景音乐改用 InnerAudioContext。整段初始化包 try/catch，失败不挡游戏。
  */
 export class AudioManager {
-  private readonly listener: THREE.AudioListener;
+  private listener: THREE.AudioListener | null = null;
   private readonly buffers = new Map<SoundGroup, AudioBuffer[]>();
   private readonly lastIndex = new Map<SoundGroup, number>();
   private background: THREE.Audio | null = null;
+  private backgroundInner: InnerAudio | null = null;
   private unlocked = false;
+  private disabled = false;
+  private readonly bgUrl: string | null;
 
   readonly ready: Promise<void>;
 
   constructor(camera: THREE.Camera, onProgress?: ProgressFn) {
-    this.listener = new THREE.AudioListener();
-    camera.add(this.listener);
-    this.ready = this.loadAll(onProgress);
+    this.bgUrl = SOUNDS.bg[0] ?? null;
+    try {
+      this.listener = new THREE.AudioListener();
+      camera.add(this.listener);
+      this.ready = this.loadAll(onProgress);
+    } catch (err) {
+      console.warn("音频初始化失败，本局静音:", err);
+      this.disabled = true;
+      this.listener = null;
+      // 进度条仍要走完音效份额，避免卡在 loading
+      this.ready = this.skipProgress(onProgress);
+    }
 
     window.addEventListener("pointerdown", this.unlock, { once: true });
-    // 切后台再回来时 AudioContext 会被挂起,背景音得重新推一把
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible" && this.unlocked) this.resume();
     });
   }
 
+  private async skipProgress(onProgress?: ProgressFn) {
+    const total = Object.values(SOUNDS).reduce((n, list) => n + list.length, 0);
+    for (let i = 0; i < total; i++) onProgress?.();
+  }
+
   private async loadAll(onProgress?: ProgressFn) {
+    if (!this.listener) return;
     const loader = new THREE.AudioLoader();
 
     const groups = Object.entries(SOUNDS) as Array<[SoundGroup, readonly string[]]>;
     await Promise.all(
       groups.map(async ([group, urls]) => {
+        // 小游戏 BGM 走 InnerAudio，不必解码进 AudioBuffer
+        if (isMinigame() && group === "bg") {
+          urls.forEach(() => onProgress?.());
+          this.buffers.set(group, []);
+          return;
+        }
         const loaded = await Promise.all(
           urls.map((url) =>
             loader
@@ -61,11 +93,10 @@ export class AudioManager {
   };
 
   private resume() {
-    const ctx = this.listener.context;
-    if (ctx.state === "suspended") void ctx.resume();
+    const ctx = this.listener?.context;
+    if (ctx && ctx.state === "suspended") void ctx.resume();
   }
 
-  /** 从一组里随机取一个,但不重复上一次 */
   private pick(group: SoundGroup): AudioBuffer | null {
     const list = this.buffers.get(group);
     if (!list || list.length === 0) return null;
@@ -78,38 +109,100 @@ export class AudioManager {
     return list[i];
   }
 
-  /**
-   * 放一个一次性音效。
-   * 每次都新建一个 Audio 对象,是为了让音效能叠着响 —— 复用一个的话
-   * 连续劈砍会把前一声掐掉。
-   */
-  play(group: SoundGroup, volume = 1, detune = true) {
-    if (!this.unlocked) return;
-    const buffer = this.pick(group);
-    if (!buffer) return;
+  private pickUrl(group: SoundGroup): string | null {
+    const list = SOUNDS[group];
+    if (!list || list.length === 0) return null;
+    if (list.length === 1) return list[0];
+    const last = this.lastIndex.get(group) ?? -1;
+    let i = Math.floor(Math.random() * list.length);
+    if (i === last) i = (i + 1) % list.length;
+    this.lastIndex.set(group, i);
+    return list[i];
+  }
 
-    const sound = new THREE.Audio(this.listener);
-    sound.setBuffer(buffer);
-    sound.setVolume(volume);
-    // 轻微随机变调,同一个采样重复播也不会显得机械
-    if (detune) sound.setPlaybackRate(0.92 + Math.random() * 0.16);
-    sound.onEnded = () => sound.disconnect();
-    sound.play();
+  private playInner(url: string, volume: number, loop = false) {
+    const factory = (globalThis as { __wxCreateInnerAudio?: () => InnerAudio | null })
+      .__wxCreateInnerAudio;
+    const inner = factory?.() ?? null;
+    if (!inner) return null;
+    try {
+      inner.src = url;
+      inner.loop = loop;
+      inner.volume = volume;
+      inner.play();
+      return inner;
+    } catch (err) {
+      console.warn("InnerAudio 播放失败:", err);
+      try {
+        inner.destroy();
+      } catch {
+        /* ignore */
+      }
+      return null;
+    }
+  }
+
+  play(group: SoundGroup, volume = 1, detune = true) {
+    if (!this.unlocked || this.disabled) return;
+
+    if (this.listener) {
+      const buffer = this.pick(group);
+      if (buffer) {
+        try {
+          const sound = new THREE.Audio(this.listener);
+          sound.setBuffer(buffer);
+          sound.setVolume(volume);
+          if (detune) sound.setPlaybackRate(0.92 + Math.random() * 0.16);
+          sound.onEnded = () => sound.disconnect();
+          sound.play();
+          return;
+        } catch (err) {
+          console.warn("WebAudio 播放失败,尝试 InnerAudio:", err);
+        }
+      }
+    }
+
+    const url = this.pickUrl(group);
+    if (url) this.playInner(url, volume, false);
   }
 
   playBackground(volume = 0.25) {
+    if (this.background || this.backgroundInner) return;
+
+    if (isMinigame() && this.bgUrl) {
+      this.backgroundInner = this.playInner(this.bgUrl, volume, true);
+      return;
+    }
+
+    if (!this.listener) return;
     const buffer = this.pick("bg");
-    if (!buffer || this.background) return;
-    this.background = new THREE.Audio(this.listener);
-    this.background.setBuffer(buffer);
-    this.background.setLoop(true);
-    this.background.setVolume(volume);
-    this.background.play();
+    if (!buffer) return;
+    try {
+      this.background = new THREE.Audio(this.listener);
+      this.background.setBuffer(buffer);
+      this.background.setLoop(true);
+      this.background.setVolume(volume);
+      this.background.play();
+    } catch (err) {
+      console.warn("背景音乐播放失败:", err);
+      this.background = null;
+    }
   }
 
   dispose() {
-    this.background?.stop();
+    try {
+      this.background?.stop();
+    } catch {
+      /* ignore */
+    }
     this.background = null;
-    this.listener.parent?.remove(this.listener);
+    try {
+      this.backgroundInner?.stop();
+      this.backgroundInner?.destroy();
+    } catch {
+      /* ignore */
+    }
+    this.backgroundInner = null;
+    this.listener?.parent?.remove(this.listener);
   }
 }

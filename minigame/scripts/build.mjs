@@ -1,9 +1,9 @@
 /**
  * 打包微信小游戏：
  * - esbuild 把共享 src + entry 打成 js/game.bundle.js（CJS）
- * - 拷贝 public/assets + public/basis 到素材分包
- * - 同步 AppID 到 project.config.json
- * - 打印主包 / 分包体积
+ * - 拷贝 public/assets 到素材分包（不拷 basis）
+ * - 离线把 KTX2 树桩解成 JPEG 嵌进 GLB
+ * - 同步 AppID；打印主包 / 分包体积
  */
 import * as esbuild from "esbuild";
 import {
@@ -19,6 +19,7 @@ import {
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { spawnSync } from "node:child_process";
 
 const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -69,7 +70,6 @@ async function bundle() {
     format: "cjs",
     platform: "browser",
     target: ["es2020"],
-    // source map 体积大，不进主包；需要调试时设 MINIGAME_SOURCEMAP=1
     sourcemap: process.env.MINIGAME_SOURCEMAP === "1",
     minify: true,
     legalComments: "none",
@@ -79,20 +79,68 @@ async function bundle() {
       "import.meta.env.DEV": "false",
       "import.meta.env.PROD": "true",
       "import.meta.env.MODE": JSON.stringify("minigame"),
-      // three.js KTX2Loader 在模块顶层用 new URL(..., import.meta.url)；
-      // CJS 打包后必须给一个合法绝对 URL，否则整包无法求值。
       "import.meta.url": JSON.stringify("https://firewood.local/js/game.bundle.js"),
     },
     loader: {
       ".glsl": "text",
       ".wgsl": "text",
     },
+    // 小游戏不打 KTX2Loader（已离线转 JPEG），避免 basis Worker/Blob 代码进主包
+    alias: {
+      "three/examples/jsm/loaders/KTX2Loader.js": join(MG, "stubs/KTX2Loader.js"),
+    },
   });
+}
+
+function runGltf(args) {
+  const r = spawnSync("npx", ["--yes", "@gltf-transform/cli@4.5.1", ...args], {
+    cwd: ROOT,
+    stdio: "inherit",
+    env: process.env,
+  });
+  if (r.status !== 0) {
+    throw new Error(`gltf-transform failed: ${args.join(" ")}`);
+  }
+}
+
+function decompressKtx2Glb(input, { maxSize = 1024, quality = 82 } = {}) {
+  if (!existsSync(input)) return;
+  const before = statSync(input).size;
+  const raw = `${input}.raw.glb`;
+  const jpg = `${input}.jpg.glb`;
+
+  console.log("[build] decode KTX2", relative(ROOT, input));
+  const decode = spawnSync(process.execPath, [join(MG, "scripts/decode-stump.mjs"), input, raw], {
+    cwd: ROOT,
+    stdio: "inherit",
+    env: process.env,
+  });
+  if (decode.status !== 0) {
+    throw new Error(`decode-stump.mjs failed for ${input}`);
+  }
+
+  runGltf(["jpeg", raw, jpg, "--formats", "*", "--quality", String(quality)]);
+  runGltf(["resize", jpg, input, "--width", String(maxSize), "--height", String(maxSize)]);
+  rmSync(raw, { force: true });
+  rmSync(jpg, { force: true });
+
+  const after = statSync(input).size;
+  console.log(`[build] ${relative(ROOT, input)} ${formatMb(before)} → ${formatMb(after)}`);
+}
+
+function decompressAllKtx2(destAssets) {
+  // 凡带 KHR_texture_basisu 的模型都离线转 JPEG
+  const targets = [
+    { file: "stump_v02_mesh_warm_ktx2_2048.glb", maxSize: 1024 },
+    { file: "ax_v01_reduced_compressed.glb", maxSize: 1024 },
+  ];
+  for (const t of targets) {
+    decompressKtx2Glb(join(destAssets, t.file), { maxSize: t.maxSize });
+  }
 }
 
 function copyAssets() {
   const pubAssets = join(ROOT, "public/assets");
-  const pubBasis = join(ROOT, "public/basis");
   const destAssets = join(SUB_ASSETS, "assets");
   const destBasis = join(SUB_ASSETS, "basis");
 
@@ -104,9 +152,10 @@ function copyAssets() {
     throw new Error(`missing ${pubAssets}`);
   }
   cpSync(pubAssets, destAssets, { recursive: true });
-  if (existsSync(pubBasis)) cpSync(pubBasis, destBasis, { recursive: true });
+  // 刻意不拷贝 basis_transcoder：小游戏已去掉 KTX2Loader
 
-  // 保证分包入口存在
+  decompressAllKtx2(destAssets);
+
   const subEntry = join(SUB_ASSETS, "game.js");
   if (!existsSync(subEntry)) {
     writeFileSync(subEntry, 'console.log("[firewood] assets subpackage ready");\n');
@@ -128,7 +177,9 @@ function reportSizes() {
     return !rel.startsWith("harness/") && !rel.startsWith("scripts/") && !rel.startsWith("src/");
   });
   const mainFiles = all.filter((f) => isMainPackageFile(f.path));
-  const subFiles = all.filter((f) => relative(MG, f.path).replace(/\\/g, "/").startsWith("subpackages/"));
+  const subFiles = all.filter((f) =>
+    relative(MG, f.path).replace(/\\/g, "/").startsWith("subpackages/"),
+  );
   const mainBytes = sum(mainFiles);
   const subBytes = sum(subFiles);
 
