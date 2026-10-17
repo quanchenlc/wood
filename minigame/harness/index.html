@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>Firewood MiniGame Harness</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #000;
+      }
+      #game {
+        display: block;
+        width: 100%;
+        height: 100%;
+        touch-action: none;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+    <script src="./wx-shim.js"></script>
+    <script>
+      // CommonJS require 仿真：按顺序拉取并 eval 小游戏脚本
+      window.module = { exports: {} };
+      window.exports = window.module.exports;
+      const cache = Object.create(null);
+
+      function dirname(path) {
+        const i = path.lastIndexOf("/");
+        return i <= 0 ? "/" : path.slice(0, i);
+      }
+      function normalize(base, rel) {
+        if (rel.startsWith("/")) return rel;
+        const parts = (dirname(base) + "/" + rel).split("/");
+        const out = [];
+        for (const p of parts) {
+          if (!p || p === ".") continue;
+          if (p === "..") out.pop();
+          else out.push(p);
+        }
+        return "/" + out.join("/");
+      }
+
+      window.require = function require(id) {
+        // 相对当前模块
+        const parent = require._current || "/game.js";
+        let path = id;
+        if (id.startsWith(".")) path = normalize(parent, id);
+        else if (!id.startsWith("/")) path = normalize(parent, "./" + id);
+        if (!/\.(c?js)$/.test(path)) path += ".js";
+
+        if (cache[path]) return cache[path].exports;
+
+        const xhr = new XMLHttpRequest();
+        xhr.open("GET", path, false); // sync，贴近小游戏启动顺序
+        xhr.send(null);
+        if (xhr.status !== 200 && xhr.status !== 0) {
+          throw new Error("require failed: " + path + " status " + xhr.status);
+        }
+        const mod = { exports: {} };
+        cache[path] = mod;
+        const prev = require._current;
+        require._current = path;
+        const prevModule = window.module;
+        const prevExports = window.exports;
+        window.module = mod;
+        window.exports = mod.exports;
+        try {
+          // eslint-disable-next-line no-eval
+          const fn = new Function("require", "module", "exports", xhr.responseText + "\n//# sourceURL=" + path);
+          fn(require, mod, mod.exports);
+        } finally {
+          require._current = prev;
+          window.module = prevModule;
+          window.exports = prevExports;
+        }
+        return mod.exports;
+      };
+
+      // 入口：真正的小游戏 game.js（不是 web index.html）
+      require("/game.js");
+    </script>
+  </body>
+</html>

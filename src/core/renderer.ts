@@ -1,7 +1,13 @@
 import * as THREE from "three";
+import { isMinigame } from "../platform/env";
 
 export function createRenderer(): THREE.WebGLRenderer {
+  // 微信小游戏适配层会预先 wx.createCanvas() 并挂到 globalThis.canvas
+  const existing =
+    typeof globalThis !== "undefined" ? (globalThis.canvas as HTMLCanvasElement | undefined) : undefined;
+
   const renderer = new THREE.WebGLRenderer({
+    canvas: existing,
     antialias: true,
     powerPreference: "high-performance",
   });
@@ -18,7 +24,9 @@ export function createRenderer(): THREE.WebGLRenderer {
   renderer.toneMappingExposure = 1;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-  document.body.appendChild(renderer.domElement);
+  if (!existing && !isMinigame()) {
+    document.body.appendChild(renderer.domElement);
+  }
   return renderer;
 }
 

@@ -21,6 +21,7 @@ import { loadStump } from "./world/stump";
 import { createLog } from "./wood/logFactory";
 import { loadWoodMaterials, type WoodMaterials } from "./wood/materials";
 import { warmUpSlicePipeline } from "./wood/warmup";
+import { ensureHud, isMinigameRuntime } from "./platform/runtime";
 
 const renderer = createRenderer();
 const scene = createScene();
@@ -92,10 +93,25 @@ async function boot() {
 }
 
 function showHint() {
+  const coarse =
+    typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+  const actionText = "点击劈开";
+
+  const hud = ensureHud();
+  if (hud) {
+    hud.showHint(actionText);
+    const dismiss = () => {
+      hud.hideHint();
+      window.removeEventListener("pointerdown", dismiss);
+    };
+    window.addEventListener("pointerdown", dismiss);
+    return;
+  }
+
   const hint = document.getElementById("hint");
   if (!hint) return;
   const action = document.getElementById("hint-action");
-  if (action && matchMedia("(pointer: coarse)").matches) action.textContent = "点击劈开";
+  if (action && coarse) action.textContent = actionText;
   hint.hidden = false;
 
   const dismiss = () => {
@@ -149,8 +165,8 @@ function frame() {
 }
 frame();
 
-if (import.meta.env.DEV) {
-  // 开发用:在控制台驱动流程,不用手点。构建时整段会被摇掉。
+// Web 开发模式 + 小游戏（含仿真 harness）都挂调试钩子，方便自动截图/点砍。
+if (import.meta.env.DEV || isMinigameRuntime()) {
   Object.assign(window, {
     __fw: {
       look: (deg: number) => controller.setAzimuth((deg * Math.PI) / 180),

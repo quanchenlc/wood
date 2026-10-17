@@ -1,0 +1,50 @@
+{
+  "description": "劈柴模拟器 — 微信小游戏（AppID wx3371f99b1b0e73d1，可由 app.config.cjs 一处更换）",
+  "packOptions": {
+    "ignore": [
+      {
+        "type": "folder",
+        "value": "harness"
+      },
+      {
+        "type": "folder",
+        "value": "scripts"
+      },
+      {
+        "type": "folder",
+        "value": "src"
+      },
+      {
+        "type": "folder",
+        "value": "node_modules"
+      },
+      {
+        "type": "file",
+        "value": "README.md"
+      },
+      {
+        "type": "file",
+        "value": "size-report.json"
+      },
+      {
+        "type": "suffix",
+        "value": ".map"
+      }
+    ]
+  },
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "postcss": false,
+    "minified": true,
+    "newFeature": true,
+    "compileWorklet": false,
+    "enhance": true
+  },
+  "compileType": "game",
+  "libVersion": "3.5.5",
+  "appid": "wx3371f99b1b0e73d1",
+  "projectname": "firewood-minigame",
+  "condition": {},
+  "isGameTourist": false
+}

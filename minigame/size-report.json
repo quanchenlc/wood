@@ -1,0 +1,43 @@
+{
+  "appid": "wx3371f99b1b0e73d1",
+  "mainPackageBytes": 1136539,
+  "mainPackage": "1.08 MB",
+  "mainUnder4MB": true,
+  "assetsSubpackageBytes": 7554622,
+  "assetsSubpackage": "7.20 MB",
+  "bundle": "1.06 MB",
+  "largestMain": [
+    {
+      "file": "js/game.bundle.js",
+      "size": "1.06 MB"
+    },
+    {
+      "file": "adapter/document.js",
+      "size": "0.00 MB"
+    },
+    {
+      "file": "adapter/xhr.js",
+      "size": "0.00 MB"
+    },
+    {
+      "file": "adapter/window.js",
+      "size": "0.00 MB"
+    },
+    {
+      "file": "adapter/index.js",
+      "size": "0.00 MB"
+    },
+    {
+      "file": "adapter/assets-loader.js",
+      "size": "0.00 MB"
+    },
+    {
+      "file": "adapter/touch.js",
+      "size": "0.00 MB"
+    },
+    {
+      "file": "project.config.json",
+      "size": "0.00 MB"
+    }
+  ]
+}
