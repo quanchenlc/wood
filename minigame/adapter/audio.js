@@ -89,12 +89,9 @@ function releaseInner(inner) {
   inner.__fwReleased = true;
   inUse.delete(inner);
   try {
+    // 只 stop，不要清空 src：部分机型清空 src 会异步 onError，
+    // 若实例已被下一音效借走会被误 release，导致播放中断。
     inner.stop();
-  } catch {
-    /* ignore */
-  }
-  try {
-    inner.src = "";
   } catch {
     /* ignore */
   }
