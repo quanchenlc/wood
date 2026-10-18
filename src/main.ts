@@ -31,6 +31,11 @@ import {
   loadWoodMaterialsForSet,
   type ArtSetResolved,
 } from "./art/ArtSetController";
+import {
+  applyInkOutlines,
+  applyParchmentGroundFade,
+  applyParchmentStumpDiscFade,
+} from "./art/parchmentLook";
 import type { ArtSetId } from "./art/types";
 import { isArtSetId } from "./art/registry";
 
@@ -68,6 +73,9 @@ let artPickerOpen = false;
 let artSwitching = false;
 let groundMap: THREE.Texture | null = null;
 let backgroundMap: THREE.Texture | null = null;
+let clearGroundFade: (() => void) | null = null;
+let clearStumpDiscFade: (() => void) | null = null;
+let hemi: THREE.HemisphereLight | null = null;
 
 function syncArtSwitcherHud(loadingText?: string | null) {
   const hud = ensureHud();
@@ -81,45 +89,62 @@ function syncArtSwitcherHud(loadingText?: string | null) {
 }
 
 function applySetLighting(set: ArtSetResolved) {
-  // 羊皮纸：柔和低对比暖光，避免高光塑料感
-  if (set.id === "set4") {
-    sun.color.set("#f0e2c4");
-    sun.intensity = 2.55;
-    ambient.color.set("#e6d4b4");
-    ambient.intensity = 0.9;
-    renderer.toneMappingExposure = 0.9;
+  const parchment = set.id === "set4";
+  if (parchment) {
+    // 柔和暖光 + 高环境：影子是暖褐而不是死黑
+    sun.color.set("#f2e6c8");
+    sun.intensity = 1.85;
+    sun.shadow.radius = 6;
+    ambient.color.set("#eddcc0");
+    ambient.intensity = 1.55;
+    renderer.toneMappingExposure = 0.95;
+    if (!hemi) {
+      hemi = new THREE.HemisphereLight(0xf5ead2, 0xb8956a, 0.85);
+      scene.add(hemi);
+    }
+    hemi.visible = true;
+    gobo.setEnabled?.(false);
   } else {
     sun.color.set(LIGHTING.sunColor);
     sun.intensity = LIGHTING.sunIntensity;
+    sun.shadow.radius = LIGHTING.shadowRadius;
     ambient.color.set(LIGHTING.ambientColor);
     ambient.intensity = LIGHTING.ambientIntensity;
     renderer.toneMappingExposure = 1;
+    if (hemi) hemi.visible = false;
+    gobo.setEnabled?.(true);
   }
 }
 
 async function applyArtAtmosphere(set: ArtSetResolved) {
+  const parchment = set.id === "set4";
   applyGrassColors(grass, set.grass);
+  grass.setInkMode?.(parchment);
   applySetLighting(set);
 
-  if (set.urls.background) {
-    try {
-      const tex = await new THREE.TextureLoader().loadAsync(set.urls.background);
-      const prev = backgroundMap;
-      backgroundMap = tex;
-      applyEnvironment(scene, set, backgroundMap);
-      prev?.dispose();
-    } catch {
-      backgroundMap?.dispose();
-      backgroundMap = null;
-      applyEnvironment(scene, set, null);
-    }
-  } else {
-    if (backgroundMap) {
-      backgroundMap.dispose();
-      backgroundMap = null;
-    }
-    applyEnvironment(scene, set, null);
+  // 羊皮纸：不用全屏贴图作 background（会与地面圆盘形成硬地平线），
+  // 改用纸色天空 + 暖雾，地面边缘淡入雾色。
+  if (backgroundMap) {
+    backgroundMap.dispose();
+    backgroundMap = null;
   }
+  applyEnvironment(scene, set, null);
+  if (scene.fog && (scene.fog as THREE.Fog).isFog) {
+    const fog = scene.fog as THREE.Fog;
+    if (parchment) {
+      // 更近的雾：远场地面/桩盘溶进纸色，消硬缝
+      fog.near = 3.2;
+      fog.far = 11;
+    } else {
+      fog.near = 6;
+      fog.far = 22;
+    }
+  }
+
+  clearGroundFade?.();
+  clearGroundFade = null;
+  clearStumpDiscFade?.();
+  clearStumpDiscFade = null;
 
   if (set.urls.groundColor) {
     try {
@@ -137,6 +162,14 @@ async function applyArtAtmosphere(set: ArtSetResolved) {
   } else {
     applyGroundLook(ground, set, null);
   }
+
+  if (parchment) {
+    // 地面圆盘半径 ≈ 14*FOOT ≈ 4.27m；淡出必须落在盘内，否则地平线仍是硬边
+    clearGroundFade = applyParchmentGroundFade(ground, new THREE.Color(set.fog), {
+      inner: 2.2,
+      outer: 4.05,
+    });
+  }
 }
 
 async function applyResolvedArt(set: ArtSetResolved, opts?: { skipAxe?: boolean }) {
@@ -151,9 +184,21 @@ async function applyResolvedArt(set: ArtSetResolved, opts?: { skipAxe?: boolean 
     currentStump = null;
   }
   currentStump = await loadStumpForSet(scene, renderer, set.urls);
+  // 桩身描边靠烘焙墨线（反转外壳会 +~9k tris，超出 set1–3 预算）
+  if (set.id === "set4" && currentStump) {
+    clearStumpDiscFade = applyParchmentStumpDiscFade(
+      currentStump.root,
+      new THREE.Color(set.fog),
+      { inner: 1.8, outer: 5.5, discY: -0.32 },
+    );
+  }
 
   if (!opts?.skipAxe) {
     await axe.reloadAxeModel(set.urls.axe);
+  }
+  if (set.id === "set4") {
+    // 斧面数小，保留廉价外壳描边
+    axe.withAxeModel((root) => applyInkOutlines(root, 1.03));
   }
 
   if (game && debugPile) {
@@ -227,6 +272,14 @@ async function boot() {
   // 启动时 axe 已按 MODELS.axe（set0）加载；若偏好非 set0 再换斧
   if (initial.id !== "set0") {
     await axe.reloadAxeModel(initial.urls.axe);
+  }
+  if (initial.id === "set4") {
+    clearStumpDiscFade = applyParchmentStumpDiscFade(stump.root, new THREE.Color(initial.fog), {
+      inner: 1.8,
+      outer: 5.5,
+      discY: -0.32,
+    });
+    axe.withAxeModel((root) => applyInkOutlines(root, 1.03));
   }
 
   currentStump = stump;

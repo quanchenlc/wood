@@ -156,6 +156,11 @@ export class AxeAnimation {
     this.attachAxeModel(modelGltf.scene);
   }
 
+  /** 羊皮纸等：对当前斧模做后处理（如墨线描边） */
+  withAxeModel(fn: (root: THREE.Object3D) => void) {
+    if (this.axeModel) fn(this.axeModel);
+  }
+
   get busy(): boolean {
     return this.playing;
   }

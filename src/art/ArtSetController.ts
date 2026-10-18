@@ -191,9 +191,10 @@ export function applyEnvironment(
   set: ArtSetResolved,
   backgroundMap: THREE.Texture | null = null,
 ) {
+  // 注意：全屏 background 贴图会与地面圆盘形成硬地平线；
+  // set4 羊皮纸在 main 里改用纸色天空 + 雾融合，不传 backgroundMap。
   if (backgroundMap) {
     backgroundMap.colorSpace = THREE.SRGBColorSpace;
-    // 普通 2D 纹理：three 会拉成全屏背景（非 cubemap）
     scene.background = backgroundMap;
   } else {
     scene.background = new THREE.Color(set.sky);

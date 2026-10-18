@@ -79,7 +79,7 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-const outDir = join(ARTIFACTS, "art-sets-0.2.2");
+const outDir = join(ARTIFACTS, "art-sets-0.2.3");
 mkdirSync(outDir, { recursive: true });
 
 const server = await startServer();
@@ -260,12 +260,26 @@ if (real404.length) {
   process.exitCode = 1;
 }
 
-const verLog = logs.find((l) => /\[firewood\].*0\.2\.2/.test(l));
+const verLog = logs.find((l) => /\[firewood\].*0\.2\.3/.test(l));
 if (!verLog) {
-  console.error("ERROR: missing 0.2.2 version log");
+  console.error("ERROR: missing 0.2.3 version log");
   process.exitCode = 1;
 } else {
   console.log("version log:", verLog);
+}
+
+// set4 close-up: nudge camera azimuth and crop-ish full frame after switch
+try {
+  await switchSet("set4");
+  await page.evaluate(() => {
+    window.__fw?.look?.(25);
+  });
+  await sleep(700);
+  const closePath = join(outDir, "set4_closeup.png");
+  await page.screenshot({ path: closePath, type: "png" });
+  console.log("[artsets] closeup", closePath);
+} catch (e) {
+  console.warn("[artsets] closeup skipped", e);
 }
 
 await browser.close();

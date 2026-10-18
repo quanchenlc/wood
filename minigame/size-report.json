@@ -1,6 +1,6 @@
 {
   "appid": "wx3371f99b1b0e73d1",
-  "mainPackageBytes": 1133038,
+  "mainPackageBytes": 1136928,
   "mainPackage": "1.08 MB",
   "mainUnder4MB": true,
   "assetsSubpackageBytes": 5500988,
@@ -23,12 +23,12 @@
       "size": "2.12 MB"
     },
     "art-set4": {
-      "bytes": 1790489,
-      "size": "1.71 MB"
+      "bytes": 2131757,
+      "size": "2.03 MB"
     }
   },
-  "subpackagesTotalBytes": 12859904,
-  "subpackagesTotal": "12.26 MB",
+  "subpackagesTotalBytes": 13201172,
+  "subpackagesTotal": "12.59 MB",
   "bundle": "1.02 MB",
   "largestMain": [
     {

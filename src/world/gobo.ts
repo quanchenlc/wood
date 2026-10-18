@@ -3,6 +3,8 @@ import { IS_MINIGAME } from "../config/constants";
 
 export interface Gobo {
   update(dt: number): void;
+  /** 羊皮纸等套装关掉树冠遮罩，避免黑斑硬影 */
+  setEnabled?(on: boolean): void;
   dispose(): void;
 }
 
@@ -110,8 +112,10 @@ export function createGobo(scene: THREE.Scene, sunDirection: THREE.Vector3): Gob
   }
 
   let elapsed = 0;
+  let enabled = true;
   return {
     update(dt) {
+      if (!enabled) return;
       elapsed += dt;
       // 两片按不同速度缓慢平移,光斑就会像有风一样慢慢游走
       PANELS.forEach((cfg, i) => {
@@ -119,6 +123,13 @@ export function createGobo(scene: THREE.Scene, sunDirection: THREE.Vector3): Gob
         material.map!.offset.x = elapsed * cfg.drift;
         material.map!.offset.y = Math.sin(elapsed * cfg.drift * 2) * 0.02;
       });
+    },
+    setEnabled(on) {
+      enabled = on;
+      for (const mesh of panels) {
+        mesh.visible = on;
+        mesh.castShadow = on;
+      }
     },
     dispose() {
       for (const mesh of panels) {
