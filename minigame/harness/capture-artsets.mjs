@@ -79,7 +79,7 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-const outDir = join(ARTIFACTS, "art-sets-0.2.1");
+const outDir = join(ARTIFACTS, "art-sets-0.2.2");
 mkdirSync(outDir, { recursive: true });
 
 const server = await startServer();
@@ -200,7 +200,7 @@ async function switchSet(id) {
   await sleep(900);
 }
 
-const sets = ["set0", "set1", "set2", "set3"];
+const sets = ["set0", "set1", "set2", "set3", "set4"];
 const report = { sets: {}, notFound: [], logsTail: [] };
 
 for (const id of sets) {
@@ -260,9 +260,9 @@ if (real404.length) {
   process.exitCode = 1;
 }
 
-const verLog = logs.find((l) => /\[firewood\].*0\.2\.1/.test(l));
+const verLog = logs.find((l) => /\[firewood\].*0\.2\.2/.test(l));
 if (!verLog) {
-  console.error("ERROR: missing 0.2.1 version log");
+  console.error("ERROR: missing 0.2.2 version log");
   process.exitCode = 1;
 } else {
   console.log("version log:", verLog);

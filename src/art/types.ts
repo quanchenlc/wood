@@ -12,6 +12,8 @@ export interface ArtSetFileMap {
   innerNormal?: string;
   /** 可选近地贴图；缺省用 solid ground 色 */
   groundColor?: string;
+  /** 可选全屏背景（如羊皮纸扫描）；缺省用 sky 纯色 */
+  background?: string;
 }
 
 export interface ArtSetGrassColors {
@@ -36,7 +38,7 @@ export interface ArtSetManifest {
   grass?: ArtSetGrassColors;
 }
 
-export type ArtSetId = "set0" | "set1" | "set2" | "set3";
+export type ArtSetId = "set0" | "set1" | "set2" | "set3" | "set4";
 
 export interface ArtSetCatalogEntry {
   id: ArtSetId;

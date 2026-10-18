@@ -5,3 +5,6 @@ dist/
 # 美术预览图不进仓库/包（体积大；构建也会 skip）
 art-sets/**/preview.png
 art-sets/**/preview_*.png
+
+# 羊皮纸 UI 大图 mockups 不进仓（overview 可留作参照）
+ui-parchment-v2/mockups/0*.png

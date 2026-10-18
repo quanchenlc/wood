@@ -27,6 +27,12 @@ export const ART_SET_CATALOG: readonly ArtSetCatalogEntry[] = [
     subpackage: "art-set3",
     root: "subpackages/art-set3/",
   },
+  {
+    id: "set4",
+    label: "羊皮纸",
+    subpackage: "art-set4",
+    root: "subpackages/art-set4/",
+  },
 ] as const;
 
 export const DEFAULT_ART_SET: ArtSetId = "set0";
@@ -61,7 +67,7 @@ export const SET0_DEFAULT_MANIFEST: ArtSetManifest = {
 };
 
 export function isArtSetId(v: string): v is ArtSetId {
-  return v === "set0" || v === "set1" || v === "set2" || v === "set3";
+  return v === "set0" || v === "set1" || v === "set2" || v === "set3" || v === "set4";
 }
 
 export function catalogEntry(id: ArtSetId): ArtSetCatalogEntry {

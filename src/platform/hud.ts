@@ -393,7 +393,8 @@ function paintArtSwitcher(
   const safeLeft = 12;
   const safeBottom = 20;
   const btnH = 34;
-  const btnW = 96;
+  // 五套标签（含「卡通低多边形」「羊皮纸」）需略宽
+  const btnW = 110;
   const bx = safeLeft;
   const by = h - safeBottom - btnH;
   const active = state.options.find((o) => o.id === state.activeId);

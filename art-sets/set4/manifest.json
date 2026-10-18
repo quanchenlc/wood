@@ -1,0 +1,39 @@
+{
+  "id": "set4",
+  "label": "羊皮纸",
+  "version": 1,
+  "files": {
+    "axe": "axe.gltf",
+    "stump": "stump.gltf",
+    "stumpLod": "stump_lod.gltf",
+    "barkColor": "outsidebark.jpg",
+    "barkNormal": "outsidebark_n.png",
+    "endColor": "top.jpg",
+    "endNormal": "top_n.png",
+    "innerColor": "insidegrain.jpg",
+    "innerNormal": "insidegrain_n.png",
+    "groundColor": "ground.jpg",
+    "background": "bg_parchment.jpg"
+  },
+  "sky": "#c3a372",
+  "fog": "#c3a372",
+  "ground": "#6e5a3a",
+  "grass": {
+    "deep": [
+      0.22,
+      0.2,
+      0.1
+    ],
+    "fresh": [
+      0.42,
+      0.4,
+      0.22
+    ],
+    "dry": [
+      0.55,
+      0.48,
+      0.28
+    ]
+  },
+  "styleDescription": "羊皮纸：中世纪手稿/羊皮纸氛围。奶油·赭石·褪朱红点缀；去饱和墨线描边感；暖纸色雾与背景。几何复用 set1（pivot 对齐），贴图为 CC0 扫描羊皮纸衍生再映射。"
+}

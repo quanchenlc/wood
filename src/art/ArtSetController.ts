@@ -26,6 +26,7 @@ export interface ArtSetUrls {
   innerColor: string;
   innerNormal: string;
   groundColor: string | null;
+  background: string | null;
 }
 
 export interface ArtSetResolved {
@@ -76,6 +77,7 @@ function buildUrls(setId: ArtSetId, manifest: ArtSetManifest, fb: ArtSetManifest
     innerColor: req("innerColor", "insidegrain.jpg"),
     innerNormal: req("innerNormal", "insidegrain_n.jpg"),
     groundColor: resolveFile(setId, manifest, "groundColor", fb),
+    background: resolveFile(setId, manifest, "background", fb),
   };
 }
 
@@ -184,8 +186,18 @@ export async function loadStumpForSet(
   });
 }
 
-export function applyEnvironment(scene: THREE.Scene, set: ArtSetResolved) {
-  scene.background = new THREE.Color(set.sky);
+export function applyEnvironment(
+  scene: THREE.Scene,
+  set: ArtSetResolved,
+  backgroundMap: THREE.Texture | null = null,
+) {
+  if (backgroundMap) {
+    backgroundMap.colorSpace = THREE.SRGBColorSpace;
+    // 普通 2D 纹理：three 会拉成全屏背景（非 cubemap）
+    scene.background = backgroundMap;
+  } else {
+    scene.background = new THREE.Color(set.sky);
+  }
   if (scene.fog && (scene.fog as THREE.Fog).isFog) {
     (scene.fog as THREE.Fog).color.set(set.fog);
   } else {

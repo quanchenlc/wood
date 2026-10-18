@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { TOTAL_ASSETS } from "./config/assets";
-import { CAMERA, IS_MINIGAME } from "./config/constants";
+import { CAMERA, IS_MINIGAME, LIGHTING } from "./config/constants";
 import { AxeAnimation } from "./anim/AxeAnimation";
 import { PieceAnimator } from "./anim/PieceAnimator";
 import { AudioManager } from "./audio/AudioManager";
@@ -44,7 +44,7 @@ const camera = new THREE.PerspectiveCamera(
 );
 
 const controller = new CameraController(camera, renderer.domElement);
-const { direction: sunDirection } = createLights(scene);
+const { sun, ambient, direction: sunDirection } = createLights(scene);
 const ground = createGround(scene);
 const grass = createGrass(scene, sunDirection);
 const gobo = createGobo(scene, sunDirection);
@@ -67,6 +67,7 @@ let currentStump: Stump | null = null;
 let artPickerOpen = false;
 let artSwitching = false;
 let groundMap: THREE.Texture | null = null;
+let backgroundMap: THREE.Texture | null = null;
 
 function syncArtSwitcherHud(loadingText?: string | null) {
   const hud = ensureHud();
@@ -79,10 +80,46 @@ function syncArtSwitcherHud(loadingText?: string | null) {
   });
 }
 
-async function applyResolvedArt(set: ArtSetResolved, opts?: { skipAxe?: boolean }) {
-  applyEnvironment(scene, set);
+function applySetLighting(set: ArtSetResolved) {
+  // 羊皮纸：柔和低对比暖光，避免高光塑料感
+  if (set.id === "set4") {
+    sun.color.set("#f0e2c4");
+    sun.intensity = 2.55;
+    ambient.color.set("#e6d4b4");
+    ambient.intensity = 0.9;
+    renderer.toneMappingExposure = 0.9;
+  } else {
+    sun.color.set(LIGHTING.sunColor);
+    sun.intensity = LIGHTING.sunIntensity;
+    ambient.color.set(LIGHTING.ambientColor);
+    ambient.intensity = LIGHTING.ambientIntensity;
+    renderer.toneMappingExposure = 1;
+  }
+}
+
+async function applyArtAtmosphere(set: ArtSetResolved) {
   applyGrassColors(grass, set.grass);
-  applyGroundLook(ground, set, groundMap);
+  applySetLighting(set);
+
+  if (set.urls.background) {
+    try {
+      const tex = await new THREE.TextureLoader().loadAsync(set.urls.background);
+      const prev = backgroundMap;
+      backgroundMap = tex;
+      applyEnvironment(scene, set, backgroundMap);
+      prev?.dispose();
+    } catch {
+      backgroundMap?.dispose();
+      backgroundMap = null;
+      applyEnvironment(scene, set, null);
+    }
+  } else {
+    if (backgroundMap) {
+      backgroundMap.dispose();
+      backgroundMap = null;
+    }
+    applyEnvironment(scene, set, null);
+  }
 
   if (set.urls.groundColor) {
     try {
@@ -91,13 +128,19 @@ async function applyResolvedArt(set: ArtSetResolved, opts?: { skipAxe?: boolean 
       groundMap = tex;
       applyGroundLook(ground, set, groundMap);
     } catch {
-      /* optional */
+      applyGroundLook(ground, set, null);
     }
   } else if (groundMap) {
     groundMap.dispose();
     groundMap = null;
     applyGroundLook(ground, set, null);
+  } else {
+    applyGroundLook(ground, set, null);
   }
+}
+
+async function applyResolvedArt(set: ArtSetResolved, opts?: { skipAxe?: boolean }) {
+  await applyArtAtmosphere(set);
 
   const materials = await loadWoodMaterialsForSet(set.urls);
   const oldMaterials = debugMaterials;
@@ -174,9 +217,7 @@ async function boot() {
     ensureHud()?.setStatus?.(text);
     void p;
   });
-  applyEnvironment(scene, initial);
-  applyGrassColors(grass, initial.grass);
-  applyGroundLook(ground, initial, null);
+  await applyArtAtmosphere(initial);
 
   const [materials, stump] = await Promise.all([
     loadWoodMaterialsForSet(initial.urls, progress.step),

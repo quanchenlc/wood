@@ -11,6 +11,7 @@
 | set1 | 晨林写实 |
 | set2 | 卡通低多边形 |
 | set3 | 手绘温馨 |
+| set4 | 羊皮纸（中世纪手稿氛围；见 `set4/SOURCES.md`） |
 
 ## 目录布局（请按套交付）
 
@@ -54,8 +55,9 @@ art-sets/
 | set1 | `subpackages/art-set1/`（按需 `wx.loadSubpackage`） |
 | set2 | `subpackages/art-set2/` |
 | set3 | `subpackages/art-set3/` |
+| set4 | `subpackages/art-set4/` |
 
-主包必须 ≤4MB；每套视觉资源进各自分包。纹理 MAD 校验只跑 set0。
+主包必须 ≤4MB；每套视觉资源进各自分包（set4 目标 ≤2.5MB）。纹理 MAD 校验只跑 set0。
 
 ## manifest.json 格式
 

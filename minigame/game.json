@@ -23,6 +23,10 @@
     {
       "name": "art-set3",
       "root": "subpackages/art-set3/"
+    },
+    {
+      "name": "art-set4",
+      "root": "subpackages/art-set4/"
     }
   ]
 }

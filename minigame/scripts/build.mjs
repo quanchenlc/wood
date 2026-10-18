@@ -700,14 +700,15 @@ async function packArtSetSubpackages() {
     { name: "art-set1", root: "subpackages/art-set1/" },
     { name: "art-set2", root: "subpackages/art-set2/" },
     { name: "art-set3", root: "subpackages/art-set3/" },
+    { name: "art-set4", root: "subpackages/art-set4/" },
   ];
   gameJson.subpackages = subs;
   writeFileSync(gameJsonPath, `${JSON.stringify(gameJson, null, 2)}\n`);
 
-  const skipExact = new Set([".DS_Store"]);
+  const skipExact = new Set([".DS_Store", "SOURCES.md"]);
   const skipPreview = /^(preview|Preview)(_.*)?\.png$/i;
 
-  for (const id of ["set1", "set2", "set3"]) {
+  for (const id of ["set1", "set2", "set3", "set4"]) {
     const srcDir = join(ROOT, "art-sets", id);
     const dest = join(MG, "subpackages", `art-${id}`);
     rmSync(dest, { recursive: true, force: true });
@@ -808,6 +809,7 @@ function reportSizes() {
     ["art-set1", "subpackages/art-set1/"],
     ["art-set2", "subpackages/art-set2/"],
     ["art-set3", "subpackages/art-set3/"],
+    ["art-set4", "subpackages/art-set4/"],
   ];
   const subpackages = {};
   let subBytes = 0;
