@@ -53,7 +53,7 @@
      "index": 0
     },
     "metallicFactor": 0,
-    "roughnessFactor": 0.92
+    "roughnessFactor": 0.9
    },
    "normalTexture": {
     "index": 1,
@@ -65,7 +65,7 @@
   {
    "bufferView": 0,
    "componentType": 5126,
-   "count": 385,
+   "count": 535,
    "type": "VEC3",
    "min": [
     -0.4238997995853424,
@@ -81,25 +81,25 @@
   {
    "bufferView": 1,
    "componentType": 5126,
-   "count": 385,
+   "count": 535,
    "type": "VEC3"
   },
   {
    "bufferView": 2,
    "componentType": 5126,
-   "count": 385,
+   "count": 535,
    "type": "VEC2"
   },
   {
    "bufferView": 3,
    "componentType": 5126,
-   "count": 385,
+   "count": 535,
    "type": "VEC3"
   },
   {
    "bufferView": 4,
    "componentType": 5123,
-   "count": 1800,
+   "count": 2664,
    "type": "SCALAR"
   }
  ],
@@ -107,38 +107,38 @@
   {
    "buffer": 0,
    "byteOffset": 0,
-   "byteLength": 4620,
+   "byteLength": 6420,
    "target": 34962
   },
   {
    "buffer": 0,
-   "byteOffset": 4620,
-   "byteLength": 4620,
+   "byteOffset": 6420,
+   "byteLength": 6420,
    "target": 34962
   },
   {
    "buffer": 0,
-   "byteOffset": 9240,
-   "byteLength": 3080,
+   "byteOffset": 12840,
+   "byteLength": 4280,
    "target": 34962
   },
   {
    "buffer": 0,
-   "byteOffset": 12320,
-   "byteLength": 4620,
+   "byteOffset": 17120,
+   "byteLength": 6420,
    "target": 34962
   },
   {
    "buffer": 0,
-   "byteOffset": 16940,
-   "byteLength": 3600,
+   "byteOffset": 23540,
+   "byteLength": 5328,
    "target": 34963
   }
  ],
  "buffers": [
   {
    "uri": "stump_lod.bin",
-   "byteLength": 20540
+   "byteLength": 28868
   }
  ],
  "images": [

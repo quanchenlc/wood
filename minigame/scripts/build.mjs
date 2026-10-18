@@ -704,7 +704,8 @@ async function packArtSetSubpackages() {
   gameJson.subpackages = subs;
   writeFileSync(gameJsonPath, `${JSON.stringify(gameJson, null, 2)}\n`);
 
-  const skipNames = new Set(["preview.png", "Preview.png", ".DS_Store"]);
+  const skipExact = new Set([".DS_Store"]);
+  const skipPreview = /^(preview|Preview)(_.*)?\.png$/i;
 
   for (const id of ["set1", "set2", "set3"]) {
     const srcDir = join(ROOT, "art-sets", id);
@@ -725,7 +726,7 @@ async function packArtSetSubpackages() {
     }
     for (const name of readdirSync(srcDir)) {
       if (name.startsWith(".")) continue;
-      if (skipNames.has(name)) {
+      if (skipExact.has(name) || skipPreview.test(name)) {
         console.log(`[build] art-${id}: skip ${name}`);
         continue;
       }

@@ -79,7 +79,7 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-const outDir = join(ARTIFACTS, "art-sets-0.2.0");
+const outDir = join(ARTIFACTS, "art-sets-0.2.1");
 mkdirSync(outDir, { recursive: true });
 
 const server = await startServer();
@@ -260,9 +260,9 @@ if (real404.length) {
   process.exitCode = 1;
 }
 
-const verLog = logs.find((l) => /\[firewood\].*0\.2\.0/.test(l));
+const verLog = logs.find((l) => /\[firewood\].*0\.2\.1/.test(l));
 if (!verLog) {
-  console.error("ERROR: missing 0.2.0 version log");
+  console.error("ERROR: missing 0.2.1 version log");
   process.exitCode = 1;
 } else {
   console.log("version log:", verLog);
