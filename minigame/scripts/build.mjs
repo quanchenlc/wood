@@ -245,7 +245,8 @@ async function rewriteTextureFile(absPath, role, destPath) {
   if (isNormal) {
     await pipeline.png({ compressionLevel: 9 }).toFile(tmp);
   } else {
-    await pipeline.jpeg({ quality: COLOR_JPEG_QUALITY, mozjpeg: true }).toFile(tmp);
+    // baseline（非 progressive）：部分微信 WebGL 对 progressive JPEG 贴图不友好
+    await pipeline.jpeg({ quality: COLOR_JPEG_QUALITY, mozjpeg: true, progressive: false }).toFile(tmp);
   }
   renameSync(tmp, destPath);
   return { nw, nh, bytes: statSync(destPath).size };
@@ -268,10 +269,28 @@ async function exportExternalGltf(destAssets, glbName, outStem) {
   const tmpGltf = join(tmpDir, `${outStem}.gltf`);
   runGltf(["copy", glb, tmpGltf]);
 
+  // P0 真机：WeChat WebGL 可能不认 normalized u16 TEXCOORD / i16 POSITION
+  // （KHR_mesh_quantization）→ UV 爆炸 + REPEAT 平铺 atlas → 斧头橙黑条纹。
+  // 导出前去量化为 float32，并去掉该扩展。
+  runGltf(["dequantize", tmpGltf, tmpGltf]);
+
   const gltfJson = JSON.parse(readFileSync(tmpGltf, "utf8"));
   const images = gltfJson.images || [];
   const textures = gltfJson.textures || [];
   const imageRoles = classifyImageRoles(gltfJson);
+
+  // Sampler：REPEAT(10497) → CLAMP_TO_EDGE(3361)，避免 UV 越界时扫到 atlas 黑底/邻岛
+  const CLAMP = 3361;
+  for (const s of gltfJson.samplers || []) {
+    s.wrapS = CLAMP;
+    s.wrapT = CLAMP;
+  }
+  if (!gltfJson.samplers || gltfJson.samplers.length === 0) {
+    gltfJson.samplers = [{ magFilter: 9729, minFilter: 9987, wrapS: CLAMP, wrapT: CLAMP }];
+  }
+  for (const tex of textures) {
+    if (tex.sampler == null) tex.sampler = 0;
+  }
 
   // imageIndex → 引用它的 material 名（多色图时取语义名）
   const imageMatNames = new Map();
@@ -409,7 +428,31 @@ function validateExportedGltf(destAssets, outStem) {
     }
   }
 
-  console.log(`[build] validate ${outStem}.gltf: ok`);
+  // 禁止残留量化：真机 UV 依赖 float TEXCOORD
+  const extUsed = gltf.extensionsUsed || [];
+  const extReq = gltf.extensionsRequired || [];
+  if (extUsed.includes("KHR_mesh_quantization") || extReq.includes("KHR_mesh_quantization")) {
+    throw new Error(`[build] ${outStem}.gltf still requires KHR_mesh_quantization — dequantize failed`);
+  }
+  for (const acc of gltf.accessors || []) {
+    // TEXCOORD / POSITION / NORMAL 必须是 float（5126），不能再是 normalized int
+    if (acc.normalized) {
+      throw new Error(
+        `[build] ${outStem}.gltf accessor still normalized (comp=${acc.componentType} type=${acc.type})`,
+      );
+    }
+    if (acc.type === "VEC2" && acc.componentType !== 5126) {
+      throw new Error(`[build] ${outStem}.gltf TEXCOORD must be float32, got componentType=${acc.componentType}`);
+    }
+  }
+  const CLAMP = 3361;
+  for (const s of gltf.samplers || []) {
+    if (s.wrapS !== CLAMP || s.wrapT !== CLAMP) {
+      throw new Error(`[build] ${outStem}.gltf sampler must be ClampToEdge, got wrapS=${s.wrapS} wrapT=${s.wrapT}`);
+    }
+  }
+
+  console.log(`[build] validate ${outStem}.gltf: ok (dequantized + clamp)`);
 }
 
 async function resizeStandaloneTextures(destAssets) {

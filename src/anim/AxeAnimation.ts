@@ -80,8 +80,19 @@ export class AxeAnimation {
         for (const m of mats) {
           const mat = m as THREE.MeshStandardMaterial;
           if (!mat) continue;
-          if (mat.map) mat.map.colorSpace = THREE.SRGBColorSpace;
-          if (mat.emissiveMap) mat.emissiveMap.colorSpace = THREE.SRGBColorSpace;
+          if (mat.map) {
+            mat.map.colorSpace = THREE.SRGBColorSpace;
+            // 真机兜底：避免 REPEAT 在异常 UV 下平铺 atlas 黑底/邻岛成条纹
+            mat.map.wrapS = THREE.ClampToEdgeWrapping;
+            mat.map.wrapT = THREE.ClampToEdgeWrapping;
+            mat.map.needsUpdate = true;
+          }
+          if (mat.emissiveMap) {
+            mat.emissiveMap.colorSpace = THREE.SRGBColorSpace;
+            mat.emissiveMap.wrapS = THREE.ClampToEdgeWrapping;
+            mat.emissiveMap.wrapT = THREE.ClampToEdgeWrapping;
+            mat.emissiveMap.needsUpdate = true;
+          }
           if (mat.color) mat.color.set(0xffffff);
           if (typeof mat.metalness === "number") mat.metalness = 0;
           if (typeof mat.roughness === "number") mat.roughness = Math.max(mat.roughness, 0.55);

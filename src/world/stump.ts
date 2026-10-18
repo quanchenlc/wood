@@ -54,8 +54,23 @@ export async function loadStump(
       mesh.receiveShadow = true;
       const mat = mesh.material as THREE.MeshStandardMaterial;
       if (!mat) return;
-      if (mat.map) mat.map.colorSpace = THREE.SRGBColorSpace;
-      if (mat.emissiveMap) mat.emissiveMap.colorSpace = THREE.SRGBColorSpace;
+      if (mat.map) {
+        mat.map.colorSpace = THREE.SRGBColorSpace;
+        mat.map.wrapS = THREE.ClampToEdgeWrapping;
+        mat.map.wrapT = THREE.ClampToEdgeWrapping;
+        mat.map.needsUpdate = true;
+      }
+      if (mat.normalMap) {
+        mat.normalMap.wrapS = THREE.ClampToEdgeWrapping;
+        mat.normalMap.wrapT = THREE.ClampToEdgeWrapping;
+        mat.normalMap.needsUpdate = true;
+      }
+      if (mat.emissiveMap) {
+        mat.emissiveMap.colorSpace = THREE.SRGBColorSpace;
+        mat.emissiveMap.wrapS = THREE.ClampToEdgeWrapping;
+        mat.emissiveMap.wrapT = THREE.ClampToEdgeWrapping;
+        mat.emissiveMap.needsUpdate = true;
+      }
       // glTF 的 baseColor 会与贴图相乘。强制白色，避免素材自带 tint 把树皮染灰。
       mat.color.set(0xffffff);
       // 原模型烘焙过高光,这里压平一点让它吃场景光而不是自带反射

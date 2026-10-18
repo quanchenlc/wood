@@ -392,9 +392,9 @@ if (audioParamFails.length) {
   console.error(audioParamFails.slice(0, 8).join("\n"));
 }
 
-const verLog = logs.find((l) => /\[firewood\].*0\.1\.6/.test(l));
+const verLog = logs.find((l) => /\[firewood\].*0\.1\.7/.test(l));
 if (!verLog) {
-  console.error("ERROR: missing 0.1.6 version log in console");
+  console.error("ERROR: missing 0.1.7 version log in console");
 } else {
   console.log("version log:", verLog);
 }
