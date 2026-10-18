@@ -4,6 +4,9 @@
  *
  * P0：GPU 回读必须带正确 colorSpace（sRGB map → SRGBColorSpace），
  * 否则按 linear 写出亮度≈0.33、发黑发脏。compressed 禁止 createImageBitmap。
+ *
+ * P0′：readRenderTargetPixels 后不要再做 CPU Y-flip；外置 JPG + glTF flipY=false
+ * 必须与 KTX2 GPU 采样同向，否则斧柄会采到 atlas 邻岛。
  */
 import { createServer } from "node:http";
 import { readFileSync, writeFileSync, existsSync, statSync } from "node:fs";
@@ -136,15 +139,11 @@ async function materializeTexture(tex) {
 
       const buf = new Uint8Array(w * h * 4);
       renderer.readRenderTargetPixels(rt, 0, 0, w, h, buf);
+      // 不要再做 CPU Y-flip：外置 JPG + glTF flipY=false 需与 KTX2 GPU 采样同向。
+      // 旧逻辑（readRenderTargetPixels 后再竖直翻转）会写出 V 颠倒的 baseColor，
+      // 导致斧柄中段采到 atlas 邻岛（橙/白条纹）；同 mesh 把 JPG 再翻回来即可对齐 web。
       const data = new ImageData(new Uint8ClampedArray(buf.buffer), w, h);
-      // WebGL Y-flip
-      const flip = ctx.createImageData(w, h);
-      for (let y = 0; y < h; y++) {
-        const src = (h - 1 - y) * w * 4;
-        const dst = y * w * 4;
-        flip.data.set(data.data.subarray(src, src + w * 4), dst);
-      }
-      ctx.putImageData(flip, 0, 0);
+      ctx.putImageData(data, 0, 0);
       rt.dispose();
       mat.dispose();
     }

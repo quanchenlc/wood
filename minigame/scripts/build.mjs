@@ -619,9 +619,27 @@ function reportSizes() {
   }
 }
 
+/** 构建后廉价 MAD：web KTX2 vs 外置 JPG，抓住 decode Y-flip 回归 */
+function verifyTextureMad() {
+  if (process.env.SKIP_TEXTURE_MAD === "1") {
+    console.log("[build] SKIP_TEXTURE_MAD=1 — skip mad check");
+    return;
+  }
+  console.log("[build] verify texture MAD (web KTX2 vs minigame JPG)…");
+  const r = spawnSync(process.execPath, [join(MG, "scripts/verify-texture-mad.mjs")], {
+    cwd: ROOT,
+    stdio: "inherit",
+    env: process.env,
+  });
+  if (r.status !== 0) {
+    throw new Error("verify-texture-mad.mjs failed — axe/stump JPG orientation likely wrong");
+  }
+}
+
 emitRuntimeAppConfig();
 await bundle();
 await copyAssets();
+verifyTextureMad();
 syncProjectConfig();
 assertNoCjsRequireInPackage();
 reportSizes();
