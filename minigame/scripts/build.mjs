@@ -24,6 +24,10 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { spawnSync } from "node:child_process";
 import sharp from "sharp";
+import { NodeIO } from "@gltf-transform/core";
+import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
+import { dedup, simplify, weld } from "@gltf-transform/functions";
+import { MeshoptSimplifier } from "meshoptimizer";
 
 const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -506,6 +510,78 @@ function decompressAllKtx2(destAssets) {
   }
 }
 
+/**
+ * 远景树桩 LOD：hero stump.gltf 保持全精度；另写 stump_lod.gltf（同贴图 URI）。
+ * 画像：stump×2 ≈ 场景 87% tris；只砍远的那份。
+ */
+async function buildStumpFarLod(destAssets) {
+  const src = join(destAssets, "stump.gltf");
+  if (!existsSync(src)) {
+    console.warn("[build] skip stump_lod — missing stump.gltf");
+    return;
+  }
+  const tmpDir = join(destAssets, ".tmp_stump_lod");
+  rmSync(tmpDir, { recursive: true, force: true });
+  mkdirSync(tmpDir, { recursive: true });
+
+  await MeshoptSimplifier.ready;
+  const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
+  const doc = await io.read(src);
+  await doc.transform(
+    dedup(),
+    weld(),
+    simplify({ simplifier: MeshoptSimplifier, ratio: 0.08, error: 0.01 }),
+  );
+
+  const tmpGltf = join(tmpDir, "stump_lod.gltf");
+  await io.write(tmpGltf, doc);
+
+  const json = JSON.parse(readFileSync(tmpGltf, "utf8"));
+  // 贴图指回 dest 里的 hero 同款（不降分辨率、不复制）
+  for (const img of json.images || []) {
+    if (!img.uri) continue;
+    const base = basename(img.uri);
+    if (/normal/i.test(base) || img.mimeType === "image/png") img.uri = "stump_normal.png";
+    else img.uri = "stump_baseColor.jpg";
+  }
+  for (const buf of json.buffers || []) {
+    if (buf.uri) buf.uri = "stump_lod.bin";
+  }
+  writeFileSync(tmpGltf, `${JSON.stringify(json, null, 2)}\n`);
+
+  // 把 tmp 里的 bin 挪成 stump_lod.bin
+  const tmpBin =
+    readdirSync(tmpDir).find((n) => n.endsWith(".bin")) || "stump_lod.bin";
+  const fromBin = join(tmpDir, tmpBin);
+  const outGltf = join(destAssets, "stump_lod.gltf");
+  const outBin = join(destAssets, "stump_lod.bin");
+  rmSync(outGltf, { force: true });
+  rmSync(outBin, { force: true });
+  if (!existsSync(fromBin)) throw new Error("[build] stump_lod bin missing in tmp");
+  renameSync(fromBin, outBin);
+  renameSync(tmpGltf, outGltf);
+  rmSync(tmpDir, { recursive: true, force: true });
+
+  // hero stump.bin 必须仍在
+  if (!existsSync(join(destAssets, "stump.bin"))) {
+    throw new Error("[build] hero stump.bin missing after LOD export");
+  }
+
+  let verts = 0;
+  let tris = 0;
+  for (const mesh of doc.getRoot().listMeshes()) {
+    for (const prim of mesh.listPrimitives()) {
+      const v = prim.getAttribute("POSITION")?.getCount() || 0;
+      const idx = prim.getIndices();
+      verts += v;
+      tris += idx ? idx.getCount() / 3 : v / 3;
+    }
+  }
+  console.log(
+    `[build] stump_lod (far only): verts=${verts} tris=${Math.round(tris)} — hero stump untouched`,
+  );
+}
+
 /** 小游戏包禁止带上旧 Fiskars 嵌图 GLB；斧头走 public 里的外置 gltf+jpg */
 function assertMinigameAxePlaceholder(destAssets) {
   const need = ["axe.gltf", "axe.bin", "axe_baseColor.jpg", "axe_orm.png"];
@@ -549,6 +625,7 @@ async function copyAssets() {
 
   decompressAllKtx2(destAssets);
   await exportExternalGltf(destAssets, "stump_v02_mesh_warm_ktx2_2048.glb", "stump");
+  await buildStumpFarLod(destAssets);
   await resizeStandaloneTextures(destAssets);
   assertMinigameAxePlaceholder(destAssets);
 

@@ -208,6 +208,61 @@ if (enableDebugHooks) {
         cameraTargetAzimuth: controller.targetAzimuth,
       }),
       click: () => game?.handleClick(),
+      /** 性能画像：按物体汇总 verts/tris，并读 renderer.info */
+      perf: () => {
+        renderer.info.reset();
+        post.composer.render();
+        const byName: Record<
+          string,
+          { meshes: number; verts: number; tris: number; castShadow: number }
+        > = {};
+        let meshes = 0;
+        let verts = 0;
+        let tris = 0;
+        let castShadow = 0;
+        scene.traverse((obj) => {
+          const mesh = obj as THREE.Mesh;
+          if (!mesh.isMesh || !mesh.geometry) return;
+          meshes++;
+          const geo = mesh.geometry;
+          const v = geo.getAttribute("position")?.count ?? 0;
+          const idx = geo.getIndex();
+          const inst =
+            (mesh as THREE.InstancedMesh).isInstancedMesh
+              ? (mesh as THREE.InstancedMesh).count || 1
+              : 1;
+          const t = (idx ? idx.count / 3 : v / 3) * inst;
+          const vv = v * inst;
+          verts += vv;
+          tris += t;
+          if (mesh.castShadow) castShadow++;
+          const label = (mesh as THREE.InstancedMesh).isInstancedMesh
+            ? "grass(instanced)"
+            : mesh.name || mesh.parent?.name || geo.type || "mesh";
+          const slot = (byName[label] ??= { meshes: 0, verts: 0, tris: 0, castShadow: 0 });
+          slot.meshes++;
+          slot.verts += vv;
+          slot.tris += t;
+          if (mesh.castShadow) slot.castShadow++;
+        });
+        const info = renderer.info;
+        const mem = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory;
+        return {
+          summary: {
+            meshes,
+            verts: Math.round(verts),
+            tris: Math.round(tris),
+            castShadowMeshes: castShadow,
+            drawCalls: info.render.calls,
+            trianglesDrawn: info.render.triangles,
+            geometries: info.memory.geometries,
+            textures: info.memory.textures,
+            jsHeapMB: mem ? Number((mem.usedJSHeapSize / 1048576).toFixed(1)) : null,
+            pixelRatio: renderer.getPixelRatio(),
+          },
+          byName,
+        };
+      },
     },
   });
 }

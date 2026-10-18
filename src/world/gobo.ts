@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { IS_MINIGAME } from "../config/constants";
 
 export interface Gobo {
   update(dt: number): void;
@@ -6,10 +7,13 @@ export interface Gobo {
 }
 
 /** 遮罩片相对太阳方向的摆位:距离、横向偏移、高度偏移、尺寸 */
-const PANELS = [
+const PANELS_FULL = [
   { distance: 3.0, lateral: -1.4, vertical: -0.6, size: 9, drift: 0.035 },
   { distance: 4.6, lateral: 1.1, vertical: 0.4, size: 11, drift: -0.022 },
 ] as const;
+
+/** 小游戏只留一片：远景光斑够用，少一次阴影 caster */
+const PANELS_MINI = [{ distance: 3.0, lateral: -1.4, vertical: -0.6, size: 9, drift: 0.035 }] as const;
 
 /**
  * 程序化生成的树冠遮罩:一堆大小不一、边缘柔和的叶簇。
@@ -20,7 +24,7 @@ const PANELS = [
  *
  * 用 canvas 现画而不是读贴图:省一个素材依赖,而且每次刷新图案都不一样。
  */
-function createCanopyTexture(size = 512): THREE.Texture {
+function createCanopyTexture(size = IS_MINIGAME ? 256 : 512): THREE.Texture {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext("2d")!;
@@ -65,6 +69,7 @@ function createCanopyTexture(size = 512): THREE.Texture {
 export function createGobo(scene: THREE.Scene, sunDirection: THREE.Vector3): Gobo {
   const texture = createCanopyTexture();
   const panels: THREE.Mesh[] = [];
+  const PANELS = IS_MINIGAME ? PANELS_MINI : PANELS_FULL;
 
   // 以太阳方向为法线搭一个局部坐标系,遮罩片就贴在这个平面上
   const forward = sunDirection.clone().normalize();

@@ -21,30 +21,41 @@ export function createPost(
   scene: THREE.Scene,
   camera: THREE.Camera,
 ): Post {
+  const hidden: THREE.Object3D[] = [];
+
+  // 小游戏：跳过 EffectComposer（省全屏 RT + blit 显存），直出 toneMapping
+  if (IS_MINIGAME) {
+    const passthrough = {
+      render: () => {
+        renderer.render(scene, camera);
+      },
+    };
+    return {
+      composer: passthrough as unknown as EffectComposer,
+      setSize: (w, h) => renderer.setSize(w, h),
+      excludeFromDepth: () => {},
+      dispose: () => {},
+    };
+  }
+
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
 
-  const hidden: THREE.Object3D[] = [];
+  const bokeh = new BokehPass(scene, camera, {
+    focus: POST.focus,
+    aperture: POST.aperture,
+    maxblur: POST.maxBlur,
+  });
 
-  // 小游戏默认关 Bokeh 景深；Web（含手机浏览器）保持原行为
-  if (!IS_MINIGAME) {
-    const bokeh = new BokehPass(scene, camera, {
-      focus: POST.focus,
-      aperture: POST.aperture,
-      maxblur: POST.maxBlur,
-    });
+  const originalRender = bokeh.render.bind(bokeh);
+  bokeh.render = (...args: Parameters<typeof originalRender>) => {
+    const wasVisible = hidden.map((o) => o.visible);
+    hidden.forEach((o) => (o.visible = false));
+    originalRender(...args);
+    hidden.forEach((o, i) => (o.visible = wasVisible[i]));
+  };
 
-    const originalRender = bokeh.render.bind(bokeh);
-    bokeh.render = (...args: Parameters<typeof originalRender>) => {
-      const wasVisible = hidden.map((o) => o.visible);
-      hidden.forEach((o) => (o.visible = false));
-      originalRender(...args);
-      hidden.forEach((o, i) => (o.visible = wasVisible[i]));
-    };
-
-    composer.addPass(bokeh);
-  }
-
+  composer.addPass(bokeh);
   composer.addPass(new OutputPass());
 
   return {

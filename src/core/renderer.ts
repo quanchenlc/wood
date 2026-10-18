@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { IS_MINIGAME } from "../config/constants";
 import { isMinigame } from "../platform/env";
 
 export function createRenderer(): THREE.WebGLRenderer {
@@ -8,12 +9,14 @@ export function createRenderer(): THREE.WebGLRenderer {
 
   const renderer = new THREE.WebGLRenderer({
     canvas: existing,
-    antialias: true,
+    // 小游戏关 MSAA：省带宽/显存，近处模型靠贴图观感
+    antialias: !IS_MINIGAME,
     powerPreference: "high-performance",
   });
 
-  // 高 DPI 屏上限制到 2x,再高对这个场景没有肉眼收益,只是白烧 GPU
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  // 小游戏 DPR≤1.5：真机 2x+composer 曾推到 ~1GB 级绘图缓冲
+  const maxDpr = IS_MINIGAME ? 1.5 : 2;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxDpr));
   renderer.setSize(window.innerWidth, window.innerHeight);
 
   renderer.shadowMap.enabled = true;

@@ -73,8 +73,12 @@ export function sliceWood(
     });
   } catch (err) {
     console.warn("切割失败:", err);
+    destructible.geometry?.dispose();
     return null;
   }
+
+  // toDestructible 克隆的几何体用完即释，避免每刀泄漏一份 non-indexed 网格
+  destructible.geometry?.dispose();
 
   if (pieces.length < 2) {
     console.warn(`切割只产出 ${pieces.length} 块,放弃`);
