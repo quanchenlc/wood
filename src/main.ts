@@ -143,6 +143,10 @@ async function handleParchmentHit() {
     syncParchmentHud();
     return true;
   }
+  if (hit === "panel") {
+    // 点在面板空白处：吞掉点击，不关面板、不劈柴
+    return true;
+  }
   if (hit === "rank_close" || hit === "dismiss") {
     uiPanel = startedPlay ? "none" : "home";
     syncParchmentHud();

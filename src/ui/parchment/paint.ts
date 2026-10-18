@@ -21,6 +21,7 @@ export type UiHit =
   | "ad_quota"
   | "ad_skip"
   | "dismiss"
+  | "panel"
   | "rank_open"
   | "rank_close"
   | "start"
@@ -257,7 +258,7 @@ export function paintParchmentLoading(
 
   ctx.globalAlpha = 0.35;
   ctx.font = fontSans(11);
-  ctx.fillText("v0.3.0 · 羊皮纸稿", w / 2, h - 24);
+  ctx.fillText("v0.3.1 · 羊皮纸稿", w / 2, h - 24);
   ctx.globalAlpha = 1;
 }
 
@@ -311,7 +312,7 @@ export function paintHomePanel(
 
   ctx.globalAlpha = 0.4;
   ctx.font = fontSans(11);
-  ctx.fillText("v0.3.0 · 羊皮纸稿", w / 2, h - 20);
+  ctx.fillText("v0.3.1 · 羊皮纸稿", w / 2, h - 20);
   ctx.globalAlpha = 1;
 }
 
@@ -327,11 +328,14 @@ export function paintClaimOrExhausted(
   // 半透明遮罩，保留 3D 场景可见
   ctx.fillStyle = "rgba(40,28,16,0.35)";
   ctx.fillRect(0, 0, w, h);
+  // 先登记全屏 dismiss，面板本体与按钮后登记（命中优先）
+  pushHit(hits, "dismiss", 0, 0, w, h);
 
   const pw = Math.min(340, w * 0.86);
   const ph = mode === "exhausted" ? Math.min(420, h * 0.55) : Math.min(380, h * 0.5);
   const px = (w - pw) / 2;
   const py = (h - ph) / 2 - 20;
+  pushHit(hits, "panel", px, py, pw, ph);
   const panel = tex["panel_vellum.png"];
   if (panel) drawNineSlice(ctx, panel, px, py, pw, ph, NINE_SLICE.panel_vellum);
   else {
@@ -350,41 +354,42 @@ export function paintClaimOrExhausted(
 
   paintRibbonTitle(ctx, tex, w / 2, py + 18, title, Math.min(pw * 0.92, 300));
 
-  ctx.fillStyle = INK;
-  ctx.font = fontSerif(16, "600");
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
-  const bodyY = py + 100;
+  // claim：丝带已含「柴棚待取：N 根」，正文只保留疏伐队提示，避免重复
+  const bodyY = mode === "claim" ? py + 88 : py + 100;
   if (mode === "exhausted") {
+    ctx.fillStyle = INK;
+    ctx.font = fontSerif(16, "600");
     ctx.fillText(COPY_C.exhaustedBody1, w / 2, bodyY);
     ctx.font = fontSans(13);
     ctx.fillStyle = INK_SOFT;
     ctx.fillText(COPY_C.exhaustedBody2, w / 2, bodyY + 28);
     ctx.fillText(COPY_C.restingHint, w / 2, bodyY + 52);
   } else {
-    ctx.fillText(COPY_C.pending(snap.state.pending_claim), w / 2, bodyY);
-    ctx.font = fontSans(13);
     ctx.fillStyle = INK_SOFT;
-    ctx.fillText(COPY_C.pendingHint, w / 2, bodyY + 28);
+    ctx.font = fontSans(14);
+    ctx.fillText(COPY_C.pendingHint, w / 2, bodyY);
   }
 
+  const divY = mode === "claim" ? bodyY + 36 : bodyY + 72;
   ctx.strokeStyle = "rgba(58,42,24,0.25)";
   ctx.beginPath();
-  ctx.moveTo(px + 40, bodyY + 72);
-  ctx.lineTo(w / 2 - 8, bodyY + 72);
-  ctx.moveTo(w / 2 + 8, bodyY + 72);
-  ctx.lineTo(px + pw - 40, bodyY + 72);
+  ctx.moveTo(px + 40, divY);
+  ctx.lineTo(w / 2 - 8, divY);
+  ctx.moveTo(w / 2 + 8, divY);
+  ctx.lineTo(px + pw - 40, divY);
   ctx.stroke();
   ctx.fillStyle = INK_SOFT;
   ctx.font = fontSans(12);
-  ctx.fillText("◆", w / 2, bodyY + 76);
+  ctx.fillText("◆", w / 2, divY + 4);
 
   const btnW = Math.min(260, pw * 0.78);
   const btnH = 52;
   const bx = (w - btnW) / 2;
 
   if (mode === "claim" && snap.state.pending_claim > 0 && snap.state.daily_remaining > 0) {
-    const by = bodyY + 100;
+    const by = divY + 28;
     paintLeatherBtn(ctx, tex, bx, by, btnW, btnH, `${COPY_C.claim}（${Math.min(snap.state.pending_claim, snap.state.daily_remaining)}）`);
     pushHit(hits, "claim", bx, by, btnW, btnH);
 
@@ -398,8 +403,8 @@ export function paintClaimOrExhausted(
     // 蓄养 / 额度用尽：加额度广告；若仍有 pending 但额度 0，领取入口仍可见（灰/提示）但可先加额
     ctx.fillStyle = INK_SOFT;
     ctx.font = fontSans(12);
-    ctx.fillText(COPY_C.watchAd, w / 2, bodyY + 96);
-    const ay = bodyY + 110;
+    ctx.fillText(COPY_C.watchAd, w / 2, divY + 24);
+    const ay = divY + 38;
     paintLeatherBtn(ctx, tex, bx, ay, btnW, btnH, COPY_C.adQuotaBtn, true);
     pushHit(hits, "ad_quota", bx, ay, btnW, btnH);
 
@@ -420,11 +425,7 @@ export function paintClaimOrExhausted(
     }
   }
 
-  const dy = py + ph + 12;
-  ctx.fillStyle = "rgba(58,42,24,0.55)";
-  ctx.font = fontSans(14);
-  ctx.fillText(COPY_C.claimTomorrow, w / 2, dy + 10);
-  pushHit(hits, "dismiss", w / 2 - 60, dy - 8, 120, 32);
+  // 面板打开时不画淡化「明日再来」（易叠在树桩上像残留 HUD）；点遮罩空白可关
 }
 
 export function paintRankPanel(
