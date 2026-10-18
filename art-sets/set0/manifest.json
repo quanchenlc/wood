@@ -1,0 +1,25 @@
+{
+  "id": "set0",
+  "label": "原版",
+  "version": 1,
+  "files": {
+    "axe": "axe.gltf",
+    "stump": "stump.gltf",
+    "stumpLod": "stump_lod.gltf",
+    "stumpData": "stump_v02_data.glb",
+    "barkColor": "outsidebark.jpg",
+    "barkNormal": "outsidebark_n.jpg",
+    "endColor": "top.jpg",
+    "endNormal": "top_n.jpg",
+    "innerColor": "insidegrain.jpg",
+    "innerNormal": "insidegrain_n.jpg"
+  },
+  "sky": "#9fc4e0",
+  "fog": "#9fc4e0",
+  "ground": "#3f4a26",
+  "grass": {
+    "deep": [0.07, 0.17, 0.05],
+    "fresh": [0.24, 0.45, 0.11],
+    "dry": [0.34, 0.36, 0.14]
+  }
+}

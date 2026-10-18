@@ -62,6 +62,8 @@ export interface GameDeps {
   stumpTopY: number;
 }
 
+// materials 在热换时会被替换；deps 保持可变引用
+
 /**
  * 游戏主循环的状态机。
  *
@@ -413,17 +415,40 @@ export class GameController {
   }
 
   dispose() {
-    for (const { mesh } of [
-      ...this.logPieces,
-      ...this.firewoodPieces,
-      ...this.firewoodOnGround,
-    ]) {
+    this.clearWorldPieces();
+  }
+
+  /** 清场上所有可劈/在飞/待码木块（几何 dispose） */
+  clearWorldPieces() {
+    this.pendingSplit = null;
+    for (const { mesh, physicsEntry } of this.firewoodPieces) {
+      if (physicsEntry) this.d.physics.removeBody(physicsEntry);
+      this.d.scene.remove(mesh);
+      mesh.geometry.dispose();
+    }
+    for (const { mesh, physicsEntry } of this.firewoodOnGround) {
+      if (physicsEntry) this.d.physics.removeBody(physicsEntry);
+      this.d.scene.remove(mesh);
+      mesh.geometry.dispose();
+    }
+    for (const { mesh } of this.logPieces) {
       this.d.scene.remove(mesh);
       mesh.geometry.dispose();
     }
     this.logPieces = [];
     this.firewoodPieces = [];
     this.firewoodOnGround = [];
+  }
+
+  /**
+   * 美术套装热换：换材质、清场、重新掉落一根原木。
+   * 需在 IDLE/非劈砍动画时调用。
+   */
+  applyArtMaterials(materials: WoodMaterials) {
+    this.clearWorldPieces();
+    this.d.materials = materials;
+    this.d.pile.setMaterials(materials);
+    this.spawn();
   }
 }
 

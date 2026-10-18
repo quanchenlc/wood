@@ -4,6 +4,12 @@ import { GRASS, GROUND_Y } from "../config/constants";
 export interface Grass {
   mesh: THREE.InstancedMesh;
   update(dt: number): void;
+  /** 美术套装：更新假 SSS 用的草叶色（线性 0–1） */
+  setColors?(
+    deep: [number, number, number],
+    fresh: [number, number, number],
+    dry: [number, number, number],
+  ): void;
   dispose(): void;
 }
 
@@ -91,6 +97,9 @@ export function createGrass(scene: THREE.Scene, sunDirection: THREE.Vector3): Gr
     uTime: { value: 0 },
     uWind: { value: GRASS.windStrength },
     uSun: { value: sunDirection.clone() },
+    uDeep: { value: new THREE.Color(0.07, 0.17, 0.05) },
+    uFresh: { value: new THREE.Color(0.24, 0.45, 0.11) },
+    uDry: { value: new THREE.Color(0.34, 0.36, 0.14) },
   };
 
   const material = new THREE.MeshStandardMaterial({
@@ -143,18 +152,18 @@ export function createGrass(scene: THREE.Scene, sunDirection: THREE.Vector3): Gr
       .replace(
         "void main() {",
         `uniform vec3 uSun;
+        uniform vec3 uDeep;
+        uniform vec3 uFresh;
+        uniform vec3 uDry;
         varying float vBladeT;
         varying float vTint;
         void main() {`,
       )
       .replace(
         "#include <map_fragment>",
-        `// 根部偏深、叶尖偏亮,再按实例掺一点枯黄,整片草地才不呆板
-        vec3 deep = vec3(0.07, 0.17, 0.05);
-        vec3 fresh = vec3(0.24, 0.45, 0.11);
-        vec3 dry = vec3(0.34, 0.36, 0.14);
-        vec3 base = mix(deep, fresh, vBladeT);
-        diffuseColor.rgb *= mix(base, dry, vTint * 0.35);`,
+        `// 根部偏深、叶尖偏亮,再按实例掺一点枯黄；颜色由 uDeep/uFresh/uDry 注入（可热换套装）
+        vec3 base = mix(uDeep, uFresh, vBladeT);
+        diffuseColor.rgb *= mix(base, uDry, vTint * 0.35);`,
       )
       .replace(
         "#include <lights_fragment_end>",
@@ -181,6 +190,11 @@ export function createGrass(scene: THREE.Scene, sunDirection: THREE.Vector3): Gr
     mesh,
     update(dt) {
       uniforms.uTime.value += dt;
+    },
+    setColors(deep, fresh, dry) {
+      uniforms.uDeep.value.setRGB(deep[0], deep[1], deep[2]);
+      uniforms.uFresh.value.setRGB(fresh[0], fresh[1], fresh[2]);
+      uniforms.uDry.value.setRGB(dry[0], dry[1], dry[2]);
     },
     dispose() {
       scene.remove(mesh);

@@ -26,6 +26,9 @@ export class CameraController {
   /** 有一次「干净的点击」待消费 */
   private pendingClick = false;
   private readonly lastClickNdc = new THREE.Vector2();
+  /** 最近一次干净点击的 CSS 像素坐标（HUD 命中用） */
+  private lastClickClientX = 0;
+  private lastClickClientY = 0;
 
   /** 光标的归一化设备坐标,射线拾取用 */
   readonly pointerNdc = new THREE.Vector2();
@@ -82,6 +85,8 @@ export class CameraController {
     if (!this.dragged) {
       this.pendingClick = true;
       this.lastClickNdc.copy(this.pointerNdc);
+      this.lastClickClientX = e.clientX;
+      this.lastClickClientY = e.clientY;
       this.angularVelocity = 0;
     }
   };
@@ -92,6 +97,16 @@ export class CameraController {
       -(e.clientY / window.innerHeight) * 2 + 1,
     );
     this.hasPointer = true;
+  }
+
+  peekClickClient(): { x: number; y: number } | null {
+    if (!this.pendingClick) return null;
+    return { x: this.lastClickClientX, y: this.lastClickClientY };
+  }
+
+  /** 丢弃本次点击（例如点到了 HUD 套装切换） */
+  cancelPendingClick() {
+    this.pendingClick = false;
   }
 
   /** 取走一次点击。取过就没了,保证一次点击只劈一刀。 */

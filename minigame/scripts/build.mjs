@@ -629,9 +629,62 @@ async function copyAssets() {
   await resizeStandaloneTextures(destAssets);
   assertMinigameAxePlaceholder(destAssets);
 
+  // set0 manifest 放进主素材分包，供运行时 ArtSetController 读取
+  const set0ManifestSrc = join(ROOT, "art-sets/set0/manifest.json");
+  if (existsSync(set0ManifestSrc)) {
+    cpSync(set0ManifestSrc, join(destAssets, "manifest.json"));
+  }
+
   const subEntry = join(SUB_ASSETS, "game.js");
   if (!existsSync(subEntry)) {
     writeFileSync(subEntry, 'console.log("[firewood] assets subpackage ready");\n');
+  }
+
+  packArtSetSubpackages();
+}
+
+/**
+ * set1–set3：各自分包。未交付前仅拷 manifest（fallback:set0），体积可忽略。
+ * 美术交付后把完整文件放进 art-sets/setN/ 即可，构建原样拷入分包根。
+ */
+function packArtSetSubpackages() {
+  const gameJsonPath = join(MG, "game.json");
+  const gameJson = JSON.parse(readFileSync(gameJsonPath, "utf8"));
+  const subs = [
+    { name: "assets", root: "subpackages/assets/" },
+    { name: "art-set1", root: "subpackages/art-set1/" },
+    { name: "art-set2", root: "subpackages/art-set2/" },
+    { name: "art-set3", root: "subpackages/art-set3/" },
+  ];
+  gameJson.subpackages = subs;
+  writeFileSync(gameJsonPath, `${JSON.stringify(gameJson, null, 2)}\n`);
+
+  for (const id of ["set1", "set2", "set3"]) {
+    const srcDir = join(ROOT, "art-sets", id);
+    const dest = join(MG, "subpackages", `art-${id}`);
+    rmSync(dest, { recursive: true, force: true });
+    mkdirSync(dest, { recursive: true });
+    writeFileSync(
+      join(dest, "game.js"),
+      `console.log("[firewood] art ${id} subpackage ready");\n`,
+    );
+    if (!existsSync(srcDir)) {
+      writeFileSync(
+        join(dest, "manifest.json"),
+        `${JSON.stringify({ id, label: id, version: 1, fallback: "set0", files: {} }, null, 2)}\n`,
+      );
+      console.log(`[build] art-${id}: stub manifest (fallback set0)`);
+      continue;
+    }
+    // 拷贝套内全部文件（manifest + 将来美术资源）
+    for (const name of readdirSync(srcDir)) {
+      if (name.startsWith(".")) continue;
+      cpSync(join(srcDir, name), join(dest, name), { recursive: true });
+    }
+    if (!existsSync(join(dest, "manifest.json"))) {
+      throw new Error(`[build] art-${id} missing manifest.json`);
+    }
+    console.log(`[build] art-${id}: packed from art-sets/${id}`);
   }
 }
 

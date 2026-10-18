@@ -15,6 +15,7 @@ const CLIP_FADE_SECONDS = 5 / 30;
  */
 export class AxeAnimation {
   private readonly scene: THREE.Scene;
+  private readonly renderer: THREE.WebGLRenderer;
   private readonly cameraController: CameraController;
   private readonly pivot = new THREE.Object3D();
   private animNull: THREE.Object3D | null = null;
@@ -37,6 +38,7 @@ export class AxeAnimation {
     onProgress?: ProgressFn,
   ) {
     this.scene = scene;
+    this.renderer = renderer;
     this.cameraController = cameraController;
     this.pivot.visible = false;
     scene.add(this.pivot);
@@ -68,45 +70,71 @@ export class AxeAnimation {
       }
 
       this.pivot.add(this.animScene);
-      this.axeModel = modelGltf.scene;
-      this.axeModel.position.set(0, 0, 0);
-      this.axeModel.traverse((obj) => {
-        if (!(obj as THREE.Mesh).isMesh) return;
-        const mesh = obj as THREE.Mesh;
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        // 资源无关：色图 sRGB + Clamp；ORM/金属度贴图可有可无（占位斧有 axe_orm.png）
-        // metalness 强制 0 → ORM 金属通道被压掉；roughnessMap 仍参与，并抬到底 0.55
-        // 禁止 flipY=true 纸糊：外置 JPG 朝向由 bake/美术保证（glTF flipY=false）
-        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-        for (const m of mats) {
-          const mat = m as THREE.MeshStandardMaterial;
-          if (!mat) continue;
-          const clampMap = (tex: THREE.Texture | null | undefined, srgb: boolean) => {
-            if (!tex) return;
-            if (srgb) tex.colorSpace = THREE.SRGBColorSpace;
-            tex.wrapS = THREE.ClampToEdgeWrapping;
-            tex.wrapT = THREE.ClampToEdgeWrapping;
-            tex.flipY = false;
-            tex.needsUpdate = true;
-          };
-          clampMap(mat.map, true);
-          clampMap(mat.emissiveMap, true);
-          // ORM / metallicRoughness：线性，勿标 sRGB
-          clampMap(mat.metalnessMap, false);
-          clampMap(mat.roughnessMap, false);
-          clampMap(mat.aoMap, false);
-          if (mat.color) mat.color.set(0xffffff);
-          if (typeof mat.metalness === "number") mat.metalness = 0;
-          if (typeof mat.roughness === "number") mat.roughness = Math.max(mat.roughness, 0.55);
-          mat.needsUpdate = true;
-        }
-      });
-      this.animNull.add(this.axeModel);
+      this.attachAxeModel(modelGltf.scene);
       this.readyState = true;
     } catch (err) {
       console.warn("斧头模型加载失败,本局不显示斧头:", err);
     }
+  }
+
+  private prepareAxeMaterials(root: THREE.Object3D) {
+    root.traverse((obj) => {
+      if (!(obj as THREE.Mesh).isMesh) return;
+      const mesh = obj as THREE.Mesh;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const m of mats) {
+        const mat = m as THREE.MeshStandardMaterial;
+        if (!mat) continue;
+        const clampMap = (tex: THREE.Texture | null | undefined, srgb: boolean) => {
+          if (!tex) return;
+          if (srgb) tex.colorSpace = THREE.SRGBColorSpace;
+          tex.wrapS = THREE.ClampToEdgeWrapping;
+          tex.wrapT = THREE.ClampToEdgeWrapping;
+          tex.flipY = false;
+          tex.needsUpdate = true;
+        };
+        clampMap(mat.map, true);
+        clampMap(mat.emissiveMap, true);
+        clampMap(mat.metalnessMap, false);
+        clampMap(mat.roughnessMap, false);
+        clampMap(mat.aoMap, false);
+        if (mat.color) mat.color.set(0xffffff);
+        if (typeof mat.metalness === "number") mat.metalness = 0;
+        if (typeof mat.roughness === "number") mat.roughness = Math.max(mat.roughness, 0.55);
+        mat.needsUpdate = true;
+      }
+    });
+  }
+
+  private disposeAxeModel() {
+    if (!this.axeModel) return;
+    this.animNull?.remove(this.axeModel);
+    this.axeModel.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      mesh.geometry?.dispose();
+      const m = mesh.material;
+      Array.isArray(m) ? m.forEach((x) => x.dispose()) : m?.dispose();
+    });
+    this.axeModel = null;
+  }
+
+  private attachAxeModel(root: THREE.Object3D) {
+    this.disposeAxeModel();
+    this.axeModel = root;
+    this.axeModel.position.set(0, 0, 0);
+    this.prepareAxeMaterials(this.axeModel);
+    this.animNull?.add(this.axeModel);
+  }
+
+  /** 热换斧模：保留 anim 轨道，只替换斧头 mesh */
+  async reloadAxeModel(url: string) {
+    if (this.playing || !this.animNull) return;
+    const loader = createGltfLoader(this.renderer);
+    const modelGltf = await loader.loadAsync(url);
+    this.attachAxeModel(modelGltf.scene);
   }
 
   get busy(): boolean {

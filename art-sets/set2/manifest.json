@@ -1,0 +1,7 @@
+{
+  "id": "set2",
+  "label": "方案2",
+  "version": 1,
+  "fallback": "set0",
+  "files": {}
+}

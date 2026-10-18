@@ -11,6 +11,18 @@
     {
       "name": "assets",
       "root": "subpackages/assets/"
+    },
+    {
+      "name": "art-set1",
+      "root": "subpackages/art-set1/"
+    },
+    {
+      "name": "art-set2",
+      "root": "subpackages/art-set2/"
+    },
+    {
+      "name": "art-set3",
+      "root": "subpackages/art-set3/"
     }
   ]
 }

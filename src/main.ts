@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { TOTAL_ASSETS } from "./config/assets";
-import { CAMERA } from "./config/constants";
+import { CAMERA, IS_MINIGAME } from "./config/constants";
 import { AxeAnimation } from "./anim/AxeAnimation";
 import { PieceAnimator } from "./anim/PieceAnimator";
 import { AudioManager } from "./audio/AudioManager";
@@ -17,11 +17,22 @@ import { FirewoodPile } from "./pile/FirewoodPile";
 import { createGobo } from "./world/gobo";
 import { createGrass } from "./world/grass";
 import { createGround } from "./world/ground";
-import { loadStump } from "./world/stump";
+import type { Stump } from "./world/stump";
 import { createLog } from "./wood/logFactory";
-import { loadWoodMaterials, type WoodMaterials } from "./wood/materials";
+import type { WoodMaterials } from "./wood/materials";
 import { warmUpSlicePipeline } from "./wood/warmup";
 import { ensureHud, compositeHud } from "./platform/runtime";
+import {
+  ArtSetController,
+  applyEnvironment,
+  applyGrassColors,
+  applyGroundLook,
+  loadStumpForSet,
+  loadWoodMaterialsForSet,
+  type ArtSetResolved,
+} from "./art/ArtSetController";
+import type { ArtSetId } from "./art/types";
+import { isArtSetId } from "./art/registry";
 
 const renderer = createRenderer();
 const scene = createScene();
@@ -34,7 +45,7 @@ const camera = new THREE.PerspectiveCamera(
 
 const controller = new CameraController(camera, renderer.domElement);
 const { direction: sunDirection } = createLights(scene);
-createGround(scene);
+const ground = createGround(scene);
 const grass = createGrass(scene, sunDirection);
 const gobo = createGobo(scene, sunDirection);
 
@@ -47,21 +58,139 @@ const animator = new PieceAnimator();
 const audio = new AudioManager(camera, progress.step);
 const debugLine = new DebugLine(scene);
 const axe = new AxeAnimation(scene, renderer, controller, progress.step);
+const artSets = new ArtSetController();
 
 let game: GameController | null = null;
 let debugPile: FirewoodPile | null = null;
 let debugMaterials: WoodMaterials | null = null;
+let currentStump: Stump | null = null;
+let artPickerOpen = false;
+let artSwitching = false;
+let groundMap: THREE.Texture | null = null;
+
+function syncArtSwitcherHud(loadingText?: string | null) {
+  const hud = ensureHud();
+  hud?.setArtSwitcher?.({
+    visible: IS_MINIGAME || Boolean(hud),
+    open: artPickerOpen,
+    activeId: artSets.activeId,
+    options: artSets.labels(),
+    loadingText: loadingText ?? null,
+  });
+}
+
+async function applyResolvedArt(set: ArtSetResolved, opts?: { skipAxe?: boolean }) {
+  applyEnvironment(scene, set);
+  applyGrassColors(grass, set.grass);
+  applyGroundLook(ground, set, groundMap);
+
+  if (set.urls.groundColor) {
+    try {
+      const tex = await new THREE.TextureLoader().loadAsync(set.urls.groundColor);
+      groundMap?.dispose();
+      groundMap = tex;
+      applyGroundLook(ground, set, groundMap);
+    } catch {
+      /* optional */
+    }
+  } else if (groundMap) {
+    groundMap.dispose();
+    groundMap = null;
+    applyGroundLook(ground, set, null);
+  }
+
+  const materials = await loadWoodMaterialsForSet(set.urls);
+  const oldMaterials = debugMaterials;
+  debugMaterials = materials;
+
+  if (currentStump) {
+    currentStump.dispose();
+    currentStump = null;
+  }
+  currentStump = await loadStumpForSet(scene, renderer, set.urls);
+
+  if (!opts?.skipAxe) {
+    await axe.reloadAxeModel(set.urls.axe);
+  }
+
+  if (game && debugPile) {
+    game.applyArtMaterials(materials);
+  }
+
+  oldMaterials?.dispose();
+  artSets.persist(set.id);
+  syncArtSwitcherHud(null);
+}
+
+async function switchArtSet(id: ArtSetId) {
+  if (artSwitching || id === artSets.activeId) {
+    artPickerOpen = false;
+    syncArtSwitcherHud(null);
+    return;
+  }
+  if (game && game.currentState !== "IDLE" && game.currentState !== "SPAWNING") return;
+  if (axe.busy) return;
+
+  artSwitching = true;
+  artPickerOpen = false;
+  const label = artSets.labels().find((l) => l.id === id)?.label || id;
+  syncArtSwitcherHud(`加载${label}…`);
+  try {
+    const set = await artSets.ensureLoaded(id, (p, text) => {
+      syncArtSwitcherHud(`${text} ${Math.round(p * 100)}%`);
+    });
+    await applyResolvedArt(set);
+  } catch (err) {
+    console.warn("[art] switch failed", err);
+    syncArtSwitcherHud(null);
+  } finally {
+    artSwitching = false;
+  }
+}
+
+function handleArtSwitcherClick() {
+  const hud = ensureHud();
+  if (!hud?.hitTestArtSwitcher) return false;
+  const pt = controller.peekClickClient();
+  if (!pt) return false;
+  const hit = hud.hitTestArtSwitcher(pt.x, pt.y);
+  if (!hit) return false;
+  controller.cancelPendingClick();
+  if (hit === "toggle") {
+    artPickerOpen = !artPickerOpen;
+    syncArtSwitcherHud(artSwitching ? "加载中…" : null);
+    return true;
+  }
+  if (isArtSetId(hit)) {
+    void switchArtSet(hit);
+    return true;
+  }
+  return false;
+}
 
 async function boot() {
+  const initial = await artSets.initFromStorage((p, text) => {
+    progress.step();
+    ensureHud()?.setStatus?.(text);
+    void p;
+  });
+  applyEnvironment(scene, initial);
+  applyGrassColors(grass, initial.grass);
+  applyGroundLook(ground, initial, null);
+
   const [materials, stump] = await Promise.all([
-    loadWoodMaterials(progress.step),
-    loadStump(scene, renderer, progress.step),
+    loadWoodMaterialsForSet(initial.urls, progress.step),
+    loadStumpForSet(scene, renderer, initial.urls, progress.step),
     axe.ready,
   ]);
+  // 启动时 axe 已按 MODELS.axe（set0）加载；若偏好非 set0 再换斧
+  if (initial.id !== "set0") {
+    await axe.reloadAxeModel(initial.urls.axe);
+  }
 
+  currentStump = stump;
   physics.addStumpCollider(stump.topY, stump.topRadius);
 
-  // 趁 loading 还没消失,把第一次切割的卡顿消化掉
   warmUpSlicePipeline(scene, renderer, camera, materials);
 
   const pile = new FirewoodPile({
@@ -85,10 +214,9 @@ async function boot() {
   });
   debugPile = pile;
 
-  // 模型都加载完了,transcoder 的 worker 池可以收掉
   disposeGltfLoader();
-
   progress.finish();
+  syncArtSwitcherHud(null);
   showHint();
 }
 
@@ -153,6 +281,7 @@ function frame() {
   last = now;
 
   controller.update(dt);
+  handleArtSwitcherClick();
   physics.update(dt);
   axe.update(dt);
   game?.update(dt);
@@ -208,6 +337,14 @@ if (enableDebugHooks) {
         cameraTargetAzimuth: controller.targetAzimuth,
       }),
       click: () => game?.handleClick(),
+      art: () => ({
+        active: artSets.activeId,
+        labels: artSets.labels(),
+        switchTo: (id: string) => {
+          if (isArtSetId(id)) return switchArtSet(id);
+          return Promise.reject(new Error("bad set id"));
+        },
+      }),
       /** 性能画像：按物体汇总 verts/tris，并读 renderer.info */
       perf: () => {
         renderer.info.reset();

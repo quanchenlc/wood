@@ -7,12 +7,26 @@
 import * as THREE from "three";
 import { isMinigame } from "./env";
 
+export interface ArtSwitcherState {
+  visible: boolean;
+  open: boolean;
+  activeId: string;
+  options: { id: string; label: string }[];
+  /** 切换加载中文案；非空时显示半透明遮罩进度 */
+  loadingText?: string | null;
+}
+
+export type ArtSwitcherHit = "toggle" | string | null;
+
 export interface HudApi {
   setProgress(loaded: number, total: number): void;
   setStatus?(text: string): void;
   hideLoading(): void;
   showHint(actionText: string): void;
   hideHint(): void;
+  setArtSwitcher?(state: ArtSwitcherState): void;
+  /** CSS 像素坐标（相对窗口） */
+  hitTestArtSwitcher?(clientX: number, clientY: number): ArtSwitcherHit;
   /** 真机 WebGL 叠加；DOM 模式为空操作 */
   composite?(renderer: THREE.WebGLRenderer): void;
   dispose(): void;
@@ -89,6 +103,8 @@ class DomCanvasHud implements HudApi {
   private loadingVisible = true;
   private hintVisible = false;
   private hintAction = "点击劈开";
+  private art: ArtSwitcherState = { visible: false, open: false, activeId: "set0", options: [] };
+  private artHit: ReturnType<typeof paintArtSwitcher> | null = null;
   private raf = 0;
 
   constructor(realDoc: Document) {
@@ -144,6 +160,21 @@ class DomCanvasHud implements HudApi {
     this.hintVisible = false;
   }
 
+  setArtSwitcher(state: ArtSwitcherState) {
+    this.art = state;
+  }
+
+  hitTestArtSwitcher(clientX: number, clientY: number): ArtSwitcherHit {
+    if (!this.art.visible || !this.artHit) return null;
+    if (this.art.loadingText) return null;
+    if (hitRect(this.artHit.toggle, clientX, clientY)) return "toggle";
+    for (const opt of this.artHit.options) {
+      if (hitRect(opt.rect, clientX, clientY)) return opt.id;
+    }
+    if (this.art.open) return "toggle"; // 点空白收起
+    return null;
+  }
+
   private loop = () => {
     this.raf = requestAnimationFrame(this.loop);
     const w = window.innerWidth || 375;
@@ -155,6 +186,7 @@ class DomCanvasHud implements HudApi {
     if (this.hintVisible) {
       paintHint(this.ctx, w, h, this.hintAction, 1);
     }
+    this.artHit = this.art.visible ? paintArtSwitcher(this.ctx, w, h, this.art) : null;
   };
 
   dispose() {
@@ -177,6 +209,8 @@ class WebglOverlayHud implements HudApi {
   private loadingVisible = true;
   private hintVisible = false;
   private hintAction = "点击劈开";
+  private art: ArtSwitcherState = { visible: false, open: false, activeId: "set0", options: [] };
+  private artHit: ReturnType<typeof paintArtSwitcher> | null = null;
   private dirty = true;
   private cssW = 375;
   private cssH = 812;
@@ -254,8 +288,25 @@ class WebglOverlayHud implements HudApi {
     if (this.hintVisible) {
       paintHint(this.ctx, w, h, this.hintAction, 1);
     }
+    this.artHit = this.art.visible ? paintArtSwitcher(this.ctx, w, h, this.art) : null;
     this.dirty = true;
     if (this.texture) this.texture.needsUpdate = true;
+  }
+
+  setArtSwitcher(state: ArtSwitcherState) {
+    this.art = state;
+    this.redraw();
+  }
+
+  hitTestArtSwitcher(clientX: number, clientY: number): ArtSwitcherHit {
+    if (!this.art.visible || !this.artHit) return null;
+    if (this.art.loadingText) return null;
+    if (hitRect(this.artHit.toggle, clientX, clientY)) return "toggle";
+    for (const opt of this.artHit.options) {
+      if (hitRect(opt.rect, clientX, clientY)) return opt.id;
+    }
+    if (this.art.open) return "toggle";
+    return null;
   }
 
   setProgress(loaded: number, total: number) {
@@ -288,7 +339,7 @@ class WebglOverlayHud implements HudApi {
   }
 
   composite(renderer: THREE.WebGLRenderer) {
-    if (!this.loadingVisible && !this.hintVisible) return;
+    if (!this.loadingVisible && !this.hintVisible && !this.art.visible) return;
     this.ensureOverlay(renderer);
     if (this.dirty && this.texture) {
       this.texture.needsUpdate = true;
@@ -329,6 +380,80 @@ function roundRect(
   ctx.arcTo(x, y + h, x, y, r);
   ctx.arcTo(x, y, x + w, y, r);
   ctx.closePath();
+}
+
+/** 右下角套装切换：按钮 + 可选四项列表；返回命中区供 hitTest */
+function paintArtSwitcher(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  state: ArtSwitcherState,
+): { toggle: DOMRect; options: { id: string; rect: DOMRect }[] } {
+  const pad = 12;
+  const btnH = 34;
+  const btnW = 96;
+  const bx = w - pad - btnW;
+  const by = h - pad - btnH;
+  const active = state.options.find((o) => o.id === state.activeId);
+  const label = active?.label || "原版";
+
+  ctx.save();
+  ctx.globalAlpha = 0.92;
+  ctx.fillStyle = "rgba(20,14,8,0.55)";
+  ctx.strokeStyle = "rgba(232,213,176,0.35)";
+  roundRect(ctx, bx, by, btnW, btnH, 10);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#e8d5b0";
+  ctx.font = "600 13px system-ui, PingFang SC, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(`${label}${state.open ? " ▴" : " ▾"}`, bx + btnW / 2, by + btnH / 2);
+
+  const options: { id: string; rect: DOMRect }[] = [];
+  if (state.open) {
+    const rowH = 36;
+    const listH = state.options.length * rowH;
+    const lx = bx;
+    const ly = by - 8 - listH;
+    const lw = btnW;
+    roundRect(ctx, lx, ly, lw, listH, 10);
+    ctx.fillStyle = "rgba(20,14,8,0.72)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(232,213,176,0.28)";
+    ctx.stroke();
+    state.options.forEach((opt, i) => {
+      const ry = ly + i * rowH;
+      if (opt.id === state.activeId) {
+        ctx.fillStyle = "rgba(232,213,176,0.18)";
+        ctx.fillRect(lx + 2, ry + 2, lw - 4, rowH - 4);
+      }
+      ctx.fillStyle = "#e8d5b0";
+      ctx.fillText(opt.label, lx + lw / 2, ry + rowH / 2);
+      options.push({
+        id: opt.id,
+        rect: { x: lx, y: ry, width: lw, height: rowH, top: ry, left: lx, bottom: ry + rowH, right: lx + lw, toJSON() {} },
+      });
+    });
+  }
+
+  if (state.loadingText) {
+    ctx.fillStyle = "rgba(10,8,5,0.45)";
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = "#e8d5b0";
+    ctx.font = "600 16px Georgia, Songti SC, serif";
+    ctx.fillText(state.loadingText, w / 2, h / 2);
+  }
+  ctx.restore();
+
+  return {
+    toggle: { x: bx, y: by, width: btnW, height: btnH, top: by, left: bx, bottom: by + btnH, right: bx + btnW, toJSON() {} },
+    options,
+  };
+}
+
+function hitRect(r: { x: number; y: number; width: number; height: number }, x: number, y: number) {
+  return x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height;
 }
 
 let hud: HudApi | null = null;

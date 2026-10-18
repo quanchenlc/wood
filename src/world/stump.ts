@@ -64,6 +64,12 @@ function prepareStumpMaterials(root: THREE.Object3D, opts: { castShadow: boolean
   });
 }
 
+export interface StumpLoadUrls {
+  stump?: string;
+  stumpLod?: string;
+  stumpData?: string;
+}
+
 /**
  * 近处砍伐树桩保持全精度；远处副本用 build 产出的 stump_lod（同贴图、少三角），
  * 且不投影 —— 画像显示 stump×2 ≈ 场景 87% tris。
@@ -72,15 +78,19 @@ export async function loadStump(
   scene: THREE.Scene,
   renderer: THREE.WebGLRenderer,
   onProgress?: ProgressFn,
+  urls?: StumpLoadUrls,
 ): Promise<Stump> {
   const loader = createGltfLoader(renderer);
   let root: THREE.Object3D;
   let farRoot: THREE.Object3D | null = null;
+  const stumpUrl = urls?.stump || MODELS.stump;
+  const dataUrl = urls?.stumpData || MODELS.stumpData;
+  const lodUrl = urls?.stumpLod || (IS_MINIGAME ? assetUrl("/assets/stump_lod.gltf") : null);
 
   try {
     const [main, data] = await Promise.all([
-      loader.loadAsync(MODELS.stump).then((g) => (onProgress?.(), g)),
-      loader.loadAsync(MODELS.stumpData).then((g) => (onProgress?.(), g)),
+      loader.loadAsync(stumpUrl).then((g) => (onProgress?.(), g)),
+      loader.loadAsync(dataUrl).then((g) => (onProgress?.(), g)),
     ]);
 
     root = main.scene;
@@ -89,9 +99,8 @@ export async function loadStump(
     const placement = data.scene.getObjectByName("instance");
 
     // 小游戏：远景用 LOD；Web / 缺 LOD 时退回全模 clone
-    if (IS_MINIGAME) {
+    if (IS_MINIGAME && lodUrl) {
       try {
-        const lodUrl = assetUrl("/assets/stump_lod.gltf");
         const lodGltf = await loader.loadAsync(lodUrl);
         farRoot = lodGltf.scene;
         prepareStumpMaterials(farRoot, { castShadow: false });
@@ -103,7 +112,7 @@ export async function loadStump(
     } else {
       farRoot = root.clone(true);
       // Web 远景仍投影；小游戏已关
-      prepareStumpMaterials(farRoot, { castShadow: true });
+      prepareStumpMaterials(farRoot, { castShadow: IS_MINIGAME ? false : true });
     }
 
     if (placement) {
