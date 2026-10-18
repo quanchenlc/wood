@@ -3,5 +3,5 @@ module.exports = {
   VERSION: "0.3.2",
   BUILD_NOTE: "direct-scene-hidpi",
   /** 短提交标识，发版前由提交写入 */
-  BUILD_REV: "pending",
+  BUILD_REV: "d714abe",
 };
