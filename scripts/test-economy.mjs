@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 
 const DESIGN_C = {
-  hitsPerRoot: 3,
+  // hitsPerRoot 已废弃：物理刀数恢复原版几何切割，不参与伐倒
   offline: { flatCount: 180, flatMinutes: 1, stageSize: 20 },
   pendingCap: 200,
   dailyQuota: 300,
@@ -119,8 +119,8 @@ assert.equal(minutesForRoot(221), 8);
   assert.equal(rem, 0);
 }
 
-// hitsPerRoot
-assert.equal(DESIGN_C.hitsPerRoot, 3);
+// 物理刀数不再由 hitsPerRoot 门控（字段已移除）
+assert.equal("hitsPerRoot" in DESIGN_C, false);
 assert.equal(DESIGN_C.ads.AD_QUOTA_PLUS.quotaPlus, 20);
 assert.equal(DESIGN_C.ads.AD_OFFLINE_SKIP.skipMinutes, 30);
 

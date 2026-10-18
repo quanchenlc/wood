@@ -1,9 +1,11 @@
 /**
  * 方案 C 配置常量 —— 唯一权威见 docs/design-scheme-c.md §9。
  * 改数值请先改文档，再同步本文件。
+ *
+ * 物理刀数：恢复 pre-0.3.0 几何切割（薄到不可劈 / 无可劈块才入垛）。
+ * 方案 C 曾写的「3 刀/根」已废弃，不参与伐倒判定。
  */
 export const DESIGN_C = {
-  hitsPerRoot: 3,
   offline: {
     flatCount: 180,
     flatMinutes: 1,

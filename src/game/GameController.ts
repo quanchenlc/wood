@@ -17,7 +17,6 @@ import {
   type SplittableMesh,
 } from "../wood/slicer";
 import { INCH } from "../config/constants";
-import { DESIGN_C } from "../economy/design";
 
 export type GameState = "SPAWNING" | "IDLE" | "SPLITTING" | "SETTLING" | "STACKING";
 
@@ -54,7 +53,7 @@ export interface EconomyHooks {
   canActiveChop: () => boolean;
   /** 入垛后是否禁止再刷出下一根（额度耗尽） */
   shouldBlockSpawn?: () => boolean;
-  /** 当前根入垛成功（已满 hitsPerRoot 刀） */
+  /** 当前根按几何规则劈完并开始入垛时回调（计 1 树根） */
   onRootStacked: () => void;
   /** 额度耗尽时回调 */
   onQuotaBlocked?: () => void;
@@ -102,9 +101,8 @@ export class GameController {
   private pendingSplit: PendingSplit | null = null;
   private stacked = 0;
   private lastSplitTime = 0;
-  /** 当前树根已有效刀数（方案 C：满 3 刀入垛） */
+  /** 当前树根已有效刀数（仅诊断；不参与伐倒判定） */
   private chopsOnRoot = 0;
-  private forceFell = false;
   private rootsFelled = 0;
 
   constructor(deps: GameDeps) {
@@ -153,7 +151,6 @@ export class GameController {
       this.firewoodOnGround = [];
       this.pendingSplit = null;
       this.chopsOnRoot = 0;
-      this.forceFell = false;
       return;
     }
     const { materials, scene, animator, audio } = this.d;
@@ -166,7 +163,6 @@ export class GameController {
     this.firewoodOnGround = [];
     this.pendingSplit = null;
     this.chopsOnRoot = 0;
-    this.forceFell = false;
     this.state = "SPAWNING";
   }
 
@@ -291,7 +287,6 @@ export class GameController {
 
     audio.play(thrown.length > 0 ? "splitBreak" : "split", thrown.length > 0 ? 0.6 : 0.8);
     this.chopsOnRoot += 1;
-    if (this.chopsOnRoot >= DESIGN_C.hitsPerRoot) this.forceFell = true;
     this.state = "SETTLING";
     this.lastSplitTime = performance.now();
     this.d.economy?.onChopSettled?.();
@@ -347,27 +342,16 @@ export class GameController {
     }
   }
 
-  private convertRemainingToFirewood() {
-    for (const log of this.logPieces) {
-      if (log.mesh.userData.isFirewood) continue;
-      log.mesh.userData.isFirewood = true;
-      log.mesh.userData.isSplittable = false;
-      this.firewoodOnGround.push({ mesh: log.mesh, physicsEntry: null });
-    }
-    this.logPieces = [];
-  }
-
   private startStacking() {
     const { physics, pile } = this.d;
     this.state = "STACKING";
-    if (this.forceFell) this.convertRemainingToFirewood();
+    // 原版：仅在无可劈块时入垛；不再 early force-fell / convertRemaining
     const pieces = [...this.firewoodOnGround];
     for (const log of this.logPieces) {
       if (log.mesh.userData.isFirewood) pieces.push({ mesh: log.mesh, physicsEntry: null });
     }
     this.logPieces = this.logPieces.filter(({ mesh }) => !mesh.userData.isFirewood);
     this.firewoodOnGround = [];
-    const felled = this.chopsOnRoot >= DESIGN_C.hitsPerRoot;
     pile.startStacking(
       pieces.map(({ mesh }) => mesh),
       (mesh) => {
@@ -379,12 +363,10 @@ export class GameController {
       },
     );
     this.stacked += pieces.length;
-    if (felled) {
-      this.rootsFelled += 1;
-      this.d.economy?.onRootStacked();
-    }
+    // 几何劈完 → 入垛即计 1 树根（不要求固定刀数）
+    this.rootsFelled += 1;
+    this.d.economy?.onRootStacked();
     this.chopsOnRoot = 0;
-    this.forceFell = false;
   }
 
   update(dt: number) {
@@ -406,7 +388,7 @@ export class GameController {
           if (animationsDone && waitDone) {
             this.firewoodOnGround.push(...this.firewoodPieces);
             this.firewoodPieces = [];
-            if (this.forceFell || splittable.length === 0) this.startStacking();
+            if (splittable.length === 0) this.startStacking();
             else this.state = "IDLE";
           }
         }
