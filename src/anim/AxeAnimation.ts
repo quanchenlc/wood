@@ -111,12 +111,31 @@ export class AxeAnimation {
   private disposeAxeModel() {
     if (!this.axeModel) return;
     this.animNull?.remove(this.axeModel);
+    const seenTex = new Set<THREE.Texture>();
     this.axeModel.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (!mesh.isMesh) return;
       mesh.geometry?.dispose();
-      const m = mesh.material;
-      Array.isArray(m) ? m.forEach((x) => x.dispose()) : m?.dispose();
+      const mats = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
+      for (const mat of mats) {
+        const std = mat as THREE.MeshStandardMaterial;
+        for (const key of [
+          "map",
+          "normalMap",
+          "roughnessMap",
+          "metalnessMap",
+          "aoMap",
+          "emissiveMap",
+          "alphaMap",
+        ] as const) {
+          const tex = std[key] as THREE.Texture | null | undefined;
+          if (tex && !seenTex.has(tex)) {
+            seenTex.add(tex);
+            tex.dispose();
+          }
+        }
+        mat.dispose();
+      }
     });
     this.axeModel = null;
   }

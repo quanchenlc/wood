@@ -40,13 +40,21 @@ export function resolveFile(
   key: keyof ArtSetFileMap,
   fallbackManifest?: ArtSetManifest | null,
 ): string | null {
-  const files = effectiveFiles(manifest, fallbackManifest);
-  const rel = files[key];
-  if (!rel) return null;
-  // 本套未提供该文件且声明了 fallback → 从 fallback 套的根路径取
-  const own = Boolean(manifest.files?.[key]);
-  const sourceId = (own ? setId : (manifest.fallback as ArtSetId | undefined) || setId) as ArtSetId;
-  return artFileUrl(sourceId, rel);
+  // 本套显式交付的文件
+  const ownRel = manifest.files?.[key];
+  if (ownRel) return artFileUrl(setId, ownRel);
+
+  // 声明了 fallback（通常 set0）→ 从 fallback 清单取
+  if (manifest.fallback) {
+    const fbFiles = fallbackManifest?.files || SET0_DEFAULT_MANIFEST.files || {};
+    const rel = fbFiles[key];
+    if (!rel) return null;
+    return artFileUrl(manifest.fallback as ArtSetId, rel);
+  }
+
+  // 无 fallback：不要把 SET0_DEFAULT 的键误解析到本套根路径
+  // （如 stumpData 共享资源由 buildUrls 的 req 回落到 set0）
+  return null;
 }
 
 /** set0 在 Web 上仍可用嵌图 GLB；小游戏强制外置路径由 caller 决定 */

@@ -11,19 +11,19 @@ export const ART_SET_CATALOG: readonly ArtSetCatalogEntry[] = [
   },
   {
     id: "set1",
-    label: "方案1",
+    label: "晨林写实",
     subpackage: "art-set1",
     root: "subpackages/art-set1/",
   },
   {
     id: "set2",
-    label: "方案2",
+    label: "卡通低多边形",
     subpackage: "art-set2",
     root: "subpackages/art-set2/",
   },
   {
     id: "set3",
-    label: "方案3",
+    label: "手绘温馨",
     subpackage: "art-set3",
     root: "subpackages/art-set3/",
   },

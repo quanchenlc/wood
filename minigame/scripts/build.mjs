@@ -688,8 +688,9 @@ async function copyAssets() {
 }
 
 /**
- * set1–set3：各自分包。未交付前仅拷 manifest（fallback:set0），体积可忽略。
- * 美术交付后把完整文件放进 art-sets/setN/ 即可；法线 PNG 会缩到 ≤512 且保持 PNG。
+ * set1–set3：各自分包。美术交付后原样拷入（不重导出、不压贴图）；
+ * 排除 preview.png；法线必须是 manifest 里的 .png。
+ * MAD / KTX2 解码只跑 set0（主 assets 分包）。
  */
 async function packArtSetSubpackages() {
   const gameJsonPath = join(MG, "game.json");
@@ -702,6 +703,8 @@ async function packArtSetSubpackages() {
   ];
   gameJson.subpackages = subs;
   writeFileSync(gameJsonPath, `${JSON.stringify(gameJson, null, 2)}\n`);
+
+  const skipNames = new Set(["preview.png", "Preview.png", ".DS_Store"]);
 
   for (const id of ["set1", "set2", "set3"]) {
     const srcDir = join(ROOT, "art-sets", id);
@@ -722,15 +725,19 @@ async function packArtSetSubpackages() {
     }
     for (const name of readdirSync(srcDir)) {
       if (name.startsWith(".")) continue;
+      if (skipNames.has(name)) {
+        console.log(`[build] art-${id}: skip ${name}`);
+        continue;
+      }
       cpSync(join(srcDir, name), join(dest, name), { recursive: true });
     }
     if (!existsSync(join(dest, "manifest.json"))) {
       throw new Error(`[build] art-${id} missing manifest.json`);
     }
     assertArtSetNormalPng(dest, id);
-    // 不跳过 stump_/axe_：套装根目录文件都要过一遍尺寸闸
-    await resizeStandaloneTextures(dest, { skipStemPrefixes: /^$/ });
-    console.log(`[build] art-${id}: packed from art-sets/${id}`);
+    // 原样交付：不再 resize/recompress（避免改动美术已校验的贴图）
+    const bytes = walkSizes(dest).reduce((n, f) => n + f.size, 0);
+    console.log(`[build] art-${id}: packed as-is from art-sets/${id} (${formatMb(bytes)})`);
   }
 }
 
@@ -793,19 +800,35 @@ function reportSizes() {
     return !rel.startsWith("harness/") && !rel.startsWith("scripts/") && !rel.startsWith("src/");
   });
   const mainFiles = all.filter((f) => isMainPackageFile(f.path));
-  const subFiles = all.filter((f) =>
-    relative(MG, f.path).replace(/\\/g, "/").startsWith("subpackages/"),
-  );
   const mainBytes = sum(mainFiles);
-  const subBytes = sum(subFiles);
+
+  const subRoots = [
+    ["assets", "subpackages/assets/"],
+    ["art-set1", "subpackages/art-set1/"],
+    ["art-set2", "subpackages/art-set2/"],
+    ["art-set3", "subpackages/art-set3/"],
+  ];
+  const subpackages = {};
+  let subBytes = 0;
+  for (const [name, prefix] of subRoots) {
+    const files = all.filter((f) =>
+      relative(MG, f.path).replace(/\\/g, "/").startsWith(prefix),
+    );
+    const bytes = sum(files);
+    subBytes += bytes;
+    subpackages[name] = { bytes, size: formatMb(bytes) };
+  }
 
   const report = {
     appid: config.WECHAT_APPID,
     mainPackageBytes: mainBytes,
     mainPackage: formatMb(mainBytes),
     mainUnder4MB: mainBytes <= 4 * 1024 * 1024,
-    assetsSubpackageBytes: subBytes,
-    assetsSubpackage: formatMb(subBytes),
+    assetsSubpackageBytes: subpackages.assets?.bytes ?? 0,
+    assetsSubpackage: subpackages.assets?.size ?? "0 MB",
+    subpackages,
+    subpackagesTotalBytes: subBytes,
+    subpackagesTotal: formatMb(subBytes),
     bundle: formatMb(statSync(OUT_BUNDLE).size),
     largestMain: mainFiles
       .slice()

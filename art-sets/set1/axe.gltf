@@ -1,0 +1,174 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "firewood art-sets procedural generator (original work)"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "AuxScene",
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "AuxScene",
+      "children": [
+        1
+      ]
+    },
+    {
+      "name": "Mesh",
+      "extras": {
+        "name": "Mesh"
+      },
+      "translation": [
+        -0.051619267542264424,
+        0.5474593472899869,
+        0.006034188443663879
+      ],
+      "scale": [
+        0.5505650991108268,
+        0.5505650991108268,
+        0.5505650991108268
+      ],
+      "mesh": 0
+    }
+  ],
+  "meshes": [
+    {
+      "name": "Mesh",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1,
+            "TEXCOORD_0": 2
+          },
+          "indices": 3,
+          "material": 0,
+          "mode": 4
+        }
+      ]
+    }
+  ],
+  "materials": [
+    {
+      "name": "Mat.1",
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          1,
+          1,
+          1,
+          1
+        ],
+        "baseColorTexture": {
+          "index": 0
+        },
+        "metallicFactor": 1,
+        "roughnessFactor": 1,
+        "metallicRoughnessTexture": {
+          "index": 1
+        }
+      }
+    }
+  ],
+  "textures": [
+    {
+      "source": 0,
+      "sampler": 0
+    },
+    {
+      "source": 1,
+      "sampler": 0
+    }
+  ],
+  "images": [
+    {
+      "uri": "axe_baseColor.jpg",
+      "mimeType": "image/jpeg"
+    },
+    {
+      "uri": "axe_orm.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "samplers": [
+    {
+      "magFilter": 9729,
+      "minFilter": 9987,
+      "wrapS": 33071,
+      "wrapT": 33071
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 1487,
+      "type": "VEC3",
+      "min": [
+        -0.20048625767230988,
+        -0.9998751878738403,
+        -0.04734015092253685
+      ],
+      "max": [
+        0.200919508934021,
+        0.9999555945396423,
+        0.045994069427251816
+      ]
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 1487,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 1487,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 3,
+      "componentType": 5123,
+      "count": 7128,
+      "type": "SCALAR"
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 17844,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 17844,
+      "byteLength": 17844,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 35688,
+      "byteLength": 11896,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 47584,
+      "byteLength": 14256,
+      "target": 34963
+    }
+  ],
+  "buffers": [
+    {
+      "uri": "axe.bin",
+      "byteLength": 61840
+    }
+  ]
+}

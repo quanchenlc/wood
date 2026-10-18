@@ -1,3 +1,6 @@
 node_modules/
 dist/
 .DS_Store
+
+# 美术预览图不进仓库/包（体积大；构建也会 skip）
+art-sets/**/preview.png

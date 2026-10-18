@@ -139,29 +139,46 @@ export async function loadStump(
     dispose() {
       scene.remove(root);
       if (farRoot) scene.remove(farRoot);
+      // LOD 可能是独立加载或 clone；用 Set 避免贴图/材质/几何 double-dispose
+      const seenGeo = new Set<THREE.BufferGeometry>();
+      const seenMat = new Set<THREE.Material>();
+      const seenTex = new Set<THREE.Texture>();
+      const disposeMat = (mat: THREE.Material) => {
+        if (seenMat.has(mat)) return;
+        seenMat.add(mat);
+        const std = mat as THREE.MeshStandardMaterial;
+        for (const key of [
+          "map",
+          "normalMap",
+          "roughnessMap",
+          "metalnessMap",
+          "aoMap",
+          "emissiveMap",
+          "alphaMap",
+        ] as const) {
+          const tex = std[key] as THREE.Texture | null | undefined;
+          if (tex && !seenTex.has(tex)) {
+            seenTex.add(tex);
+            tex.dispose();
+          }
+        }
+        mat.dispose();
+      };
       const disposeTree = (o: THREE.Object3D) => {
         o.traverse((child) => {
           const mesh = child as THREE.Mesh;
           if (!mesh.isMesh) return;
-          mesh.geometry?.dispose();
+          if (mesh.geometry && !seenGeo.has(mesh.geometry)) {
+            seenGeo.add(mesh.geometry);
+            mesh.geometry.dispose();
+          }
           const m = mesh.material;
-          Array.isArray(m) ? m.forEach((x) => x.dispose()) : m?.dispose();
+          if (Array.isArray(m)) m.forEach(disposeMat);
+          else if (m) disposeMat(m);
         });
       };
       disposeTree(root);
-      // far LOD 有独立 geometry；clone 时 geometry 与 root 共享，避免 double-dispose
-      if (farRoot && farRoot !== root) {
-        const shared = new Set<THREE.BufferGeometry>();
-        root.traverse((c) => {
-          const m = c as THREE.Mesh;
-          if (m.isMesh && m.geometry) shared.add(m.geometry);
-        });
-        farRoot.traverse((c) => {
-          const mesh = c as THREE.Mesh;
-          if (!mesh.isMesh) return;
-          if (mesh.geometry && !shared.has(mesh.geometry)) mesh.geometry.dispose();
-        });
-      }
+      if (farRoot && farRoot !== root) disposeTree(farRoot);
     },
   };
 }

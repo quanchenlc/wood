@@ -344,6 +344,8 @@ if (enableDebugHooks) {
           if (isArtSetId(id)) return switchArtSet(id);
           return Promise.reject(new Error("bad set id"));
         },
+        /** 便于 harness 轮询 */
+        isSwitching: () => artSwitching,
       }),
       /** 性能画像：按物体汇总 verts/tris，并读 renderer.info */
       perf: () => {
