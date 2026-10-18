@@ -2,10 +2,19 @@
  * 小游戏 HUD：全部画在 canvas 上，禁止 wx.showLoading / showToast / showModal。
  * - harness：DOM 透明覆盖层 canvas
  * - 真机：离屏 2D canvas → CanvasTexture，每帧叠在 WebGL 上
+ * - 0.3.0：羊皮纸经济 HUD / 面板（export/textures + 9-slice）
  */
 
 import * as THREE from "three";
 import { isMinigame } from "./env";
+import {
+  hitTestUi,
+  paintParchmentLoading,
+  paintParchmentUi,
+  type HitRect,
+  type ParchmentUiState,
+  type UiHit,
+} from "../ui/parchment";
 
 export interface ArtSwitcherState {
   visible: boolean;
@@ -27,6 +36,8 @@ export interface HudApi {
   setArtSwitcher?(state: ArtSwitcherState): void;
   /** CSS 像素坐标（相对窗口） */
   hitTestArtSwitcher?(clientX: number, clientY: number): ArtSwitcherHit;
+  setParchmentUi?(state: ParchmentUiState): void;
+  hitTestParchment?(clientX: number, clientY: number): UiHit;
   /** 真机 WebGL 叠加；DOM 模式为空操作 */
   composite?(renderer: THREE.WebGLRenderer): void;
   dispose(): void;
@@ -40,28 +51,7 @@ function paintLoading(
   total: number,
   status: string,
 ) {
-  const pct = Math.round((loaded / Math.max(1, total)) * 100);
-  ctx.fillStyle = "#1a1207";
-  ctx.fillRect(0, 0, w, h);
-  ctx.fillStyle = "#e8d5b0";
-  ctx.font = "600 22px Georgia, Songti SC, serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "alphabetic";
-  ctx.fillText(status || "正在加载", w / 2, h / 2 - 36);
-  ctx.globalAlpha = 0.75;
-  ctx.font = "600 18px ui-monospace, monospace";
-  ctx.fillText(`${pct}%`, w / 2, h / 2 - 6);
-  ctx.globalAlpha = 0.55;
-  ctx.font = "13px ui-monospace, monospace";
-  ctx.fillText(`${loaded} / ${total}`, w / 2, h / 2 + 18);
-  ctx.globalAlpha = 1;
-  const barW = Math.min(240, w * 0.62);
-  const barX = (w - barW) / 2;
-  const barY = h / 2 + 36;
-  ctx.fillStyle = "rgba(232,213,176,0.15)";
-  ctx.fillRect(barX, barY, barW, 6);
-  ctx.fillStyle = "#e8d5b0";
-  ctx.fillRect(barX, barY, barW * Math.min(1, loaded / Math.max(1, total)), 6);
+  paintParchmentLoading(ctx, w, h, loaded, total, status || "正在磨斧…");
 }
 
 function paintHint(
@@ -99,12 +89,14 @@ class DomCanvasHud implements HudApi {
   private readonly ctx: CanvasRenderingContext2D;
   private loaded = 0;
   private total = 1;
-  private status = "正在加载";
+  private status = "正在磨斧…";
   private loadingVisible = true;
   private hintVisible = false;
   private hintAction = "点击劈开";
   private art: ArtSwitcherState = { visible: false, open: false, activeId: "set0", options: [] };
   private artHit: ReturnType<typeof paintArtSwitcher> | null = null;
+  private parchment: ParchmentUiState = { panel: "none", toast: null, loading: null, economy: null };
+  private parchmentHits: HitRect[] = [];
   private raf = 0;
 
   constructor(realDoc: Document) {
@@ -143,7 +135,7 @@ class DomCanvasHud implements HudApi {
   }
 
   setStatus(text: string) {
-    this.status = text || "正在加载";
+    this.status = text || "正在磨斧…";
     this.loadingVisible = true;
   }
 
@@ -164,9 +156,18 @@ class DomCanvasHud implements HudApi {
     this.art = state;
   }
 
+  setParchmentUi(state: ParchmentUiState) {
+    this.parchment = state;
+  }
+
+  hitTestParchment(clientX: number, clientY: number): UiHit {
+    return hitTestUi(this.parchmentHits, clientX, clientY);
+  }
+
   hitTestArtSwitcher(clientX: number, clientY: number): ArtSwitcherHit {
     if (!this.art.visible || !this.artHit) return null;
     if (this.art.loadingText) return null;
+    if (this.parchment.panel !== "none" && this.parchment.panel !== "home") return null;
     if (hitRect(this.artHit.toggle, clientX, clientY)) return "toggle";
     for (const opt of this.artHit.options) {
       if (hitRect(opt.rect, clientX, clientY)) return opt.id;
@@ -182,11 +183,17 @@ class DomCanvasHud implements HudApi {
     this.ctx.clearRect(0, 0, w, h);
     if (this.loadingVisible) {
       paintLoading(this.ctx, w, h, this.loaded, this.total, this.status);
+      this.parchmentHits = [];
+    } else {
+      this.parchmentHits = paintParchmentUi(this.ctx, w, h, this.parchment);
+      if (this.hintVisible && this.parchment.panel === "none") {
+        paintHint(this.ctx, w, h, this.hintAction, 1);
+      }
+      this.artHit =
+        this.art.visible && (this.parchment.panel === "none" || this.parchment.panel === "home")
+          ? paintArtSwitcher(this.ctx, w, h, this.art)
+          : null;
     }
-    if (this.hintVisible) {
-      paintHint(this.ctx, w, h, this.hintAction, 1);
-    }
-    this.artHit = this.art.visible ? paintArtSwitcher(this.ctx, w, h, this.art) : null;
   };
 
   dispose() {
@@ -205,12 +212,14 @@ class WebglOverlayHud implements HudApi {
   private readonly ctx: CanvasRenderingContext2D;
   private loaded = 0;
   private total = 1;
-  private status = "正在加载";
+  private status = "正在磨斧…";
   private loadingVisible = true;
   private hintVisible = false;
   private hintAction = "点击劈开";
   private art: ArtSwitcherState = { visible: false, open: false, activeId: "set0", options: [] };
   private artHit: ReturnType<typeof paintArtSwitcher> | null = null;
+  private parchment: ParchmentUiState = { panel: "none", toast: null, loading: null, economy: null };
+  private parchmentHits: HitRect[] = [];
   private dirty = true;
   private cssW = 375;
   private cssH = 812;
@@ -284,11 +293,18 @@ class WebglOverlayHud implements HudApi {
     this.ctx.clearRect(0, 0, w, h);
     if (this.loadingVisible) {
       paintLoading(this.ctx, w, h, this.loaded, this.total, this.status);
+      this.parchmentHits = [];
+      this.artHit = null;
+    } else {
+      this.parchmentHits = paintParchmentUi(this.ctx, w, h, this.parchment);
+      if (this.hintVisible && this.parchment.panel === "none") {
+        paintHint(this.ctx, w, h, this.hintAction, 1);
+      }
+      this.artHit =
+        this.art.visible && (this.parchment.panel === "none" || this.parchment.panel === "home")
+          ? paintArtSwitcher(this.ctx, w, h, this.art)
+          : null;
     }
-    if (this.hintVisible) {
-      paintHint(this.ctx, w, h, this.hintAction, 1);
-    }
-    this.artHit = this.art.visible ? paintArtSwitcher(this.ctx, w, h, this.art) : null;
     this.dirty = true;
     if (this.texture) this.texture.needsUpdate = true;
   }
@@ -298,9 +314,19 @@ class WebglOverlayHud implements HudApi {
     this.redraw();
   }
 
+  setParchmentUi(state: ParchmentUiState) {
+    this.parchment = state;
+    this.redraw();
+  }
+
+  hitTestParchment(clientX: number, clientY: number): UiHit {
+    return hitTestUi(this.parchmentHits, clientX, clientY);
+  }
+
   hitTestArtSwitcher(clientX: number, clientY: number): ArtSwitcherHit {
     if (!this.art.visible || !this.artHit) return null;
     if (this.art.loadingText) return null;
+    if (this.parchment.panel !== "none" && this.parchment.panel !== "home") return null;
     if (hitRect(this.artHit.toggle, clientX, clientY)) return "toggle";
     for (const opt of this.artHit.options) {
       if (hitRect(opt.rect, clientX, clientY)) return opt.id;
@@ -317,7 +343,7 @@ class WebglOverlayHud implements HudApi {
   }
 
   setStatus(text: string) {
-    this.status = text || "正在加载";
+    this.status = text || "正在磨斧…";
     this.loadingVisible = true;
     this.redraw();
   }
@@ -339,7 +365,8 @@ class WebglOverlayHud implements HudApi {
   }
 
   composite(renderer: THREE.WebGLRenderer) {
-    if (!this.loadingVisible && !this.hintVisible && !this.art.visible) return;
+    const hasPanel = this.parchment.panel !== "none" || Boolean(this.parchment.economy);
+    if (!this.loadingVisible && !this.hintVisible && !this.art.visible && !hasPanel) return;
     this.ensureOverlay(renderer);
     if (this.dirty && this.texture) {
       this.texture.needsUpdate = true;

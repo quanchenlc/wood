@@ -1,7 +1,7 @@
 {
   "appid": "wx3371f99b1b0e73d1",
-  "mainPackageBytes": 1136928,
-  "mainPackage": "1.08 MB",
+  "mainPackageBytes": 1364435,
+  "mainPackage": "1.30 MB",
   "mainUnder4MB": true,
   "assetsSubpackageBytes": 5500988,
   "assetsSubpackage": "5.25 MB",
@@ -29,39 +29,39 @@
   },
   "subpackagesTotalBytes": 13201172,
   "subpackagesTotal": "12.59 MB",
-  "bundle": "1.02 MB",
+  "bundle": "1.05 MB",
   "largestMain": [
     {
       "file": "js/game.bundle.js",
-      "size": "1.02 MB"
+      "size": "1.05 MB"
+    },
+    {
+      "file": "ui/parchment/bg_parchment.jpg",
+      "size": "0.10 MB"
+    },
+    {
+      "file": "ui/parchment/panel_vellum.png",
+      "size": "0.04 MB"
+    },
+    {
+      "file": "ui/parchment/btn_leather.png",
+      "size": "0.01 MB"
+    },
+    {
+      "file": "ui/parchment/strip_parchment.png",
+      "size": "0.01 MB"
     },
     {
       "file": "adapter/audio.js",
       "size": "0.01 MB"
     },
     {
-      "file": "adapter/index.js",
+      "file": "ui/parchment/ribbon_madder.png",
       "size": "0.01 MB"
     },
     {
-      "file": "adapter/fetch.js",
+      "file": "ui/parchment/chip_parchment.png",
       "size": "0.01 MB"
-    },
-    {
-      "file": "adapter/abort.js",
-      "size": "0.00 MB"
-    },
-    {
-      "file": "adapter/document.js",
-      "size": "0.00 MB"
-    },
-    {
-      "file": "adapter/xhr.js",
-      "size": "0.00 MB"
-    },
-    {
-      "file": "adapter/blob.js",
-      "size": "0.00 MB"
     }
   ]
 }

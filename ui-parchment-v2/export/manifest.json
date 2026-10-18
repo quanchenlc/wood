@@ -1,0 +1,103 @@
+{
+  "name": "ui-parchment-v2",
+  "version": "2.1",
+  "total_texture_bytes": 200965,
+  "total_texture_kb": 196.3,
+  "textures": [
+    {
+      "file": "bg_parchment.jpg",
+      "width": 576,
+      "height": 1024,
+      "bytes": 104953,
+      "nine_slice_insets": null,
+      "role": "fullscreen parchment background (cover/contain)"
+    },
+    {
+      "file": "btn_leather.png",
+      "width": 340,
+      "height": 120,
+      "bytes": 14836,
+      "nine_slice_insets": [
+        40,
+        28,
+        40,
+        28
+      ],
+      "role": "primary CTA leather button"
+    },
+    {
+      "file": "chip_boost.png",
+      "width": 280,
+      "height": 64,
+      "bytes": 7323,
+      "nine_slice_insets": [
+        20,
+        14,
+        20,
+        14
+      ],
+      "role": "economy HUD chip accent for 加速中"
+    },
+    {
+      "file": "chip_parchment.png",
+      "width": 280,
+      "height": 64,
+      "bytes": 8319,
+      "nine_slice_insets": [
+        20,
+        14,
+        20,
+        14
+      ],
+      "role": "economy HUD chip (今日已砍 / 剩余树根 / 生长倒计时)"
+    },
+    {
+      "file": "panel_vellum.png",
+      "width": 400,
+      "height": 300,
+      "bytes": 37360,
+      "nine_slice_insets": [
+        60,
+        60,
+        60,
+        60
+      ],
+      "role": "modal / ranking panel 9-slice"
+    },
+    {
+      "file": "ribbon_madder.png",
+      "width": 380,
+      "height": 75,
+      "bytes": 8891,
+      "nine_slice_insets": [
+        70,
+        18,
+        70,
+        18
+      ],
+      "role": "title ribbon (swallowtail ends)"
+    },
+    {
+      "file": "seal_wax.png",
+      "width": 128,
+      "height": 129,
+      "bytes": 7641,
+      "nine_slice_insets": null,
+      "role": "decorative wax seal accent"
+    },
+    {
+      "file": "strip_parchment.png",
+      "width": 360,
+      "height": 80,
+      "bytes": 11642,
+      "nine_slice_insets": [
+        24,
+        16,
+        24,
+        16
+      ],
+      "role": "secondary button / list-row highlight strip"
+    }
+  ],
+  "nine_slice_convention": "insets = [left, top, right, bottom] in source pixels"
+}

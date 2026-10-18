@@ -38,6 +38,9 @@ import {
 } from "./art/parchmentLook";
 import type { ArtSetId } from "./art/types";
 import { isArtSetId } from "./art/registry";
+import { COPY_C, getEconomy } from "./economy";
+import { loadParchmentTextures } from "./ui/parchment";
+import type { PanelMode, ParchmentUiState } from "./ui/parchment";
 
 const renderer = createRenderer();
 const scene = createScene();
@@ -76,6 +79,106 @@ let backgroundMap: THREE.Texture | null = null;
 let clearGroundFade: (() => void) | null = null;
 let clearStumpDiscFade: (() => void) | null = null;
 let hemi: THREE.HemisphereLight | null = null;
+const economy = getEconomy();
+let uiPanel: PanelMode = "home";
+let uiToast: string | null = null;
+let toastUntil = 0;
+let startedPlay = false;
+let uiBusy = false;
+
+function showToast(text: string, ms = 2200) {
+  uiToast = text;
+  toastUntil = performance.now() + ms;
+  syncParchmentHud();
+}
+
+function syncParchmentHud() {
+  const hud = ensureHud();
+  if (!hud?.setParchmentUi) return;
+  if (uiToast && performance.now() > toastUntil) uiToast = null;
+  const snap = economy.snapshot();
+  const state: ParchmentUiState = {
+    panel: uiPanel,
+    toast: uiToast,
+    loading: null,
+    economy: startedPlay || uiPanel !== "home" ? snap : snap,
+    selfRank: { name: "我", pieces: snap.state.total_pieces, rank: 5 },
+  };
+  hud.setParchmentUi(state);
+}
+
+function openExhaustedPanel() {
+  uiPanel = "exhausted";
+  syncParchmentHud();
+}
+
+function openClaimIfNeeded() {
+  const snap = economy.snapshot();
+  if (snap.state.pending_claim > 0) {
+    uiPanel = "claim";
+    syncParchmentHud();
+  }
+}
+
+async function handleParchmentHit() {
+  const hud = ensureHud();
+  if (!hud?.hitTestParchment) return false;
+  const pt = controller.peekClickClient();
+  if (!pt) return false;
+  const hit = hud.hitTestParchment(pt.x, pt.y);
+  if (!hit) return false;
+  controller.cancelPendingClick();
+  if (uiBusy) return true;
+
+  if (hit === "start") {
+    startedPlay = true;
+    uiPanel = "none";
+    economy.settle();
+    openClaimIfNeeded();
+    if (uiPanel === "none") syncParchmentHud();
+    return true;
+  }
+  if (hit === "rank_open") {
+    uiPanel = "rank";
+    syncParchmentHud();
+    return true;
+  }
+  if (hit === "rank_close" || hit === "dismiss") {
+    uiPanel = startedPlay ? "none" : "home";
+    syncParchmentHud();
+    return true;
+  }
+  if (hit === "claim") {
+    const n = economy.claim();
+    showToast(n > 0 ? `已领取 ${n} 根` : COPY_C.resting);
+    if (economy.snapshot().quotaExhausted && economy.snapshot().state.pending_claim > 0) {
+      uiPanel = "exhausted";
+    } else if (economy.snapshot().state.pending_claim <= 0) {
+      uiPanel = "none";
+    }
+    syncParchmentHud();
+    return true;
+  }
+  if (hit === "ad_skip" || hit === "ad_quota") {
+    uiBusy = true;
+    const placement = hit === "ad_skip" ? "AD_OFFLINE_SKIP" : "AD_QUOTA_PLUS";
+    const res = await economy.watchAd(placement);
+    uiBusy = false;
+    if (!res.ok) {
+      showToast(res.reason === "fail" || res.reason === "closed" ? COPY_C.adFail : "今日次数已用完");
+    } else if (placement === "AD_QUOTA_PLUS") {
+      showToast(COPY_C.quotaPlus);
+      if (economy.snapshot().state.pending_claim > 0) uiPanel = "claim";
+      else uiPanel = "none";
+    } else {
+      showToast(`${COPY_C.speedUp} +${res.gained ?? 0}`);
+      uiPanel = "claim";
+    }
+    syncParchmentHud();
+    return true;
+  }
+  return true;
+}
 
 function syncArtSwitcherHud(loadingText?: string | null) {
   const hud = ensureHud();
@@ -257,6 +360,7 @@ function handleArtSwitcherClick() {
 }
 
 async function boot() {
+  void loadParchmentTextures().then(() => syncParchmentHud());
   const initial = await artSets.initFromStorage((p, text) => {
     progress.step();
     ensureHud()?.setStatus?.(text);
@@ -305,12 +409,25 @@ async function boot() {
     materials,
     stumpTopY: stump.topY,
     pile,
+    economy: {
+      canActiveChop: () => startedPlay && uiPanel === "none" && economy.canActiveChop(),
+      shouldBlockSpawn: () => startedPlay && !economy.canActiveChop(),
+      onRootStacked: () => {
+        economy.tryActiveStack();
+        syncParchmentHud();
+      },
+      onQuotaBlocked: () => {
+        if (startedPlay) openExhaustedPanel();
+      },
+    },
   });
   debugPile = pile;
 
   disposeGltfLoader();
   progress.finish();
   syncArtSwitcherHud(null);
+  uiPanel = "home";
+  syncParchmentHud();
   showHint();
 }
 
@@ -375,7 +492,8 @@ function frame() {
   last = now;
 
   controller.update(dt);
-  handleArtSwitcherClick();
+  void handleParchmentHit();
+  if (uiPanel === "none" || uiPanel === "home") handleArtSwitcherClick();
   physics.update(dt);
   axe.update(dt);
   game?.update(dt);
@@ -383,6 +501,13 @@ function frame() {
   debugPile?.update();
   grass.update(dt);
   gobo.update(dt);
+
+  // 经济 HUD 倒计时刷新
+  if (startedPlay && Math.floor(now / 500) !== Math.floor((now - dt * 1000) / 500)) {
+    syncParchmentHud();
+  } else if (uiToast && performance.now() > toastUntil) {
+    syncParchmentHud();
+  }
 
   post.composer.render();
   // 小游戏 loading / 提示叠在 WebGL 之上（canvas 自绘，不用系统 UI）
@@ -431,6 +556,25 @@ if (enableDebugHooks) {
         cameraTargetAzimuth: controller.targetAzimuth,
       }),
       click: () => game?.handleClick(),
+      economy: () => ({
+        snapshot: () => economy.snapshot(),
+        claim: () => economy.claim(),
+        settle: () => economy.settle(),
+        skipMinutes: (m: number) => economy.debugSkipMinutes(m),
+        setRemaining: (n: number) => economy.debugSetRemaining(n),
+        watchAd: (p: "AD_OFFLINE_SKIP" | "AD_QUOTA_PLUS") => economy.watchAd(p),
+        start: () => {
+          startedPlay = true;
+          uiPanel = "none";
+          syncParchmentHud();
+        },
+        openPanel: (p: PanelMode) => {
+          uiPanel = p;
+          syncParchmentHud();
+        },
+        chops: () => game?.chopsOnCurrentRoot ?? 0,
+        roots: () => game?.rootsFelledCount ?? 0,
+      }),
       art: () => ({
         active: artSets.activeId,
         labels: artSets.labels(),
