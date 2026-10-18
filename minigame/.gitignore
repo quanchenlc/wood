@@ -2,3 +2,7 @@ js/game.bundle.js.map
 # 大素材从 public/ 复制而来，构建时再生成，避免仓库双份
 subpackages/assets/assets/
 subpackages/assets/basis/
+# art-setN 由 build 从 art-sets/ 打包生成
+subpackages/art-set1/
+subpackages/art-set2/
+subpackages/art-set3/
