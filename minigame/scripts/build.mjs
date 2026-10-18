@@ -279,8 +279,9 @@ async function exportExternalGltf(destAssets, glbName, outStem) {
   const textures = gltfJson.textures || [];
   const imageRoles = classifyImageRoles(gltfJson);
 
-  // Sampler：REPEAT(10497) → CLAMP_TO_EDGE(3361)，避免 UV 越界时扫到 atlas 黑底/邻岛
-  const CLAMP = 3361;
+  // Sampler：REPEAT(10497) → CLAMP_TO_EDGE(33071 / 0x812F)，避免 UV 越界时扫到 atlas 黑底/邻岛
+  // 注意：3361 不是合法 GL enum，GLTFLoader 会当成 Repeat，构建侧 clamp 会失效
+  const CLAMP = 33071;
   for (const s of gltfJson.samplers || []) {
     s.wrapS = CLAMP;
     s.wrapT = CLAMP;
@@ -445,10 +446,10 @@ function validateExportedGltf(destAssets, outStem) {
       throw new Error(`[build] ${outStem}.gltf TEXCOORD must be float32, got componentType=${acc.componentType}`);
     }
   }
-  const CLAMP = 3361;
+  const CLAMP = 33071; // GL_CLAMP_TO_EDGE
   for (const s of gltf.samplers || []) {
     if (s.wrapS !== CLAMP || s.wrapT !== CLAMP) {
-      throw new Error(`[build] ${outStem}.gltf sampler must be ClampToEdge, got wrapS=${s.wrapS} wrapT=${s.wrapT}`);
+      throw new Error(`[build] ${outStem}.gltf sampler must be ClampToEdge(33071), got wrapS=${s.wrapS} wrapT=${s.wrapT}`);
     }
   }
 
