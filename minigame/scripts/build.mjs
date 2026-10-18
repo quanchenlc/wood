@@ -2,9 +2,10 @@
  * 打包微信小游戏：
  * - esbuild 把共享 src + entry 打成 js/game.bundle.js（CJS）
  * - 拷贝 public/assets 到素材分包（不拷 basis）
- * - 离线把 KTX2 解成 色图 JPEG + 法线 PNG，再导出 .gltf + 外置贴图
+ * - 树桩：离线 KTX2→色图 JPEG + 法线 PNG → stump.gltf
+ * - 斧头：直接用美术木柄占位 axe.gltf/.bin/.jpg/.png（去掉 Fiskars GLB）
  * - 色图 JPEG ≤1024 quality≥85；法线必须 PNG ≤512（禁止 JPEG）
- * - 同步 AppID；打印主包 / 分包体积
+ * - 构建后 stump MAD + 木柄斧出图校验；同步 AppID；打印体积
  */
 import * as esbuild from "esbuild";
 import {
@@ -498,10 +499,34 @@ async function resizeStandaloneTextures(destAssets) {
 }
 
 function decompressAllKtx2(destAssets) {
-  const targets = ["stump_v02_mesh_warm_ktx2_2048.glb", "ax_v01_reduced_compressed.glb"];
+  // 斧头已换成美术木柄占位（public/assets/axe.*），不再从 Fiskars KTX2 GLB 导出
+  const targets = ["stump_v02_mesh_warm_ktx2_2048.glb"];
   for (const file of targets) {
     decompressKtx2Glb(join(destAssets, file), { quality: COLOR_JPEG_QUALITY });
   }
+}
+
+/** 小游戏包禁止带上旧 Fiskars 嵌图 GLB；斧头走 public 里的外置 gltf+jpg */
+function assertMinigameAxePlaceholder(destAssets) {
+  const need = ["axe.gltf", "axe.bin", "axe_baseColor.jpg", "axe_orm.png"];
+  for (const f of need) {
+    if (!existsSync(join(destAssets, f))) {
+      throw new Error(`[build] missing wood-handle axe placeholder: ${f}`);
+    }
+  }
+  const banned = ["ax_v01_reduced_compressed.glb", "ax_v01_reduced_compressed.glb.raw.glb"];
+  for (const f of banned) {
+    if (existsSync(join(destAssets, f))) {
+      throw new Error(`[build] Fiskars GLB still in minigame package: ${f}`);
+    }
+  }
+  // 占位材质应引用 orm，且无品牌 atlas 以外的嵌图
+  const gltf = JSON.parse(readFileSync(join(destAssets, "axe.gltf"), "utf8"));
+  const uris = (gltf.images || []).map((i) => i.uri).filter(Boolean);
+  if (!uris.includes("axe_baseColor.jpg") || !uris.includes("axe_orm.png")) {
+    throw new Error(`[build] axe.gltf images unexpected: ${uris.join(",")}`);
+  }
+  console.log("[build] wood-handle axe placeholder: ok");
 }
 
 async function copyAssets() {
@@ -519,10 +544,13 @@ async function copyAssets() {
   cpSync(pubAssets, destAssets, { recursive: true });
   // 刻意不拷贝 basis_transcoder：小游戏已去掉 KTX2Loader
 
+  // Web 仍用旧 GLB；小游戏包去掉 Fiskars 嵌图，改用美术木柄占位 axe.*
+  rmSync(join(destAssets, "ax_v01_reduced_compressed.glb"), { force: true });
+
   decompressAllKtx2(destAssets);
   await exportExternalGltf(destAssets, "stump_v02_mesh_warm_ktx2_2048.glb", "stump");
-  await exportExternalGltf(destAssets, "ax_v01_reduced_compressed.glb", "axe");
   await resizeStandaloneTextures(destAssets);
+  assertMinigameAxePlaceholder(destAssets);
 
   const subEntry = join(SUB_ASSETS, "game.js");
   if (!existsSync(subEntry)) {

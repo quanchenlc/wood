@@ -75,24 +75,27 @@ export class AxeAnimation {
         const mesh = obj as THREE.Mesh;
         mesh.castShadow = true;
         mesh.receiveShadow = true;
-        // 对齐 stump：色图 sRGB、去掉材质 tint、压金属度
+        // 资源无关：色图 sRGB + Clamp；ORM/金属度贴图可有可无（占位斧有 axe_orm.png）
+        // metalness 强制 0 → ORM 金属通道被压掉；roughnessMap 仍参与，并抬到底 0.55
+        // 禁止 flipY=true 纸糊：外置 JPG 朝向由 bake/美术保证（glTF flipY=false）
         const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
         for (const m of mats) {
           const mat = m as THREE.MeshStandardMaterial;
           if (!mat) continue;
-          if (mat.map) {
-            mat.map.colorSpace = THREE.SRGBColorSpace;
-            // 真机兜底：避免 REPEAT 在异常 UV 下平铺 atlas 黑底/邻岛成条纹
-            mat.map.wrapS = THREE.ClampToEdgeWrapping;
-            mat.map.wrapT = THREE.ClampToEdgeWrapping;
-            mat.map.needsUpdate = true;
-          }
-          if (mat.emissiveMap) {
-            mat.emissiveMap.colorSpace = THREE.SRGBColorSpace;
-            mat.emissiveMap.wrapS = THREE.ClampToEdgeWrapping;
-            mat.emissiveMap.wrapT = THREE.ClampToEdgeWrapping;
-            mat.emissiveMap.needsUpdate = true;
-          }
+          const clampMap = (tex: THREE.Texture | null | undefined, srgb: boolean) => {
+            if (!tex) return;
+            if (srgb) tex.colorSpace = THREE.SRGBColorSpace;
+            tex.wrapS = THREE.ClampToEdgeWrapping;
+            tex.wrapT = THREE.ClampToEdgeWrapping;
+            tex.flipY = false;
+            tex.needsUpdate = true;
+          };
+          clampMap(mat.map, true);
+          clampMap(mat.emissiveMap, true);
+          // ORM / metallicRoughness：线性，勿标 sRGB
+          clampMap(mat.metalnessMap, false);
+          clampMap(mat.roughnessMap, false);
+          clampMap(mat.aoMap, false);
           if (mat.color) mat.color.set(0xffffff);
           if (typeof mat.metalness === "number") mat.metalness = 0;
           if (typeof mat.roughness === "number") mat.roughness = Math.max(mat.roughness, 0.55);
