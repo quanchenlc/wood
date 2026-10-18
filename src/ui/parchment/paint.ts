@@ -1,10 +1,17 @@
 import { COPY_C } from "../../economy/design";
 import { formatCountdown } from "../../economy/time";
 import type { EconomySnapshot } from "../../economy/types";
-import { getParchmentTextures, NINE_SLICE, type TexMap } from "./assets";
-import { drawCover, drawNineSlice } from "./nineSlice";
+import {
+  getParchmentTextures,
+  NINE_SLICE,
+  scaledInsets,
+  type ParchmentTex,
+  type TexMap,
+} from "./assets";
+import { GUIDE_STEPS } from "./guide";
+import { drawNineSlice } from "./nineSlice";
 
-export type PanelMode = "none" | "home" | "claim" | "exhausted" | "rank";
+export type PanelMode = "none" | "claim" | "exhausted" | "rank";
 
 export interface ParchmentUiState {
   panel: PanelMode;
@@ -14,6 +21,8 @@ export interface ParchmentUiState {
   economy: EconomySnapshot | null;
   /** 榜上本地自己 */
   selfRank?: { name: string; pieces: number; rank: number };
+  /** 首次引导步 1–3；null/0 表示不显示 */
+  guideStep?: number | null;
 }
 
 export type UiHit =
@@ -24,8 +33,13 @@ export type UiHit =
   | "panel"
   | "rank_open"
   | "rank_close"
-  | "start"
+  | "guide_next"
+  | "guide_skip"
   | null;
+
+function texImg(t: ParchmentTex | undefined): HTMLImageElement | undefined {
+  return t?.img;
+}
 
 export interface HitRect {
   id: UiHit;
@@ -64,10 +78,14 @@ function drawChip(
   value: string,
   valueColor = INK,
 ) {
-  const img = boost ? tex["chip_boost.png"] : tex["chip_parchment.png"];
-  const insets = boost ? NINE_SLICE.chip_boost : NINE_SLICE.chip_parchment;
-  if (img) drawNineSlice(ctx, img, x, y, w, h, insets);
-  else {
+  const entry = boost ? tex["chip_boost.png"] : tex["chip_parchment.png"];
+  const base = boost ? NINE_SLICE.chip_boost : NINE_SLICE.chip_parchment;
+  const img = texImg(entry);
+  if (img) {
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    drawNineSlice(ctx, img, x, y, w, h, scaledInsets(base, entry));
+  } else {
     ctx.fillStyle = boost ? "rgba(180,90,40,0.55)" : "rgba(232,220,190,0.85)";
     ctx.fillRect(x, y, w, h);
   }
@@ -82,13 +100,14 @@ function drawChip(
   ctx.fillText(value, x + w - 14, y + h / 2);
 }
 
-/** 经济 HUD chips：左上两行，避开胶囊（右缘 ≤ ~520 @750） */
+/** 经济 HUD chips：左上两行 + 小榜入口，避开胶囊（右缘 ≤ ~520 @750） */
 export function paintEconomyHud(
   ctx: CanvasRenderingContext2D,
   w: number,
   h: number,
   snap: EconomySnapshot,
   tex: TexMap = getParchmentTextures(),
+  hits?: HitRect[],
 ): void {
   const scale = Math.min(w / 750, h / 1334);
   const chipH = Math.round(56 * scale);
@@ -96,7 +115,7 @@ export function paintEconomyHud(
   const left = Math.round(16 * scale);
   const top = Math.round(48 * scale);
   const maxRight = Math.round(520 * scale);
-  const row1W = Math.min(Math.round(220 * scale), (maxRight - left - gap) / 2);
+  const row1W = Math.min(Math.round(200 * scale), (maxRight - left - gap * 2) / 2);
 
   const s = snap.state;
   drawChip(ctx, tex, false, left, top, row1W, chipH, COPY_C.hudToday, String(s.today_pieces));
@@ -114,7 +133,7 @@ export function paintEconomyHud(
   );
 
   const row2Y = top + chipH + gap;
-  const growW = Math.round(260 * scale);
+  const growW = Math.round(240 * scale);
   drawChip(
     ctx,
     tex,
@@ -127,9 +146,29 @@ export function paintEconomyHud(
     snap.pendingFull ? "已满" : formatCountdown(snap.nextRootMs),
   );
   if (snap.boosting) {
-    const bw = Math.round(150 * scale);
+    const bw = Math.round(130 * scale);
     drawChip(ctx, tex, true, left + growW + gap, row2Y, bw, chipH, COPY_C.hudBoost, "×2", MADDER);
   }
+
+  // 小榜入口：顶栏右侧、仍避开胶囊
+  const rankW = Math.round(88 * scale);
+  const rankH = Math.round(40 * scale);
+  const rx = Math.min(maxRight - rankW, w - rankW - Math.round(16 * scale));
+  const ry = top + Math.round(4 * scale);
+  const strip = tex["strip_parchment.png"];
+  const simg = texImg(strip);
+  if (simg) {
+    drawNineSlice(ctx, simg, rx, ry, rankW, rankH, scaledInsets(NINE_SLICE.strip_parchment, strip));
+  } else {
+    ctx.fillStyle = "rgba(240,228,200,0.9)";
+    ctx.fillRect(rx, ry, rankW, rankH);
+  }
+  ctx.fillStyle = INK;
+  ctx.font = fontSerif(Math.round(rankH * 0.42), "600");
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("柴榜", rx + rankW / 2, ry + rankH / 2);
+  if (hits) pushHit(hits, "rank_open", rx, ry, rankW, rankH);
 }
 
 function paintRibbonTitle(
@@ -140,10 +179,11 @@ function paintRibbonTitle(
   title: string,
   width: number,
 ) {
-  const img = tex["ribbon_madder.png"];
+  const entry = tex["ribbon_madder.png"];
+  const img = texImg(entry);
   const h = Math.round(width * (75 / 380));
   const x = cx - width / 2;
-  if (img) drawNineSlice(ctx, img, x, y, width, h, NINE_SLICE.ribbon_madder);
+  if (img) drawNineSlice(ctx, img, x, y, width, h, scaledInsets(NINE_SLICE.ribbon_madder, entry));
   else {
     ctx.fillStyle = MADDER;
     ctx.fillRect(x, y, width, h);
@@ -166,14 +206,15 @@ function paintLeatherBtn(
   label: string,
   withSeal = false,
 ) {
-  const img = tex["btn_leather.png"];
-  if (img) drawNineSlice(ctx, img, x, y, w, h, NINE_SLICE.btn_leather);
+  const entry = tex["btn_leather.png"];
+  const img = texImg(entry);
+  if (img) drawNineSlice(ctx, img, x, y, w, h, scaledInsets(NINE_SLICE.btn_leather, entry));
   else {
     ctx.fillStyle = "#4a3020";
     ctx.fillRect(x, y, w, h);
   }
-  if (withSeal && tex["seal_wax.png"]) {
-    const seal = tex["seal_wax.png"]!;
+  const seal = texImg(tex["seal_wax.png"]);
+  if (withSeal && seal) {
     const sh = h * 0.85;
     ctx.drawImage(seal, x + 8, y + (h - sh) / 2, sh, sh);
   }
@@ -193,8 +234,9 @@ function paintStripBtn(
   h: number,
   label: string,
 ) {
-  const img = tex["strip_parchment.png"];
-  if (img) drawNineSlice(ctx, img, x, y, w, h, NINE_SLICE.strip_parchment);
+  const entry = tex["strip_parchment.png"];
+  const img = texImg(entry);
+  if (img) drawNineSlice(ctx, img, x, y, w, h, scaledInsets(NINE_SLICE.strip_parchment, entry));
   else {
     ctx.fillStyle = "rgba(240,228,200,0.9)";
     ctx.fillRect(x, y, w, h);
@@ -258,62 +300,58 @@ export function paintParchmentLoading(
 
   ctx.globalAlpha = 0.35;
   ctx.font = fontSans(11);
-  ctx.fillText("v0.3.1 · 羊皮纸稿", w / 2, h - 24);
+  ctx.fillText("v0.3.2 · 羊皮纸稿", w / 2, h - 24);
   ctx.globalAlpha = 1;
 }
 
-export function paintHomePanel(
+/** 首次三步引导（占位文案；可跳过） */
+export function paintGuide(
   ctx: CanvasRenderingContext2D,
   w: number,
   h: number,
+  step: number,
   tex: TexMap,
   hits: HitRect[],
 ) {
-  if (tex["bg_parchment.jpg"]) drawCover(ctx, tex["bg_parchment.jpg"]!, w, h);
+  const info = GUIDE_STEPS.find((s) => s.step === step) || GUIDE_STEPS[0];
+  ctx.fillStyle = "rgba(40,28,16,0.4)";
+  ctx.fillRect(0, 0, w, h);
+  pushHit(hits, "dismiss", 0, 0, w, h);
+
+  const pw = Math.min(320, w * 0.84);
+  const ph = Math.min(280, h * 0.38);
+  const px = (w - pw) / 2;
+  const py = h * 0.28;
+  pushHit(hits, "panel", px, py, pw, ph);
+  const panel = tex["panel_vellum.png"];
+  const pimg = texImg(panel);
+  if (pimg) drawNineSlice(ctx, pimg, px, py, pw, ph, scaledInsets(NINE_SLICE.panel_vellum, panel));
   else {
-    ctx.fillStyle = "#e8dcc4";
-    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = "#f0e6d0";
+    ctx.fillRect(px, py, pw, ph);
   }
-  if (tex["seal_wax.png"]) {
-    const s = Math.min(64, w * 0.12);
-    ctx.drawImage(tex["seal_wax.png"]!, w - s - 18, 36, s, s);
-  }
+
+  paintRibbonTitle(ctx, tex, w / 2, py + 16, `入门 ${info.step}/3`, Math.min(pw * 0.85, 260));
   ctx.fillStyle = INK;
-  ctx.font = fontSerif(Math.round(w * 0.08), "700");
+  ctx.font = fontSerif(18, "700");
   ctx.textAlign = "center";
-  ctx.fillText(COPY_C.title, w / 2, h * 0.18);
-  ctx.strokeStyle = "rgba(58,42,24,0.35)";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(w * 0.28, h * 0.21);
-  ctx.lineTo(w * 0.72, h * 0.21);
-  ctx.stroke();
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText(info.title, w / 2, py + 90);
   ctx.fillStyle = INK_SOFT;
-  ctx.font = fontSans(14);
-  ctx.fillText(COPY_C.tagline, w / 2, h * 0.245);
-
-  ctx.globalAlpha = 0.35;
   ctx.font = fontSans(13);
-  ctx.fillText("（树桩 · 3D 场景区）", w / 2, h * 0.48);
-  ctx.globalAlpha = 1;
+  const lines = info.body.length > 18 ? [info.body.slice(0, 16), info.body.slice(16)] : [info.body];
+  lines.forEach((line, i) => ctx.fillText(line, w / 2, py + 122 + i * 22));
 
-  const btnW = Math.min(300, w * 0.72);
-  const btnH = 56;
+  const btnW = Math.min(200, pw * 0.7);
   const bx = (w - btnW) / 2;
-  const by = h * 0.72;
-  paintLeatherBtn(ctx, tex, bx, by, btnW, btnH, COPY_C.startChop);
-  pushHit(hits, "start", bx, by, btnW, btnH);
+  const by = py + ph - 88;
+  paintLeatherBtn(ctx, tex, bx, by, btnW, 48, info.step < 3 ? "下一步" : "开始砍柴");
+  pushHit(hits, "guide_next", bx, by, btnW, 48);
 
-  const sw = (btnW - 12) / 2;
-  const sy = by + btnH + 14;
-  paintStripBtn(ctx, tex, bx, sy, sw, 40, COPY_C.openRank);
-  pushHit(hits, "rank_open", bx, sy, sw, 40);
-  paintStripBtn(ctx, tex, bx + sw + 12, sy, sw, 40, "每日签到");
-
-  ctx.globalAlpha = 0.4;
-  ctx.font = fontSans(11);
-  ctx.fillText("v0.3.1 · 羊皮纸稿", w / 2, h - 20);
-  ctx.globalAlpha = 1;
+  ctx.fillStyle = "rgba(58,42,24,0.55)";
+  ctx.font = fontSans(13);
+  ctx.fillText("跳过引导", w / 2, py + ph - 22);
+  pushHit(hits, "guide_skip", w / 2 - 50, py + ph - 36, 100, 28);
 }
 
 export function paintClaimOrExhausted(
@@ -337,7 +375,8 @@ export function paintClaimOrExhausted(
   const py = (h - ph) / 2 - 20;
   pushHit(hits, "panel", px, py, pw, ph);
   const panel = tex["panel_vellum.png"];
-  if (panel) drawNineSlice(ctx, panel, px, py, pw, ph, NINE_SLICE.panel_vellum);
+  const pimg = texImg(panel);
+  if (pimg) drawNineSlice(ctx, pimg, px, py, pw, ph, scaledInsets(NINE_SLICE.panel_vellum, panel));
   else {
     ctx.fillStyle = "#f0e6d0";
     ctx.fillRect(px, py, pw, ph);
@@ -445,16 +484,18 @@ export function paintRankPanel(
   const px = (w - pw) / 2;
   const py = (h - ph) / 2 - 10;
   const panel = tex["panel_vellum.png"];
-  if (panel) drawNineSlice(ctx, panel, px, py, pw, ph, NINE_SLICE.panel_vellum);
+  const pimg = texImg(panel);
+  if (pimg) drawNineSlice(ctx, pimg, px, py, pw, ph, scaledInsets(NINE_SLICE.panel_vellum, panel));
   else {
     ctx.fillStyle = "#f0e6d0";
     ctx.fillRect(px, py, pw, ph);
   }
 
   paintRibbonTitle(ctx, tex, w / 2, py + 16, `${COPY_C.rankTitle} · 本周`, Math.min(pw * 0.88, 300));
-  if (tex["seal_wax.png"]) {
+  const seal = texImg(tex["seal_wax.png"]);
+  if (seal) {
     const s = 42;
-    ctx.drawImage(tex["seal_wax.png"]!, px + pw - s - 18, py + 22, s, s);
+    ctx.drawImage(seal, px + pw - s - 18, py + 22, s, s);
   }
 
   const pieces = self?.pieces ?? snap?.state.total_pieces ?? 0;
@@ -480,7 +521,18 @@ export function paintRankPanel(
     const rh = 44;
     if (row.self || row.name === name) {
       const strip = tex["strip_parchment.png"];
-      if (strip) drawNineSlice(ctx, strip, px + 16, y - 4, pw - 32, rh, NINE_SLICE.strip_parchment);
+      const simg = texImg(strip);
+      if (simg) {
+        drawNineSlice(
+          ctx,
+          simg,
+          px + 16,
+          y - 4,
+          pw - 32,
+          rh,
+          scaledInsets(NINE_SLICE.strip_parchment, strip),
+        );
+      }
     }
     ctx.fillStyle = INK;
     ctx.font = fontSerif(16, "700");
@@ -538,16 +590,15 @@ export function paintParchmentUi(
     return hits;
   }
 
-  if (state.panel === "home") {
-    paintHomePanel(ctx, w, h, tex, hits);
-    return hits;
+  const guideOn = Boolean(state.guideStep && state.guideStep >= 1 && state.guideStep <= 3);
+
+  if (state.economy && state.panel !== "rank" && !guideOn) {
+    paintEconomyHud(ctx, w, h, state.economy, tex, hits);
   }
 
-  if (state.economy && state.panel !== "rank") {
-    paintEconomyHud(ctx, w, h, state.economy, tex);
-  }
-
-  if (state.panel === "claim" && state.economy) {
+  if (guideOn) {
+    paintGuide(ctx, w, h, state.guideStep!, tex, hits);
+  } else if (state.panel === "claim" && state.economy) {
     paintClaimOrExhausted(ctx, w, h, state.economy, tex, hits, "claim");
   } else if (state.panel === "exhausted" && state.economy) {
     paintClaimOrExhausted(ctx, w, h, state.economy, tex, hits, "exhausted");

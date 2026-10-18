@@ -39,7 +39,12 @@ import {
 import type { ArtSetId } from "./art/types";
 import { isArtSetId } from "./art/registry";
 import { COPY_C, getEconomy } from "./economy";
-import { loadParchmentTextures } from "./ui/parchment";
+import {
+  isGuideDone,
+  loadParchmentTextures,
+  markGuideDone,
+  resetGuideForTests,
+} from "./ui/parchment";
 import type { PanelMode, ParchmentUiState } from "./ui/parchment";
 
 const renderer = createRenderer();
@@ -80,15 +85,22 @@ let clearGroundFade: (() => void) | null = null;
 let clearStumpDiscFade: (() => void) | null = null;
 let hemi: THREE.HemisphereLight | null = null;
 const economy = getEconomy();
-let uiPanel: PanelMode = "home";
+let uiPanel: PanelMode = "none";
 let uiToast: string | null = null;
 let toastUntil = 0;
-let startedPlay = false;
 let uiBusy = false;
+/** 首次引导：1–3；null 表示已完成/跳过 */
+let guideStep: number | null = isGuideDone() ? null : 1;
 
 function showToast(text: string, ms = 2200) {
   uiToast = text;
   toastUntil = performance.now() + ms;
+  syncParchmentHud();
+}
+
+function finishGuide() {
+  guideStep = null;
+  markGuideDone();
   syncParchmentHud();
 }
 
@@ -101,18 +113,21 @@ function syncParchmentHud() {
     panel: uiPanel,
     toast: uiToast,
     loading: null,
-    economy: startedPlay || uiPanel !== "home" ? snap : snap,
+    economy: snap,
     selfRank: { name: "我", pieces: snap.state.total_pieces, rank: 5 },
+    guideStep,
   };
   hud.setParchmentUi(state);
 }
 
 function openExhaustedPanel() {
+  if (guideStep) return;
   uiPanel = "exhausted";
   syncParchmentHud();
 }
 
 function openClaimIfNeeded() {
+  if (guideStep) return;
   const snap = economy.snapshot();
   if (snap.state.pending_claim > 0) {
     uiPanel = "claim";
@@ -130,12 +145,19 @@ async function handleParchmentHit() {
   controller.cancelPendingClick();
   if (uiBusy) return true;
 
-  if (hit === "start") {
-    startedPlay = true;
-    uiPanel = "none";
-    economy.settle();
+  if (hit === "guide_next") {
+    if (guideStep && guideStep < 3) {
+      guideStep += 1;
+      syncParchmentHud();
+    } else {
+      finishGuide();
+      openClaimIfNeeded();
+    }
+    return true;
+  }
+  if (hit === "guide_skip") {
+    finishGuide();
     openClaimIfNeeded();
-    if (uiPanel === "none") syncParchmentHud();
     return true;
   }
   if (hit === "rank_open") {
@@ -148,7 +170,8 @@ async function handleParchmentHit() {
     return true;
   }
   if (hit === "rank_close" || hit === "dismiss") {
-    uiPanel = startedPlay ? "none" : "home";
+    if (guideStep) return true; // 引导中点遮罩不关
+    uiPanel = "none";
     syncParchmentHud();
     return true;
   }
@@ -414,15 +437,14 @@ async function boot() {
     stumpTopY: stump.topY,
     pile,
     economy: {
-      canActiveChop: () => startedPlay && uiPanel === "none" && economy.canActiveChop(),
-      shouldBlockSpawn: () => startedPlay && !economy.canActiveChop(),
+      canActiveChop: () =>
+        !guideStep && uiPanel === "none" && economy.canActiveChop(),
+      shouldBlockSpawn: () => !economy.canActiveChop(),
       onRootStacked: () => {
         economy.tryActiveStack();
         syncParchmentHud();
       },
-      onQuotaBlocked: () => {
-        if (startedPlay) openExhaustedPanel();
-      },
+      onQuotaBlocked: () => openExhaustedPanel(),
     },
   });
   debugPile = pile;
@@ -430,9 +452,13 @@ async function boot() {
   disposeGltfLoader();
   progress.finish();
   syncArtSwitcherHud(null);
-  uiPanel = "home";
+  economy.settle();
+  uiPanel = "none";
   syncParchmentHud();
-  showHint();
+  if (!guideStep) {
+    openClaimIfNeeded();
+    showHint();
+  }
 }
 
 function showHint() {
@@ -497,7 +523,7 @@ function frame() {
 
   controller.update(dt);
   void handleParchmentHit();
-  if (uiPanel === "none" || uiPanel === "home") handleArtSwitcherClick();
+  if (uiPanel === "none" && !guideStep) handleArtSwitcherClick();
   physics.update(dt);
   axe.update(dt);
   game?.update(dt);
@@ -507,7 +533,7 @@ function frame() {
   gobo.update(dt);
 
   // 经济 HUD 倒计时刷新
-  if (startedPlay && Math.floor(now / 500) !== Math.floor((now - dt * 1000) / 500)) {
+  if (Math.floor(now / 500) !== Math.floor((now - dt * 1000) / 500)) {
     syncParchmentHud();
   } else if (uiToast && performance.now() > toastUntil) {
     syncParchmentHud();
@@ -567,15 +593,19 @@ if (enableDebugHooks) {
         skipMinutes: (m: number) => economy.debugSkipMinutes(m),
         setRemaining: (n: number) => economy.debugSetRemaining(n),
         watchAd: (p: "AD_OFFLINE_SKIP" | "AD_QUOTA_PLUS") => economy.watchAd(p),
-        start: () => {
-          startedPlay = true;
-          uiPanel = "none";
-          syncParchmentHud();
-        },
         openPanel: (p: PanelMode) => {
+          guideStep = null;
           uiPanel = p;
           syncParchmentHud();
         },
+        skipGuide: () => finishGuide(),
+        resetGuide: () => {
+          resetGuideForTests();
+          guideStep = 1;
+          uiPanel = "none";
+          syncParchmentHud();
+        },
+        guideStep: () => guideStep,
         chops: () => game?.chopsOnCurrentRoot ?? 0,
         roots: () => game?.rootsFelledCount ?? 0,
       }),

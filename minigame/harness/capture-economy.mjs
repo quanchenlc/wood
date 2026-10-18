@@ -1,5 +1,5 @@
 /**
- * 0.3.0 经济 + 羊皮纸 UI 截图：HUD / claim / exhausted / set4 场景
+ * 0.3.2 直进场景 + HiDPI HUD + 引导截图
  */
 import { createServer } from "node:http";
 import {
@@ -15,7 +15,7 @@ import puppeteer from "puppeteer-core";
 
 const MG = join(fileURLToPath(new URL("..", import.meta.url)));
 const ARTIFACTS = process.env.ARTIFACT_DIR || "/opt/cursor/artifacts";
-const PORT = Number(process.env.HARNESS_PORT || 5191);
+const PORT = Number(process.env.HARNESS_PORT || 5192);
 const CHROME =
   process.env.CHROME_PATH ||
   ["/usr/local/bin/google-chrome", "/usr/bin/google-chrome-stable", "/usr/bin/google-chrome"].find(
@@ -69,7 +69,7 @@ function startServer() {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const outDir = join(ARTIFACTS, "minigame-economy-030");
+const outDir = join(ARTIFACTS, "minigame-032");
 mkdirSync(outDir, { recursive: true });
 
 const server = await startServer();
@@ -79,7 +79,7 @@ const browser = await puppeteer.launch({
   args: ["--no-sandbox", "--disable-gpu", "--use-gl=swiftshader"],
 });
 const page = await browser.newPage();
-await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
+await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 3 });
 page.on("console", (m) => console.log("[page]", m.type(), m.text()));
 
 await page.goto(`http://127.0.0.1:${PORT}/harness/index.html`, {
@@ -87,7 +87,6 @@ await page.goto(`http://127.0.0.1:${PORT}/harness/index.html`, {
   timeout: 120000,
 });
 
-// wait __fw
 for (let i = 0; i < 90; i++) {
   const ready = await page.evaluate(
     () => typeof window.__fw?.economy === "function" && typeof window.__fw?.art === "function",
@@ -95,11 +94,15 @@ for (let i = 0; i < 90; i++) {
   if (ready) break;
   await sleep(500);
 }
-await sleep(1500);
+await sleep(1200);
 
-await page.screenshot({ path: join(outDir, "01_home.png"), type: "png" });
+// Guide step 1 (fresh)
+await page.evaluate(() => window.__fw.economy().resetGuide());
+await sleep(500);
+await page.screenshot({ path: join(outDir, "01_guide_step1.png"), type: "png" });
 
 await page.evaluate(async () => {
+  window.__fw.economy().skipGuide();
   await window.__fw.art().switchTo("set4");
   for (let i = 0; i < 60; i++) {
     if (!window.__fw.art().isSwitching()) break;
@@ -109,45 +112,35 @@ await page.evaluate(async () => {
 await sleep(1000);
 
 await page.evaluate(() => {
-  window.__fw.economy().start();
-  window.__fw.economy().skipMinutes(45);
-  window.__fw.economy().openPanel("claim");
-});
-await sleep(800);
-await page.screenshot({ path: join(outDir, "02_claim_panel.png"), type: "png" });
-
-await page.evaluate(() => {
-  window.__fw.economy().setRemaining(0);
-  window.__fw.economy().openPanel("exhausted");
-});
-await sleep(500);
-await page.screenshot({ path: join(outDir, "03_exhausted_hud.png"), type: "png" });
-
-await page.evaluate(() => {
   window.__fw.economy().setRemaining(12);
   window.__fw.economy().openPanel("none");
 });
 await sleep(500);
-await page.screenshot({ path: join(outDir, "04_hud_set4.png"), type: "png" });
+await page.screenshot({ path: join(outDir, "02_scene_hud.png"), type: "png" });
 
-await page.evaluate(() => window.__fw.economy().openPanel("rank"));
-await sleep(500);
-await page.screenshot({ path: join(outDir, "05_rank_shell.png"), type: "png" });
-
-const snap = await page.evaluate(() => window.__fw.economy().snapshot());
-const version = await page.evaluate(() => {
-  try {
-    return require("./version.js");
-  } catch {
-    return null;
-  }
+await page.evaluate(() => {
+  window.__fw.economy().skipMinutes(45);
+  window.__fw.economy().openPanel("claim");
 });
+await sleep(500);
+await page.screenshot({ path: join(outDir, "03_claim.png"), type: "png" });
 
-writeFileSync(
-  join(outDir, "economy-snap.json"),
-  JSON.stringify({ snap, version, at: new Date().toISOString() }, null, 2),
-);
+const meta = await page.evaluate(() => ({
+  snap: window.__fw.economy().snapshot(),
+  guide: window.__fw.economy().guideStep(),
+  version: require("./version.js"),
+  hudCanvas: (() => {
+    const c = document.getElementById("fw-hud");
+    if (!c) return null;
+    return {
+      css: { w: window.innerWidth, h: window.innerHeight },
+      buffer: { w: c.width, h: c.height },
+      dprApprox: c.width / window.innerWidth,
+    };
+  })(),
+}));
 
-console.log("wrote", outDir);
+writeFileSync(join(outDir, "meta.json"), JSON.stringify(meta, null, 2));
+console.log("wrote", outDir, JSON.stringify(meta.hudCanvas), "guide", meta.guide);
 await browser.close();
 server.close();

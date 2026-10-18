@@ -14,7 +14,7 @@ export function createRenderer(): THREE.WebGLRenderer {
     powerPreference: "high-performance",
   });
 
-  // 小游戏 DPR≤1.5：真机 2x+composer 曾推到 ~1GB 级绘图缓冲
+  // 3D DPR≤1.5（perf）；2D HUD 另走全 device DPR，见 platform/hud.ts
   const maxDpr = IS_MINIGAME ? 1.5 : 2;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxDpr));
   renderer.setSize(window.innerWidth, window.innerHeight);

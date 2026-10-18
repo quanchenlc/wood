@@ -2,8 +2,27 @@
  * 小游戏 HUD：全部画在 canvas 上，禁止 wx.showLoading / showToast / showModal。
  * - harness：DOM 透明覆盖层 canvas
  * - 真机：离屏 2D canvas → CanvasTexture，每帧叠在 WebGL 上
- * - 0.3.0：羊皮纸经济 HUD / 面板（export/textures + 9-slice）
+ * - 0.3.2：羊皮纸 HUD 全 device DPR 绘制（3D 仍 ≤1.5）；支持 @2x 切片
  */
+
+/** UI 层取完整 devicePixelRatio（可略封顶防极端机型），与 3D maxDpr=1.5 解耦 */
+function uiDeviceDpr(fallback = 2): number {
+  let raw = fallback;
+  try {
+    if (typeof wx !== "undefined") {
+      const info = (
+        wx as { getSystemInfoSync?: () => { pixelRatio?: number } }
+      ).getSystemInfoSync?.();
+      if (info?.pixelRatio) raw = info.pixelRatio;
+    } else if (typeof window !== "undefined") {
+      raw = window.devicePixelRatio || fallback;
+    }
+  } catch {
+    raw = typeof window !== "undefined" ? window.devicePixelRatio || fallback : fallback;
+  }
+  // 全 DPR 锐利文字；仅防 4x 极端机型撑爆内存
+  return Math.min(Math.max(1, raw), 3);
+}
 
 import * as THREE from "three";
 import { isMinigame } from "./env";
@@ -122,10 +141,13 @@ class DomCanvasHud implements HudApi {
   private syncSize = () => {
     const w = window.innerWidth || 375;
     const h = window.innerHeight || 812;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    // 假设验证：UI 若跟 3D 一样 cap≤1.5/2 会发糊；此处用全 DPR
+    const dpr = uiDeviceDpr(window.devicePixelRatio || 2);
     this.canvas.width = Math.floor(w * dpr);
     this.canvas.height = Math.floor(h * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.ctx.imageSmoothingEnabled = true;
+    this.ctx.imageSmoothingQuality = "high";
   };
 
   setProgress(loaded: number, total: number) {
@@ -167,7 +189,7 @@ class DomCanvasHud implements HudApi {
   hitTestArtSwitcher(clientX: number, clientY: number): ArtSwitcherHit {
     if (!this.art.visible || !this.artHit) return null;
     if (this.art.loadingText) return null;
-    if (this.parchment.panel !== "none" && this.parchment.panel !== "home") return null;
+    if (this.parchment.panel !== "none" || this.parchment.guideStep) return null;
     if (hitRect(this.artHit.toggle, clientX, clientY)) return "toggle";
     for (const opt of this.artHit.options) {
       if (hitRect(opt.rect, clientX, clientY)) return opt.id;
@@ -186,11 +208,12 @@ class DomCanvasHud implements HudApi {
       this.parchmentHits = [];
     } else {
       this.parchmentHits = paintParchmentUi(this.ctx, w, h, this.parchment);
-      if (this.hintVisible && this.parchment.panel === "none") {
+      const guideOn = Boolean(this.parchment.guideStep);
+      if (this.hintVisible && this.parchment.panel === "none" && !guideOn) {
         paintHint(this.ctx, w, h, this.hintAction, 1);
       }
       this.artHit =
-        this.art.visible && (this.parchment.panel === "none" || this.parchment.panel === "home")
+        this.art.visible && this.parchment.panel === "none" && !guideOn
           ? paintArtSwitcher(this.ctx, w, h, this.art)
           : null;
     }
@@ -260,10 +283,13 @@ class WebglOverlayHud implements HudApi {
         : { windowWidth: window.innerWidth, windowHeight: window.innerHeight, pixelRatio: 2 };
     this.cssW = info.windowWidth || window.innerWidth || 375;
     this.cssH = info.windowHeight || window.innerHeight || 812;
-    const dpr = Math.min(info.pixelRatio || window.devicePixelRatio || 2, 2);
+    // UI 全 DPR；经 WebGL 合成时仍受 3D FB（≤1.5）限制，但缓冲本身够锐、@2x 切片可发挥作用
+    const dpr = uiDeviceDpr(info.pixelRatio || window.devicePixelRatio || 2);
     this.surface.width = Math.floor(this.cssW * dpr);
     this.surface.height = Math.floor(this.cssH * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.ctx.imageSmoothingEnabled = true;
+    this.ctx.imageSmoothingQuality = "high";
     this.dirty = true;
   }
 
@@ -297,11 +323,12 @@ class WebglOverlayHud implements HudApi {
       this.artHit = null;
     } else {
       this.parchmentHits = paintParchmentUi(this.ctx, w, h, this.parchment);
-      if (this.hintVisible && this.parchment.panel === "none") {
+      const guideOn = Boolean(this.parchment.guideStep);
+      if (this.hintVisible && this.parchment.panel === "none" && !guideOn) {
         paintHint(this.ctx, w, h, this.hintAction, 1);
       }
       this.artHit =
-        this.art.visible && (this.parchment.panel === "none" || this.parchment.panel === "home")
+        this.art.visible && this.parchment.panel === "none" && !guideOn
           ? paintArtSwitcher(this.ctx, w, h, this.art)
           : null;
     }
@@ -326,7 +353,7 @@ class WebglOverlayHud implements HudApi {
   hitTestArtSwitcher(clientX: number, clientY: number): ArtSwitcherHit {
     if (!this.art.visible || !this.artHit) return null;
     if (this.art.loadingText) return null;
-    if (this.parchment.panel !== "none" && this.parchment.panel !== "home") return null;
+    if (this.parchment.panel !== "none" || this.parchment.guideStep) return null;
     if (hitRect(this.artHit.toggle, clientX, clientY)) return "toggle";
     for (const opt of this.artHit.options) {
       if (hitRect(opt.rect, clientX, clientY)) return opt.id;

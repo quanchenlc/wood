@@ -99,5 +99,9 @@
       "role": "secondary button / list-row highlight strip"
     }
   ],
-  "nine_slice_convention": "insets = [left, top, right, bottom] in source pixels"
+  "nine_slice_convention": "insets = [left, top, right, bottom] in source pixels (1x). When shipping @2x, name files `foo@2x.png`; runtime scales insets by naturalWidth/logicalWidth.",
+  "hidpi": {
+    "convention": "optional sibling `name@2x.ext` next to 1x; preferred when devicePixelRatio ≥ 1.5, else fallback 1x",
+    "example": ["chip_parchment.png", "chip_parchment@2x.png"]
+  }
 }
