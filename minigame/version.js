@@ -1,7 +1,7 @@
 /** 体验版包版本号（上传时对照） */
 module.exports = {
-  VERSION: "0.3.2",
-  BUILD_NOTE: "direct-scene-hidpi",
+  VERSION: "0.3.3",
+  BUILD_NOTE: "ui-v3-hidpi-guide",
   /** 短提交标识，发版前由提交写入 */
-  BUILD_REV: "d714abe",
+  BUILD_REV: "pending",
 };

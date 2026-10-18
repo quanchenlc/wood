@@ -30,6 +30,7 @@ import {
   hitTestUi,
   paintParchmentLoading,
   paintParchmentUi,
+  setUiDpr,
   type HitRect,
   type ParchmentUiState,
   type UiHit,
@@ -59,6 +60,8 @@ export interface HudApi {
   hitTestParchment?(clientX: number, clientY: number): UiHit;
   /** 真机 WebGL 叠加；DOM 模式为空操作 */
   composite?(renderer: THREE.WebGLRenderer): void;
+  /** 与绘图缓冲对齐（WebGL overlay）；DOM 层空操作 */
+  syncToDrawingBuffer?(renderer: THREE.WebGLRenderer): void;
   dispose(): void;
 }
 
@@ -73,35 +76,6 @@ function paintLoading(
   paintParchmentLoading(ctx, w, h, loaded, total, status || "正在磨斧…");
 }
 
-function paintHint(
-  ctx: CanvasRenderingContext2D,
-  w: number,
-  h: number,
-  actionText: string,
-  alpha: number,
-) {
-  const text = `← 拖动旋转 →  ·  ${actionText}`;
-  ctx.globalAlpha = alpha;
-  ctx.font = "600 14px system-ui, PingFang SC, sans-serif";
-  const tw = ctx.measureText(text).width;
-  const padX = 18;
-  const boxW = tw + padX * 2;
-  const boxH = 34;
-  const x = (w - boxW) / 2;
-  const y = h - 42 - boxH;
-  ctx.fillStyle = "rgba(0,0,0,0.45)";
-  ctx.strokeStyle = "rgba(255,255,255,0.15)";
-  roundRect(ctx, x, y, boxW, boxH, 17);
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = "#e8d5b0";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(text, w / 2, y + boxH / 2);
-  ctx.globalAlpha = 1;
-  ctx.textBaseline = "alphabetic";
-}
-
 /** harness：DOM 覆盖层 */
 class DomCanvasHud implements HudApi {
   private readonly canvas: HTMLCanvasElement;
@@ -110,8 +84,6 @@ class DomCanvasHud implements HudApi {
   private total = 1;
   private status = "正在磨斧…";
   private loadingVisible = true;
-  private hintVisible = false;
-  private hintAction = "点击劈开";
   private art: ArtSwitcherState = { visible: false, open: false, activeId: "set0", options: [] };
   private artHit: ReturnType<typeof paintArtSwitcher> | null = null;
   private parchment: ParchmentUiState = { panel: "none", toast: null, loading: null, economy: null };
@@ -141,8 +113,9 @@ class DomCanvasHud implements HudApi {
   private syncSize = () => {
     const w = window.innerWidth || 375;
     const h = window.innerHeight || 812;
-    // 假设验证：UI 若跟 3D 一样 cap≤1.5/2 会发糊；此处用全 DPR
+    // 独立 DOM 层：全设备 DPR，不经 1.5x 3D 缓冲（0.3.2 已修）
     const dpr = uiDeviceDpr(window.devicePixelRatio || 2);
+    setUiDpr(dpr);
     this.canvas.width = Math.floor(w * dpr);
     this.canvas.height = Math.floor(h * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -165,13 +138,12 @@ class DomCanvasHud implements HudApi {
     this.loadingVisible = false;
   }
 
-  showHint(actionText: string) {
-    this.hintAction = actionText;
-    this.hintVisible = true;
+  showHint(_actionText: string) {
+    /* 0.3.3 旧 hint 条已移除 */
   }
 
   hideHint() {
-    this.hintVisible = false;
+    /* no-op */
   }
 
   setArtSwitcher(state: ArtSwitcherState) {
@@ -209,9 +181,7 @@ class DomCanvasHud implements HudApi {
     } else {
       this.parchmentHits = paintParchmentUi(this.ctx, w, h, this.parchment);
       const guideOn = Boolean(this.parchment.guideStep);
-      if (this.hintVisible && this.parchment.panel === "none" && !guideOn) {
-        paintHint(this.ctx, w, h, this.hintAction, 1);
-      }
+      // 0.3.3：旧 hint 条移除，由引导 step1 替代
       this.artHit =
         this.art.visible && this.parchment.panel === "none" && !guideOn
           ? paintArtSwitcher(this.ctx, w, h, this.art)
@@ -237,8 +207,6 @@ class WebglOverlayHud implements HudApi {
   private total = 1;
   private status = "正在磨斧…";
   private loadingVisible = true;
-  private hintVisible = false;
-  private hintAction = "点击劈开";
   private art: ArtSwitcherState = { visible: false, open: false, activeId: "set0", options: [] };
   private artHit: ReturnType<typeof paintArtSwitcher> | null = null;
   private parchment: ParchmentUiState = { panel: "none", toast: null, loading: null, economy: null };
@@ -283,8 +251,9 @@ class WebglOverlayHud implements HudApi {
         : { windowWidth: window.innerWidth, windowHeight: window.innerHeight, pixelRatio: 2 };
     this.cssW = info.windowWidth || window.innerWidth || 375;
     this.cssH = info.windowHeight || window.innerHeight || 812;
-    // UI 全 DPR；经 WebGL 合成时仍受 3D FB（≤1.5）限制，但缓冲本身够锐、@2x 切片可发挥作用
+    // 与屏缓冲同 DPR（ScenePresenter 已把屏提到设备 DPR）；禁止再 min(dpr,2) 后塞进 1.5x
     const dpr = uiDeviceDpr(info.pixelRatio || window.devicePixelRatio || 2);
+    setUiDpr(dpr);
     this.surface.width = Math.floor(this.cssW * dpr);
     this.surface.height = Math.floor(this.cssH * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -293,17 +262,40 @@ class WebglOverlayHud implements HudApi {
     this.dirty = true;
   }
 
+  /** 与 renderer 绘图缓冲对齐（1:1，无二次缩放） */
+  syncToDrawingBuffer(renderer: THREE.WebGLRenderer) {
+    const size = new THREE.Vector2();
+    renderer.getDrawingBufferSize(size);
+    const dpr = size.x / Math.max(1, this.cssW);
+    if (
+      Math.abs(this.surface.width - size.x) > 1 ||
+      Math.abs(this.surface.height - size.y) > 1
+    ) {
+      setUiDpr(dpr);
+      this.surface.width = Math.floor(size.x);
+      this.surface.height = Math.floor(size.y);
+      this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      this.ctx.imageSmoothingEnabled = true;
+      this.ctx.imageSmoothingQuality = "high";
+      this.redraw();
+    }
+  }
+
   private ensureOverlay(renderer: THREE.WebGLRenderer) {
     if (this.overlayScene) return;
     this.texture = new THREE.CanvasTexture(this.surface);
     this.texture.colorSpace = THREE.SRGBColorSpace;
+    this.texture.generateMipmaps = false;
     this.texture.minFilter = THREE.LinearFilter;
     this.texture.magFilter = THREE.LinearFilter;
+    this.texture.premultiplyAlpha = true;
     const mat = new THREE.MeshBasicMaterial({
       map: this.texture,
       transparent: true,
       depthTest: false,
       depthWrite: false,
+      toneMapped: false,
+      premultipliedAlpha: true,
     });
     const geo = new THREE.PlaneGeometry(2, 2);
     this.mesh = new THREE.Mesh(geo, mat);
@@ -324,9 +316,7 @@ class WebglOverlayHud implements HudApi {
     } else {
       this.parchmentHits = paintParchmentUi(this.ctx, w, h, this.parchment);
       const guideOn = Boolean(this.parchment.guideStep);
-      if (this.hintVisible && this.parchment.panel === "none" && !guideOn) {
-        paintHint(this.ctx, w, h, this.hintAction, 1);
-      }
+      // 0.3.3：旧 hint 条移除，由引导 step1 替代
       this.artHit =
         this.art.visible && this.parchment.panel === "none" && !guideOn
           ? paintArtSwitcher(this.ctx, w, h, this.art)
@@ -380,20 +370,21 @@ class WebglOverlayHud implements HudApi {
     this.redraw();
   }
 
-  showHint(actionText: string) {
-    this.hintAction = actionText;
-    this.hintVisible = true;
-    this.redraw();
+  showHint(_actionText: string) {
+    /* 0.3.3 旧 hint 条已移除 */
   }
 
   hideHint() {
-    this.hintVisible = false;
-    this.redraw();
+    /* no-op */
   }
 
   composite(renderer: THREE.WebGLRenderer) {
-    const hasPanel = this.parchment.panel !== "none" || Boolean(this.parchment.economy);
-    if (!this.loadingVisible && !this.hintVisible && !this.art.visible && !hasPanel) return;
+    const hasPanel =
+      this.parchment.panel !== "none" ||
+      Boolean(this.parchment.economy) ||
+      Boolean(this.parchment.guideStep);
+    if (!this.loadingVisible && !this.art.visible && !hasPanel) return;
+    this.syncToDrawingBuffer(renderer);
     this.ensureOverlay(renderer);
     if (this.dirty && this.texture) {
       this.texture.needsUpdate = true;

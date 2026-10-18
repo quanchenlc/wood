@@ -8,3 +8,7 @@ art-sets/**/preview_*.png
 
 # 羊皮纸 UI 大图 mockups 不进仓（overview 可留作参照）
 ui-parchment-v2/mockups/0*.png
+ui-parchment-v2/export_v3/mockups/
+ui-parchment-export-v3/
+*.tar.gz
+*.tar_00b3.gz

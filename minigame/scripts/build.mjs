@@ -697,6 +697,7 @@ async function packArtSetSubpackages() {
   const gameJson = JSON.parse(readFileSync(gameJsonPath, "utf8"));
   const subs = [
     { name: "assets", root: "subpackages/assets/" },
+    { name: "ui-parchment", root: "subpackages/ui-parchment/" },
     { name: "art-set1", root: "subpackages/art-set1/" },
     { name: "art-set2", root: "subpackages/art-set2/" },
     { name: "art-set3", root: "subpackages/art-set3/" },
@@ -806,6 +807,7 @@ function reportSizes() {
 
   const subRoots = [
     ["assets", "subpackages/assets/"],
+    ["ui-parchment", "subpackages/ui-parchment/"],
     ["art-set1", "subpackages/art-set1/"],
     ["art-set2", "subpackages/art-set2/"],
     ["art-set3", "subpackages/art-set3/"],
@@ -866,9 +868,47 @@ function verifyTextureMad() {
   }
 }
 
+function copyUiParchmentSubpackage() {
+  const src = join(ROOT, "ui-parchment-v2/export_v3/textures");
+  const manifestSrc = join(ROOT, "ui-parchment-v2/export_v3/manifest.json");
+  const dest = join(MG, "subpackages/ui-parchment");
+  rmSync(dest, { recursive: true, force: true });
+  mkdirSync(dest, { recursive: true });
+  if (!existsSync(src) || !existsSync(manifestSrc)) {
+    throw new Error("[build] missing ui-parchment-v2/export_v3 textures/manifest");
+  }
+  for (const name of readdirSync(src)) {
+    cpSync(join(src, name), join(dest, name));
+  }
+  cpSync(manifestSrc, join(dest, "manifest.json"));
+  writeFileSync(
+    join(dest, "game.js"),
+    `console.log("[firewood] ui-parchment subpackage ready");\n`,
+  );
+  // 主包不再带 UI 贴图（仅占位说明）
+  const mainUi = join(MG, "ui/parchment");
+  rmSync(mainUi, { recursive: true, force: true });
+  mkdirSync(mainUi, { recursive: true });
+  writeFileSync(
+    join(mainUi, "README.json"),
+    `${JSON.stringify({ subpackage: "ui-parchment", note: "textures live in subpackages/ui-parchment" }, null, 2)}\n`,
+  );
+  // 同步 web/public 与分包同源（@2x/@3x + manifest）
+  const publicUi = join(ROOT, "public/ui/parchment");
+  rmSync(publicUi, { recursive: true, force: true });
+  mkdirSync(publicUi, { recursive: true });
+  for (const name of readdirSync(src)) {
+    cpSync(join(src, name), join(publicUi, name));
+  }
+  cpSync(manifestSrc, join(publicUi, "manifest.json"));
+  const bytes = walkSizes(dest).reduce((n, f) => n + f.size, 0);
+  console.log(`[build] ui-parchment subpackage ${formatMb(bytes)}`);
+}
+
 emitRuntimeAppConfig();
 await bundle();
 await copyAssets();
+copyUiParchmentSubpackage();
 verifyTextureMad();
 syncProjectConfig();
 assertNoCjsRequireInPackage();

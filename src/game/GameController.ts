@@ -58,6 +58,8 @@ export interface EconomyHooks {
   onRootStacked: () => void;
   /** 额度耗尽时回调 */
   onQuotaBlocked?: () => void;
+  /** 一次有效劈砍结算（引导用） */
+  onChopSettled?: () => void;
 }
 
 export interface GameDeps {
@@ -292,6 +294,7 @@ export class GameController {
     if (this.chopsOnRoot >= DESIGN_C.hitsPerRoot) this.forceFell = true;
     this.state = "SETTLING";
     this.lastSplitTime = performance.now();
+    this.d.economy?.onChopSettled?.();
   }
 
   private addNeighborReactions(

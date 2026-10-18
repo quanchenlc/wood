@@ -1,78 +1,84 @@
 import { isMinigame } from "../../platform/env";
+import type { Insets } from "./nineSlice";
 
-/** export/manifest.json 权威 insets：[L,T,R,B]（1x 源像素） */
-export const NINE_SLICE = {
-  panel_vellum: [60, 60, 60, 60] as const,
-  strip_parchment: [24, 16, 24, 16] as const,
-  chip_parchment: [20, 14, 20, 14] as const,
-  chip_boost: [20, 14, 20, 14] as const,
-  btn_leather: [40, 28, 40, 28] as const,
-  ribbon_madder: [70, 18, 70, 18] as const,
-} as const;
+export type TexId =
+  | "btn_icon_ad"
+  | "btn_icon_help"
+  | "btn_icon_rank"
+  | "btn_leather"
+  | "chip_boost"
+  | "chip_parchment"
+  | "guide_bubble"
+  | "guide_hand"
+  | "guide_ring"
+  | "guide_tail"
+  | "panel_vellum"
+  | "ribbon_madder"
+  | "seal_wax"
+  | "strip_parchment";
 
-/** 1x 逻辑尺寸（用于 @2x 时推算 inset 缩放） */
-export const LOGICAL_SIZE: Record<string, { w: number; h: number }> = {
-  "bg_parchment.jpg": { w: 576, h: 1024 },
-  "btn_leather.png": { w: 340, h: 120 },
-  "chip_boost.png": { w: 280, h: 64 },
-  "chip_parchment.png": { w: 280, h: 64 },
-  "panel_vellum.png": { w: 400, h: 300 },
-  "ribbon_madder.png": { w: 380, h: 75 },
-  "seal_wax.png": { w: 128, h: 129 },
-  "strip_parchment.png": { w: 360, h: 80 },
-};
-
-export type ParchmentTextureKey =
-  | "bg_parchment.jpg"
-  | "panel_vellum.png"
-  | "strip_parchment.png"
-  | "btn_leather.png"
-  | "ribbon_madder.png"
-  | "seal_wax.png"
-  | "chip_parchment.png"
-  | "chip_boost.png";
-
-export interface ParchmentTex {
-  img: HTMLImageElement;
-  /** 相对 1x 的倍率（@2x → 2） */
-  scale: number;
+export interface ManifestVariant {
+  file: string;
+  bytes: number;
+  width: number;
+  height: number;
 }
 
-/** 主包路径：minigame/ui/parchment（非素材分包） */
-export function parchmentUrl(file: string): string {
-  const clean = file.replace(/^\//, "");
+export interface ManifestTexture {
+  file: string;
+  logical_size: [number, number];
+  scale?: number;
+  nine_slice_insets_pt?: Insets | null;
+  nine_slice_insets_2x?: Insets | null;
+  nine_slice_insets?: Insets | null;
+  variants: {
+    "2x"?: ManifestVariant;
+    "3x"?: ManifestVariant;
+  };
+  role?: string;
+}
+
+export interface UiManifest {
+  version?: string;
+  textures: ManifestTexture[];
+}
+
+export interface ParchmentTex {
+  id: TexId;
+  img: HTMLImageElement;
+  /** 实际加载的密度 2 或 3 */
+  density: 2 | 3;
+  logicalW: number;
+  logicalH: number;
+  srcInsets: Insets | null;
+  dstInsets: Insets | null;
+}
+
+export type TexMap = Partial<Record<TexId, ParchmentTex>>;
+
+let manifestCache: UiManifest | null = null;
+let texCache: TexMap | null = null;
+let loading: Promise<TexMap> | null = null;
+let uiDpr = 2;
+
+export function setUiDpr(dpr: number) {
+  uiDpr = Math.min(Math.max(1, dpr), 3);
+}
+
+export function getUiDpr(): number {
+  return uiDpr;
+}
+
+function baseUrl(): string {
   if (isMinigame()) {
     const harness = Boolean(
       (globalThis as { __HARNESS_CANVAS__?: boolean }).__HARNESS_CANVAS__,
     );
-    return harness ? `/ui/parchment/${clean}` : `ui/parchment/${clean}`;
+    // 分包根；harness 需前导 /
+    return harness ? "/subpackages/ui-parchment/" : "subpackages/ui-parchment/";
   }
-  return `/ui/parchment/${clean}`;
+  return "/ui/parchment/";
 }
-
-/** foo.png → foo@2x.png；已带 @2x 则原样 */
-export function at2xName(file: string): string {
-  if (/@2x\./i.test(file)) return file;
-  const i = file.lastIndexOf(".");
-  if (i < 0) return `${file}@2x`;
-  return `${file.slice(0, i)}@2x${file.slice(i)}`;
-}
-
-export type TexMap = Partial<Record<ParchmentTextureKey, ParchmentTex>>;
-
-const KEYS: ParchmentTextureKey[] = [
-  "bg_parchment.jpg",
-  "panel_vellum.png",
-  "strip_parchment.png",
-  "btn_leather.png",
-  "ribbon_madder.png",
-  "seal_wax.png",
-  "chip_parchment.png",
-  "chip_boost.png",
-];
-
-let cache: TexMap | null = null;
-let loading: Promise<TexMap> | null = null;
 
 function createImageEl(): HTMLImageElement {
   const g = globalThis as {
@@ -94,83 +100,179 @@ function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = createImageEl();
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error(`parchment tex fail: ${url}`));
+    img.onerror = () => reject(new Error(`ui tex fail: ${url}`));
     img.src = url;
   });
 }
 
-function deviceDpr(): number {
+function loadJson(url: string): Promise<UiManifest> {
+  // harness：同步 XHR（fetch 被 shim 剥离）
   try {
-    if (typeof wx !== "undefined") {
-      const info = (
-        wx as { getSystemInfoSync?: () => { pixelRatio?: number } }
-      ).getSystemInfoSync?.();
-      if (info?.pixelRatio) return info.pixelRatio;
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", url, false);
+    xhr.send(null);
+    if (xhr.status === 200 || xhr.status === 0) {
+      return Promise.resolve(JSON.parse(xhr.responseText) as UiManifest);
     }
   } catch {
-    /* ignore */
+    /* fall through */
   }
-  return typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+  const wxApi = (globalThis as {
+    wx?: {
+      request?: (o: {
+        url: string;
+        success: (r: { data: unknown }) => void;
+        fail: (e: unknown) => void;
+      }) => void;
+    };
+  }).wx;
+  if (wxApi?.request) {
+    return new Promise<UiManifest>((resolve, reject) => {
+      wxApi.request!({
+        url,
+        success: (r) => {
+          const data = r.data;
+          if (typeof data === "string") resolve(JSON.parse(data) as UiManifest);
+          else resolve(data as UiManifest);
+        },
+        fail: reject,
+      });
+    });
+  }
+  return fetch(url).then(async (r) => {
+    if (!r.ok) throw new Error(`manifest ${r.status}`);
+    return r.json();
+  });
+}
+
+function idFromFile(file: string): TexId {
+  return file.replace(/@[23]x\.(png|jpg|jpeg)$/i, "").replace(/\.(png|jpg|jpeg)$/i, "") as TexId;
+}
+
+function pickVariant(
+  entry: ManifestTexture,
+  dpr: number,
+): { density: 2 | 3; variant: ManifestVariant } | null {
+  const v3 = entry.variants?.["3x"];
+  const v2 = entry.variants?.["2x"];
+  if (dpr >= 3 && v3?.file) return { density: 3, variant: v3 };
+  if (v2?.file) return { density: 2, variant: v2 };
+  if (v3?.file) return { density: 3, variant: v3 };
+  return null;
+}
+
+function srcInsetsFor(entry: ManifestTexture, density: 2 | 3): Insets | null {
+  if (density === 2 && entry.nine_slice_insets_2x) return entry.nine_slice_insets_2x;
+  if (density === 3 && entry.nine_slice_insets) return entry.nine_slice_insets;
+  if (entry.nine_slice_insets_2x) return entry.nine_slice_insets_2x;
+  if (entry.nine_slice_insets) return entry.nine_slice_insets;
+  return null;
 }
 
 /**
- * 优先加载 @2x（DPR≥1.5 时），失败回落 1x。
- * 美术后续交付 `name@2x.ext` 即可自动启用，无需改代码。
+ * 加载 ui-parchment 分包（若需要），再按 manifest 只请求存在的 variants。
  */
-async function loadOne(key: ParchmentTextureKey): Promise<ParchmentTex | null> {
-  const want2x = deviceDpr() >= 1.5;
-  if (want2x) {
-    try {
-      const img = await loadImage(parchmentUrl(at2xName(key)));
-      const logical = LOGICAL_SIZE[key];
-      const scale = logical ? img.naturalWidth / logical.w || 2 : 2;
-      return { img, scale: scale >= 1.5 ? 2 : 1 };
-    } catch {
-      /* fall through to 1x */
-    }
+export async function ensureUiSubpackage(
+  onProgress?: (p: number, text: string) => void,
+): Promise<void> {
+  if (!isMinigame()) {
+    onProgress?.(1, "UI就绪");
+    return;
   }
-  try {
-    const img = await loadImage(parchmentUrl(key));
-    return { img, scale: 1 };
-  } catch {
-    return null;
+  const wxApi = (globalThis as {
+    wx?: {
+      loadSubpackage?: (opts: {
+        name: string;
+        success: () => void;
+        fail: (e: unknown) => void;
+      }) => { onProgressUpdate?: (cb: (r: { progress?: number }) => void) => void };
+    };
+  }).wx;
+  if (!wxApi?.loadSubpackage) {
+    onProgress?.(1, "UI就绪");
+    return;
   }
-}
-
-export function scaledInsets(
-  base: readonly [number, number, number, number],
-  tex: ParchmentTex | undefined,
-): [number, number, number, number] {
-  const s = tex?.scale ?? 1;
-  if (s === 1) return [base[0], base[1], base[2], base[3]];
-  return [
-    Math.round(base[0] * s),
-    Math.round(base[1] * s),
-    Math.round(base[2] * s),
-    Math.round(base[3] * s),
-  ];
-}
-
-export function loadParchmentTextures(): Promise<TexMap> {
-  if (cache) return Promise.resolve(cache);
-  if (loading) return loading;
-  loading = Promise.all(KEYS.map(async (k) => [k, await loadOne(k)] as const)).then((pairs) => {
-    const map: TexMap = {};
-    for (const [k, tex] of pairs) {
-      if (tex) map[k] = tex;
-    }
-    cache = map;
-    return map;
+  onProgress?.(0, "加载界面");
+  await new Promise<void>((resolve) => {
+    const task = wxApi.loadSubpackage!({
+      name: "ui-parchment",
+      success: () => {
+        onProgress?.(1, "界面就绪");
+        resolve();
+      },
+      fail: (err) => {
+        // harness 已有静态文件时允许失败后继续
+        console.warn("[ui] loadSubpackage ui-parchment", err);
+        onProgress?.(1, "界面就绪");
+        resolve();
+      },
+    });
+    task?.onProgressUpdate?.((res) => {
+      const p = typeof res.progress === "number" ? res.progress / 100 : 0;
+      onProgress?.(Math.max(0, Math.min(1, p)), "下载界面");
+    });
   });
+}
+
+export async function loadParchmentTextures(dpr = uiDpr): Promise<TexMap> {
+  setUiDpr(dpr);
+  if (texCache) return texCache;
+  if (loading) return loading;
+
+  loading = (async () => {
+    await ensureUiSubpackage();
+    const base = baseUrl();
+    if (!manifestCache) {
+      manifestCache = await loadJson(`${base}manifest.json`);
+    }
+    const map: TexMap = {};
+    await Promise.all(
+      manifestCache.textures.map(async (entry) => {
+        const picked = pickVariant(entry, uiDpr);
+        if (!picked) return;
+        const id = idFromFile(entry.file);
+        try {
+          const img = await loadImage(`${base}${picked.variant.file}`);
+          map[id] = {
+            id,
+            img,
+            density: picked.density,
+            logicalW: entry.logical_size[0],
+            logicalH: entry.logical_size[1],
+            srcInsets: srcInsetsFor(entry, picked.density),
+            dstInsets: entry.nine_slice_insets_pt ?? null,
+          };
+        } catch (err) {
+          console.warn("[ui] tex miss", picked.variant.file, err);
+        }
+      }),
+    );
+    texCache = map;
+    return map;
+  })();
+
   return loading;
 }
 
 export function getParchmentTextures(): TexMap {
-  return cache || {};
+  return texCache || {};
 }
 
-declare const wx:
-  | {
-      getSystemInfoSync?: () => { pixelRatio?: number };
-    }
-  | undefined;
+export function getManifest(): UiManifest | null {
+  return manifestCache;
+}
+
+/** 兼容旧导出名 */
+export const NINE_SLICE = {} as const;
+export function parchmentUrl(file: string): string {
+  return `${baseUrl()}${file.replace(/^\//, "")}`;
+}
+export function at2xName(file: string): string {
+  return file;
+}
+export function scaledInsets(
+  base: Insets,
+  _tex?: ParchmentTex,
+): [number, number, number, number] {
+  return [base[0], base[1], base[2], base[3]];
+}

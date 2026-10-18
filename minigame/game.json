@@ -13,6 +13,10 @@
       "root": "subpackages/assets/"
     },
     {
+      "name": "ui-parchment",
+      "root": "subpackages/ui-parchment/"
+    },
+    {
       "name": "art-set1",
       "root": "subpackages/art-set1/"
     },

@@ -1,45 +1,47 @@
 import { COPY_C } from "../../economy/design";
 import { formatCountdown } from "../../economy/time";
 import type { EconomySnapshot } from "../../economy/types";
-import {
-  getParchmentTextures,
-  NINE_SLICE,
-  scaledInsets,
-  type ParchmentTex,
-  type TexMap,
-} from "./assets";
-import { GUIDE_STEPS } from "./guide";
-import { drawNineSlice } from "./nineSlice";
+import { getParchmentTextures, getUiDpr, type ParchmentTex, type TexMap } from "./assets";
+import { GUIDE_COPY } from "./guide";
+import { drawNineSlice, snapPt, snapRect, type Insets } from "./nineSlice";
 
 export type PanelMode = "none" | "claim" | "exhausted" | "rank";
+
+export interface GuideTargets {
+  /** 木头屏幕投影（CSS px） */
+  log?: { x: number; y: number; w: number; h: number };
+  /** 剩余树根 + 生长倒计时合并框 */
+  roots?: { x: number; y: number; w: number; h: number };
+  /** 右侧图标列 */
+  icons?: { x: number; y: number; w: number; h: number };
+}
 
 export interface ParchmentUiState {
   panel: PanelMode;
   toast: string | null;
-  /** 加载中：null 表示已结束；loading 用程序条，不贴 bg */
   loading: { loaded: number; total: number; status: string } | null;
   economy: EconomySnapshot | null;
-  /** 榜上本地自己 */
   selfRank?: { name: string; pieces: number; rank: number };
-  /** 首次引导步 1–3；null/0 表示不显示 */
   guideStep?: number | null;
+  guideTargets?: GuideTargets;
+  /** 广告位今日剩余次数角标 */
+  adRemaining?: number;
 }
 
 export type UiHit =
   | "claim"
+  | "claim_strip"
   | "ad_quota"
   | "ad_skip"
   | "dismiss"
   | "panel"
   | "rank_open"
   | "rank_close"
+  | "help_open"
   | "guide_next"
   | "guide_skip"
+  | "guide_tap"
   | null;
-
-function texImg(t: ParchmentTex | undefined): HTMLImageElement | undefined {
-  return t?.img;
-}
 
 export interface HitRect {
   id: UiHit;
@@ -57,13 +59,40 @@ const MADDER = "#8b2e2e";
 function fontSerif(size: number, weight = "600") {
   return `${weight} ${size}px "Songti SC", "Noto Serif CJK SC", "STSong", serif`;
 }
-
 function fontSans(size: number, weight = "500") {
   return `${weight} ${size}px "PingFang SC", "Noto Sans CJK SC", system-ui, sans-serif`;
 }
 
 function pushHit(hits: HitRect[], id: UiHit, x: number, y: number, w: number, h: number) {
   hits.push({ id, x, y, w, h });
+}
+
+function drawTexNine(
+  ctx: CanvasRenderingContext2D,
+  tex: ParchmentTex | undefined,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  dpr: number,
+) {
+  if (!tex) return false;
+  const r = snapRect(x, y, w, h, dpr);
+  if (tex.srcInsets && tex.dstInsets) {
+    drawNineSlice(
+      ctx,
+      tex.img,
+      r.x,
+      r.y,
+      r.w,
+      r.h,
+      tex.srcInsets,
+      tex.dstInsets as Insets,
+    );
+  } else {
+    ctx.drawImage(tex.img, r.x, r.y, r.w, r.h);
+  }
+  return true;
 }
 
 function drawChip(
@@ -76,99 +105,24 @@ function drawChip(
   h: number,
   label: string,
   value: string,
+  dpr: number,
   valueColor = INK,
 ) {
-  const entry = boost ? tex["chip_boost.png"] : tex["chip_parchment.png"];
-  const base = boost ? NINE_SLICE.chip_boost : NINE_SLICE.chip_parchment;
-  const img = texImg(entry);
-  if (img) {
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    drawNineSlice(ctx, img, x, y, w, h, scaledInsets(base, entry));
-  } else {
+  const entry = boost ? tex.chip_boost : tex.chip_parchment;
+  if (!drawTexNine(ctx, entry, x, y, w, h, dpr)) {
     ctx.fillStyle = boost ? "rgba(180,90,40,0.55)" : "rgba(232,220,190,0.85)";
-    ctx.fillRect(x, y, w, h);
+    const r = snapRect(x, y, w, h, dpr);
+    ctx.fillRect(r.x, r.y, r.w, r.h);
   }
   ctx.textBaseline = "middle";
   ctx.textAlign = "left";
   ctx.fillStyle = INK_SOFT;
-  ctx.font = fontSans(Math.round(h * 0.32));
-  ctx.fillText(label, x + 14, y + h / 2);
+  ctx.font = fontSans(12);
+  ctx.fillText(label, snapPt(x + 10, dpr), snapPt(y + h / 2, dpr));
   ctx.textAlign = "right";
   ctx.fillStyle = valueColor;
-  ctx.font = fontSerif(Math.round(h * 0.42), "700");
-  ctx.fillText(value, x + w - 14, y + h / 2);
-}
-
-/** 经济 HUD chips：左上两行 + 小榜入口，避开胶囊（右缘 ≤ ~520 @750） */
-export function paintEconomyHud(
-  ctx: CanvasRenderingContext2D,
-  w: number,
-  h: number,
-  snap: EconomySnapshot,
-  tex: TexMap = getParchmentTextures(),
-  hits?: HitRect[],
-): void {
-  const scale = Math.min(w / 750, h / 1334);
-  const chipH = Math.round(56 * scale);
-  const gap = Math.round(8 * scale);
-  const left = Math.round(16 * scale);
-  const top = Math.round(48 * scale);
-  const maxRight = Math.round(520 * scale);
-  const row1W = Math.min(Math.round(200 * scale), (maxRight - left - gap * 2) / 2);
-
-  const s = snap.state;
-  drawChip(ctx, tex, false, left, top, row1W, chipH, COPY_C.hudToday, String(s.today_pieces));
-  drawChip(
-    ctx,
-    tex,
-    false,
-    left + row1W + gap,
-    top,
-    row1W,
-    chipH,
-    COPY_C.hudRemaining,
-    String(s.daily_remaining),
-    s.daily_remaining <= 0 ? MADDER : INK,
-  );
-
-  const row2Y = top + chipH + gap;
-  const growW = Math.round(240 * scale);
-  drawChip(
-    ctx,
-    tex,
-    false,
-    left,
-    row2Y,
-    growW,
-    chipH,
-    COPY_C.hudGrowing,
-    snap.pendingFull ? "已满" : formatCountdown(snap.nextRootMs),
-  );
-  if (snap.boosting) {
-    const bw = Math.round(130 * scale);
-    drawChip(ctx, tex, true, left + growW + gap, row2Y, bw, chipH, COPY_C.hudBoost, "×2", MADDER);
-  }
-
-  // 小榜入口：顶栏右侧、仍避开胶囊
-  const rankW = Math.round(88 * scale);
-  const rankH = Math.round(40 * scale);
-  const rx = Math.min(maxRight - rankW, w - rankW - Math.round(16 * scale));
-  const ry = top + Math.round(4 * scale);
-  const strip = tex["strip_parchment.png"];
-  const simg = texImg(strip);
-  if (simg) {
-    drawNineSlice(ctx, simg, rx, ry, rankW, rankH, scaledInsets(NINE_SLICE.strip_parchment, strip));
-  } else {
-    ctx.fillStyle = "rgba(240,228,200,0.9)";
-    ctx.fillRect(rx, ry, rankW, rankH);
-  }
-  ctx.fillStyle = INK;
-  ctx.font = fontSerif(Math.round(rankH * 0.42), "600");
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText("柴榜", rx + rankW / 2, ry + rankH / 2);
-  if (hits) pushHit(hits, "rank_open", rx, ry, rankW, rankH);
+  ctx.font = fontSerif(16, "700");
+  ctx.fillText(value, snapPt(x + w - 10, dpr), snapPt(y + h / 2, dpr));
 }
 
 function paintRibbonTitle(
@@ -178,22 +132,16 @@ function paintRibbonTitle(
   y: number,
   title: string,
   width: number,
+  dpr: number,
 ) {
-  const entry = tex["ribbon_madder.png"];
-  const img = texImg(entry);
-  const h = Math.round(width * (75 / 380));
+  const h = 36;
   const x = cx - width / 2;
-  if (img) drawNineSlice(ctx, img, x, y, width, h, scaledInsets(NINE_SLICE.ribbon_madder, entry));
-  else {
-    ctx.fillStyle = MADDER;
-    ctx.fillRect(x, y, width, h);
-  }
+  drawTexNine(ctx, tex.ribbon_madder, x, y, width, h, dpr);
   ctx.fillStyle = CREAM;
-  ctx.font = fontSerif(Math.round(h * 0.42), "700");
+  ctx.font = fontSerif(15, "700");
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(title, cx, y + h / 2 + 1);
-  return { x, y, w: width, h };
+  ctx.fillText(title, snapPt(cx, dpr), snapPt(y + h / 2 + 1, dpr));
 }
 
 function paintLeatherBtn(
@@ -204,25 +152,23 @@ function paintLeatherBtn(
   w: number,
   h: number,
   label: string,
+  dpr: number,
   withSeal = false,
 ) {
-  const entry = tex["btn_leather.png"];
-  const img = texImg(entry);
-  if (img) drawNineSlice(ctx, img, x, y, w, h, scaledInsets(NINE_SLICE.btn_leather, entry));
-  else {
+  if (!drawTexNine(ctx, tex.btn_leather, x, y, w, h, dpr)) {
+    const r = snapRect(x, y, w, h, dpr);
     ctx.fillStyle = "#4a3020";
-    ctx.fillRect(x, y, w, h);
+    ctx.fillRect(r.x, r.y, r.w, r.h);
   }
-  const seal = texImg(tex["seal_wax.png"]);
-  if (withSeal && seal) {
-    const sh = h * 0.85;
-    ctx.drawImage(seal, x + 8, y + (h - sh) / 2, sh, sh);
+  if (withSeal && tex.seal_wax) {
+    const sh = h * 0.72;
+    ctx.drawImage(tex.seal_wax.img, snapPt(x + 8, dpr), snapPt(y + (h - sh) / 2, dpr), sh, sh);
   }
   ctx.fillStyle = CREAM;
-  ctx.font = fontSerif(Math.round(h * 0.38), "700");
+  ctx.font = fontSerif(Math.max(14, h * 0.36), "700");
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(label, x + w / 2 + (withSeal ? 10 : 0), y + h / 2);
+  ctx.fillText(label, snapPt(x + w / 2 + (withSeal ? 8 : 0), dpr), snapPt(y + h / 2, dpr));
 }
 
 function paintStripBtn(
@@ -233,22 +179,63 @@ function paintStripBtn(
   w: number,
   h: number,
   label: string,
+  dpr: number,
 ) {
-  const entry = tex["strip_parchment.png"];
-  const img = texImg(entry);
-  if (img) drawNineSlice(ctx, img, x, y, w, h, scaledInsets(NINE_SLICE.strip_parchment, entry));
-  else {
+  if (!drawTexNine(ctx, tex.strip_parchment, x, y, w, h, dpr)) {
+    const r = snapRect(x, y, w, h, dpr);
     ctx.fillStyle = "rgba(240,228,200,0.9)";
-    ctx.fillRect(x, y, w, h);
+    ctx.fillRect(r.x, r.y, r.w, r.h);
   }
   ctx.fillStyle = INK;
-  ctx.font = fontSerif(Math.round(h * 0.4), "600");
+  ctx.font = fontSerif(Math.max(12, h * 0.4), "600");
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(label, x + w / 2, y + h / 2);
+  ctx.fillText(label, snapPt(x + w / 2, dpr), snapPt(y + h / 2, dpr));
 }
 
-/** 程序化加载条（无贴图，notes 要求 first paint 不依赖纹理 I/O） */
+function paintIconBtn(
+  ctx: CanvasRenderingContext2D,
+  tex: TexMap,
+  id: "btn_icon_rank" | "btn_icon_ad" | "btn_icon_help",
+  x: number,
+  y: number,
+  label: string,
+  dpr: number,
+  badge?: number,
+) {
+  const size = 48;
+  const entry = tex[id];
+  const r = snapRect(x, y, size, size, dpr);
+  if (entry) ctx.drawImage(entry.img, r.x, r.y, r.w, r.h);
+  else {
+    ctx.fillStyle = "rgba(232,220,190,0.9)";
+    ctx.beginPath();
+    ctx.arc(r.x + r.w / 2, r.y + r.h / 2, r.w / 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  if (badge != null && badge > 0) {
+    ctx.fillStyle = MADDER;
+    ctx.beginPath();
+    ctx.arc(r.x + r.w - 4, r.y + 6, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = CREAM;
+    ctx.font = fontSans(11, "700");
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(Math.min(badge, 9)), r.x + r.w - 4, r.y + 6);
+  }
+  ctx.font = fontSans(11, "700");
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  ctx.strokeStyle = "rgba(243,230,200,0.85)";
+  ctx.lineWidth = 2;
+  ctx.strokeText(label, snapPt(x + size / 2, dpr), snapPt(y + size + 4, dpr));
+  ctx.fillStyle = INK;
+  ctx.fillText(label, snapPt(x + size / 2, dpr), snapPt(y + size + 4, dpr));
+  return { x, y, w: size, h: size + 20 };
+}
+
+/** 程序化加载（无 bg 贴图） */
 export function paintParchmentLoading(
   ctx: CanvasRenderingContext2D,
   w: number,
@@ -257,7 +244,6 @@ export function paintParchmentLoading(
   total: number,
   status: string,
 ) {
-  // 暖纸底 + 暗角（不读 bg）
   const g = ctx.createRadialGradient(w / 2, h / 2, w * 0.1, w / 2, h / 2, w * 0.75);
   g.addColorStop(0, "#e8dcc4");
   g.addColorStop(1, "#c4a882");
@@ -268,16 +254,14 @@ export function paintParchmentLoading(
 
   const pct = Math.round((loaded / Math.max(1, total)) * 100);
   ctx.fillStyle = INK;
-  ctx.font = fontSerif(Math.round(Math.min(w, h) * 0.055), "700");
+  ctx.font = fontSerif(22, "700");
   ctx.textAlign = "center";
-  ctx.textBaseline = "alphabetic";
   ctx.fillText(COPY_C.title, w / 2, h * 0.42);
 
   const barW = Math.min(280, w * 0.62);
   const barX = (w - barW) / 2;
   const barY = h * 0.48;
   ctx.strokeStyle = "rgba(58,42,24,0.25)";
-  ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(barX, barY);
   ctx.lineTo(barX + barW, barY);
@@ -297,61 +281,108 @@ export function paintParchmentLoading(
   ctx.fillStyle = INK_SOFT;
   ctx.font = fontSans(14);
   ctx.fillText(`${status || COPY_C.loading} ${pct}%`, w / 2, barY + 28);
-
   ctx.globalAlpha = 0.35;
   ctx.font = fontSans(11);
-  ctx.fillText("v0.3.2 · 羊皮纸稿", w / 2, h - 24);
+  ctx.fillText("v0.3.3 · 羊皮纸稿", w / 2, h - 24);
   ctx.globalAlpha = 1;
 }
 
-/** 首次三步引导（占位文案；可跳过） */
-export function paintGuide(
+export function paintEconomyHud(
   ctx: CanvasRenderingContext2D,
   w: number,
   h: number,
-  step: number,
+  snap: EconomySnapshot,
   tex: TexMap,
   hits: HitRect[],
-) {
-  const info = GUIDE_STEPS.find((s) => s.step === step) || GUIDE_STEPS[0];
-  ctx.fillStyle = "rgba(40,28,16,0.4)";
-  ctx.fillRect(0, 0, w, h);
-  pushHit(hits, "dismiss", 0, 0, w, h);
+  opts?: { adRemaining?: number; hideClaimStrip?: boolean },
+): GuideTargets {
+  const dpr = getUiDpr();
+  const chipH = 34;
+  const gap = 6;
+  const left = 12;
+  // 胶囊安全：约 y=50，右缘 ≤268 @375
+  const top = 50;
+  const chipW = 120;
 
-  const pw = Math.min(320, w * 0.84);
-  const ph = Math.min(280, h * 0.38);
-  const px = (w - pw) / 2;
-  const py = h * 0.28;
-  pushHit(hits, "panel", px, py, pw, ph);
-  const panel = tex["panel_vellum.png"];
-  const pimg = texImg(panel);
-  if (pimg) drawNineSlice(ctx, pimg, px, py, pw, ph, scaledInsets(NINE_SLICE.panel_vellum, panel));
-  else {
-    ctx.fillStyle = "#f0e6d0";
-    ctx.fillRect(px, py, pw, ph);
+  const s = snap.state;
+  drawChip(ctx, tex, false, left, top, chipW, chipH, COPY_C.hudToday, String(s.today_pieces), dpr);
+  drawChip(
+    ctx,
+    tex,
+    false,
+    left + chipW + gap,
+    top,
+    chipW,
+    chipH,
+    COPY_C.hudRemaining,
+    String(s.daily_remaining),
+    dpr,
+    s.daily_remaining <= 0 ? MADDER : INK,
+  );
+
+  const row2Y = top + chipH + gap;
+  const growW = 150;
+  drawChip(
+    ctx,
+    tex,
+    false,
+    left,
+    row2Y,
+    growW,
+    chipH,
+    COPY_C.hudGrowing,
+    snap.pendingFull ? "已满" : formatCountdown(snap.nextRootMs),
+    dpr,
+  );
+  if (snap.boosting) {
+    drawChip(ctx, tex, true, left + growW + gap, row2Y, 96, chipH, COPY_C.hudBoost, "×2", dpr, MADDER);
   }
 
-  paintRibbonTitle(ctx, tex, w / 2, py + 16, `入门 ${info.step}/3`, Math.min(pw * 0.85, 260));
-  ctx.fillStyle = INK;
-  ctx.font = fontSerif(18, "700");
-  ctx.textAlign = "center";
-  ctx.textBaseline = "alphabetic";
-  ctx.fillText(info.title, w / 2, py + 90);
-  ctx.fillStyle = INK_SOFT;
-  ctx.font = fontSans(13);
-  const lines = info.body.length > 18 ? [info.body.slice(0, 16), info.body.slice(16)] : [info.body];
-  lines.forEach((line, i) => ctx.fillText(line, w / 2, py + 122 + i * 22));
+  // 右侧图标列
+  const iconX = w - 12 - 48;
+  let iconY = 100;
+  const rankBox = paintIconBtn(ctx, tex, "btn_icon_rank", iconX, iconY, "柴榜", dpr);
+  pushHit(hits, "rank_open", rankBox.x, rankBox.y, rankBox.w, rankBox.h);
+  iconY += 72;
+  const adBox = paintIconBtn(
+    ctx,
+    tex,
+    "btn_icon_ad",
+    iconX,
+    iconY,
+    "加速",
+    dpr,
+    opts?.adRemaining,
+  );
+  pushHit(hits, "ad_skip", adBox.x, adBox.y, adBox.w, adBox.h);
+  iconY += 72;
+  const helpBox = paintIconBtn(ctx, tex, "btn_icon_help", iconX, iconY, "玩法", dpr);
+  pushHit(hits, "help_open", helpBox.x, helpBox.y, helpBox.w, helpBox.h);
 
-  const btnW = Math.min(200, pw * 0.7);
-  const bx = (w - btnW) / 2;
-  const by = py + ph - 88;
-  paintLeatherBtn(ctx, tex, bx, by, btnW, 48, info.step < 3 ? "下一步" : "开始砍柴");
-  pushHit(hits, "guide_next", bx, by, btnW, 48);
+  // 底部领取纸条（引导期间隐藏）
+  if (!opts?.hideClaimStrip && s.pending_claim > 0) {
+    const sw = 168;
+    const sh = 40;
+    const sx = (w - sw) / 2;
+    const sy = Math.min(h - 100, 712);
+    paintStripBtn(ctx, tex, sx, sy, sw, sh, `柴棚待取 ${s.pending_claim} · 领取`, dpr);
+    pushHit(hits, "claim_strip", sx, sy, sw, sh);
+  }
 
-  ctx.fillStyle = "rgba(58,42,24,0.55)";
-  ctx.font = fontSans(13);
-  ctx.fillText("跳过引导", w / 2, py + ph - 22);
-  pushHit(hits, "guide_skip", w / 2 - 50, py + ph - 36, 100, 28);
+  return {
+    roots: {
+      x: left,
+      y: top,
+      w: chipW * 2 + gap,
+      h: chipH * 2 + gap,
+    },
+    icons: {
+      x: iconX - 4,
+      y: 96,
+      w: 56,
+      h: 72 * 2 + 48,
+    },
+  };
 }
 
 export function paintClaimOrExhausted(
@@ -363,108 +394,90 @@ export function paintClaimOrExhausted(
   hits: HitRect[],
   mode: "claim" | "exhausted",
 ) {
-  // 半透明遮罩，保留 3D 场景可见
-  ctx.fillStyle = "rgba(40,28,16,0.35)";
+  const dpr = getUiDpr();
+  ctx.fillStyle = "rgba(40,28,16,0.4)";
   ctx.fillRect(0, 0, w, h);
-  // 先登记全屏 dismiss，面板本体与按钮后登记（命中优先）
   pushHit(hits, "dismiss", 0, 0, w, h);
 
-  const pw = Math.min(340, w * 0.86);
-  const ph = mode === "exhausted" ? Math.min(420, h * 0.55) : Math.min(380, h * 0.5);
+  const pw = Math.min(300, w * 0.86);
+  const ph = mode === "exhausted" ? 360 : 320;
   const px = (w - pw) / 2;
-  const py = (h - ph) / 2 - 20;
+  const py = (h - ph) / 2 - 16;
   pushHit(hits, "panel", px, py, pw, ph);
-  const panel = tex["panel_vellum.png"];
-  const pimg = texImg(panel);
-  if (pimg) drawNineSlice(ctx, pimg, px, py, pw, ph, scaledInsets(NINE_SLICE.panel_vellum, panel));
-  else {
-    ctx.fillStyle = "#f0e6d0";
-    ctx.fillRect(px, py, pw, ph);
-  }
+  drawTexNine(ctx, tex.panel_vellum, px, py, pw, ph, dpr);
 
   const title =
     mode === "exhausted"
-      ? snap.state.pending_claim > 0 && snap.quotaExhausted
+      ? snap.quotaExhausted
         ? COPY_C.resting
         : COPY_C.exhaustedTitle
       : snap.pendingFull
         ? COPY_C.shedFull
         : COPY_C.pending(snap.state.pending_claim);
 
-  paintRibbonTitle(ctx, tex, w / 2, py + 18, title, Math.min(pw * 0.92, 300));
+  paintRibbonTitle(ctx, tex, w / 2, py + 14, title, Math.min(pw * 0.9, 260), dpr);
 
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
-  // claim：丝带已含「柴棚待取：N 根」，正文只保留疏伐队提示，避免重复
-  const bodyY = mode === "claim" ? py + 88 : py + 100;
+  const bodyY = py + 70;
   if (mode === "exhausted") {
     ctx.fillStyle = INK;
-    ctx.font = fontSerif(16, "600");
+    ctx.font = fontSerif(15, "600");
     ctx.fillText(COPY_C.exhaustedBody1, w / 2, bodyY);
-    ctx.font = fontSans(13);
     ctx.fillStyle = INK_SOFT;
-    ctx.fillText(COPY_C.exhaustedBody2, w / 2, bodyY + 28);
-    ctx.fillText(COPY_C.restingHint, w / 2, bodyY + 52);
+    ctx.font = fontSans(12);
+    ctx.fillText(COPY_C.exhaustedBody2, w / 2, bodyY + 24);
+    ctx.fillText(COPY_C.restingHint, w / 2, bodyY + 46);
   } else {
     ctx.fillStyle = INK_SOFT;
-    ctx.font = fontSans(14);
+    ctx.font = fontSans(13);
     ctx.fillText(COPY_C.pendingHint, w / 2, bodyY);
   }
 
-  const divY = mode === "claim" ? bodyY + 36 : bodyY + 72;
-  ctx.strokeStyle = "rgba(58,42,24,0.25)";
-  ctx.beginPath();
-  ctx.moveTo(px + 40, divY);
-  ctx.lineTo(w / 2 - 8, divY);
-  ctx.moveTo(w / 2 + 8, divY);
-  ctx.lineTo(px + pw - 40, divY);
-  ctx.stroke();
-  ctx.fillStyle = INK_SOFT;
-  ctx.font = fontSans(12);
-  ctx.fillText("◆", w / 2, divY + 4);
-
-  const btnW = Math.min(260, pw * 0.78);
-  const btnH = 52;
+  const btnW = Math.min(220, pw * 0.78);
+  const btnH = 48;
   const bx = (w - btnW) / 2;
-
   if (mode === "claim" && snap.state.pending_claim > 0 && snap.state.daily_remaining > 0) {
-    const by = divY + 28;
-    paintLeatherBtn(ctx, tex, bx, by, btnW, btnH, `${COPY_C.claim}（${Math.min(snap.state.pending_claim, snap.state.daily_remaining)}）`);
+    const by = bodyY + 40;
+    paintLeatherBtn(
+      ctx,
+      tex,
+      bx,
+      by,
+      btnW,
+      btnH,
+      `${COPY_C.claim}（${Math.min(snap.state.pending_claim, snap.state.daily_remaining)}）`,
+      dpr,
+    );
     pushHit(hits, "claim", bx, by, btnW, btnH);
-
     ctx.fillStyle = INK_SOFT;
     ctx.font = fontSans(12);
-    ctx.fillText(COPY_C.watchAd, w / 2, by + btnH + 28);
-    const ay = by + btnH + 40;
-    paintLeatherBtn(ctx, tex, bx, ay, btnW, btnH, COPY_C.adSkipBtn, true);
+    ctx.fillText(COPY_C.watchAd, w / 2, by + btnH + 24);
+    const ay = by + btnH + 36;
+    paintLeatherBtn(ctx, tex, bx, ay, btnW, btnH, COPY_C.adSkipBtn, dpr, true);
     pushHit(hits, "ad_skip", bx, ay, btnW, btnH);
   } else {
-    // 蓄养 / 额度用尽：加额度广告；若仍有 pending 但额度 0，领取入口仍可见（灰/提示）但可先加额
     ctx.fillStyle = INK_SOFT;
     ctx.font = fontSans(12);
-    ctx.fillText(COPY_C.watchAd, w / 2, divY + 24);
-    const ay = divY + 38;
-    paintLeatherBtn(ctx, tex, bx, ay, btnW, btnH, COPY_C.adQuotaBtn, true);
+    ctx.fillText(COPY_C.watchAd, w / 2, bodyY + 36);
+    const ay = bodyY + 50;
+    paintLeatherBtn(ctx, tex, bx, ay, btnW, btnH, COPY_C.adQuotaBtn, dpr, true);
     pushHit(hits, "ad_quota", bx, ay, btnW, btnH);
-
-    if (snap.state.pending_claim > 0) {
-      const cy = ay + btnH + 16;
+    if (snap.state.pending_claim > 0 && snap.state.daily_remaining > 0) {
+      const cy = ay + btnH + 14;
       paintStripBtn(
         ctx,
         tex,
         bx,
         cy,
         btnW,
-        40,
-        snap.state.daily_remaining > 0
-          ? `${COPY_C.claim}（${Math.min(snap.state.pending_claim, snap.state.daily_remaining)}）`
-          : `${COPY_C.claim}（需加额度）`,
+        36,
+        `${COPY_C.claim}（${Math.min(snap.state.pending_claim, snap.state.daily_remaining)}）`,
+        dpr,
       );
-      if (snap.state.daily_remaining > 0) pushHit(hits, "claim", bx, cy, btnW, 40);
+      pushHit(hits, "claim", bx, cy, btnW, 36);
     }
   }
-
-  // 面板打开时不画淡化「明日再来」（易叠在树桩上像残留 HUD）；点遮罩空白可关
 }
 
 export function paintRankPanel(
@@ -476,97 +489,200 @@ export function paintRankPanel(
   hits: HitRect[],
   self?: { name: string; pieces: number; rank: number },
 ) {
+  const dpr = getUiDpr();
   ctx.fillStyle = "rgba(40,28,16,0.4)";
   ctx.fillRect(0, 0, w, h);
+  pushHit(hits, "dismiss", 0, 0, w, h);
 
-  const pw = Math.min(360, w * 0.9);
-  const ph = Math.min(560, h * 0.72);
+  const pw = Math.min(320, w * 0.9);
+  const ph = Math.min(520, h * 0.7);
   const px = (w - pw) / 2;
-  const py = (h - ph) / 2 - 10;
-  const panel = tex["panel_vellum.png"];
-  const pimg = texImg(panel);
-  if (pimg) drawNineSlice(ctx, pimg, px, py, pw, ph, scaledInsets(NINE_SLICE.panel_vellum, panel));
-  else {
-    ctx.fillStyle = "#f0e6d0";
-    ctx.fillRect(px, py, pw, ph);
-  }
-
-  paintRibbonTitle(ctx, tex, w / 2, py + 16, `${COPY_C.rankTitle} · 本周`, Math.min(pw * 0.88, 300));
-  const seal = texImg(tex["seal_wax.png"]);
-  if (seal) {
-    const s = 42;
-    ctx.drawImage(seal, px + pw - s - 18, py + 22, s, s);
+  const py = (h - ph) / 2 - 8;
+  pushHit(hits, "panel", px, py, pw, ph);
+  drawTexNine(ctx, tex.panel_vellum, px, py, pw, ph, dpr);
+  paintRibbonTitle(ctx, tex, w / 2, py + 12, `${COPY_C.rankTitle} · 本周`, Math.min(pw * 0.88, 260), dpr);
+  if (tex.seal_wax) {
+    const s = 36;
+    ctx.drawImage(tex.seal_wax.img, snapPt(px + pw - s - 14, dpr), snapPt(py + 18, dpr), s, s);
   }
 
   const pieces = self?.pieces ?? snap?.state.total_pieces ?? 0;
-  const rank = self?.rank ?? 1;
   const name = self?.name ?? "我";
   const ranks = ["壹", "贰", "叁", "肆", "伍", "陆", "柒", "捌"];
-
-  // 占位好友 + 本地自己高亮
   const rows = [
-    { r: 1, name: "林间老樵", pieces: Math.max(pieces + 200, 1284) },
-    { r: 2, name: "阿菜", pieces: Math.max(pieces + 80, 960) },
-    { r: 3, name: "松下客", pieces: Math.max(pieces + 40, 720) },
-    { r: 4, name: "柴门客", pieces: Math.max(pieces + 10, 600) },
-    { r: rank, name, pieces, self: true },
-    { r: 6, name: "南枝", pieces: Math.max(0, pieces - 40) },
-    { r: 7, name: "晚风", pieces: Math.max(0, pieces - 80) },
-    { r: 8, name: "山客", pieces: Math.max(0, pieces - 120) },
+    { name: "林间老樵", pieces: Math.max(pieces + 200, 1284) },
+    { name: "阿菜", pieces: Math.max(pieces + 80, 960) },
+    { name: "松下客", pieces: Math.max(pieces + 40, 720) },
+    { name: "柴门客", pieces: Math.max(pieces + 10, 600) },
+    { name, pieces, self: true },
+    { name: "南枝", pieces: Math.max(0, pieces - 40) },
+    { name: "晚风", pieces: Math.max(0, pieces - 80) },
+    { name: "山客", pieces: Math.max(0, pieces - 120) },
   ].sort((a, b) => b.pieces - a.pieces);
 
-  let y = py + 90;
+  let y = py + 70;
   ctx.textBaseline = "middle";
   rows.slice(0, 8).forEach((row, i) => {
-    const rh = 44;
+    const rh = 40;
     if (row.self || row.name === name) {
-      const strip = tex["strip_parchment.png"];
-      const simg = texImg(strip);
-      if (simg) {
-        drawNineSlice(
-          ctx,
-          simg,
-          px + 16,
-          y - 4,
-          pw - 32,
-          rh,
-          scaledInsets(NINE_SLICE.strip_parchment, strip),
-        );
-      }
+      drawTexNine(ctx, tex.strip_parchment, px + 14, y - 2, pw - 28, rh, dpr);
     }
     ctx.fillStyle = INK;
-    ctx.font = fontSerif(16, "700");
+    ctx.font = fontSerif(14, "700");
     ctx.textAlign = "left";
-    ctx.fillText(ranks[i] || String(i + 1), px + 28, y + rh / 2 - 4);
-    ctx.beginPath();
-    ctx.arc(px + 70, y + rh / 2 - 4, 14, 0, Math.PI * 2);
-    ctx.strokeStyle = INK_SOFT;
-    ctx.stroke();
-    ctx.font = fontSans(12);
-    ctx.textAlign = "center";
-    ctx.fillText(row.name.slice(0, 1), px + 70, y + rh / 2 - 4);
-    ctx.textAlign = "left";
-    ctx.font = fontSans(14);
-    ctx.fillText(row.name, px + 96, y + rh / 2 - 4);
+    ctx.fillText(ranks[i] || String(i + 1), px + 24, y + rh / 2 - 2);
+    ctx.font = fontSans(13);
+    ctx.fillText(row.name, px + 56, y + rh / 2 - 2);
     ctx.textAlign = "right";
-    ctx.font = fontSerif(14, "600");
-    ctx.fillText(`${row.pieces.toLocaleString()} 根`, px + pw - 28, y + rh / 2 - 4);
+    ctx.font = fontSerif(13, "600");
+    ctx.fillText(`${row.pieces.toLocaleString()} 根`, px + pw - 24, y + rh / 2 - 2);
     y += rh;
   });
 
   ctx.textAlign = "center";
   ctx.fillStyle = INK_SOFT;
-  ctx.font = fontSans(12);
-  ctx.fillText(COPY_C.rankInvite, w / 2, py + ph - 70);
   ctx.font = fontSans(11);
-  ctx.fillText(COPY_C.rankScoreHint, w / 2, py + ph - 52);
+  ctx.fillText(COPY_C.rankInvite, w / 2, py + ph - 58);
+  paintLeatherBtn(ctx, tex, (w - 140) / 2, py + ph - 42, 140, 40, COPY_C.back, dpr);
+  pushHit(hits, "rank_close", (w - 140) / 2, py + ph - 42, 140, 40);
+}
 
-  const bw = 140;
-  const bh = 44;
-  const bx = (w - bw) / 2;
-  const by = py + ph - 40;
-  paintLeatherBtn(ctx, tex, bx, by, bw, bh, COPY_C.back);
-  pushHit(hits, "rank_close", bx, by, bw, bh);
+function drawSpotlight(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  hole: { x: number; y: number; w: number; h: number },
+  round = false,
+) {
+  ctx.save();
+  ctx.fillStyle = "rgba(20,12,6,0.58)";
+  ctx.beginPath();
+  ctx.rect(0, 0, w, h);
+  if (round) {
+    const cx = hole.x + hole.w / 2;
+    const cy = hole.y + hole.h / 2;
+    const rx = hole.w / 2;
+    const ry = hole.h / 2;
+    ctx.moveTo(cx + rx, cy);
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2, true);
+  } else {
+    const r = 10;
+    const { x, y, w: hw, h: hh } = hole;
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + hw, y, x + hw, y + hh, r);
+    ctx.arcTo(x + hw, y + hh, x, y + hh, r);
+    ctx.arcTo(x, y + hh, x, y, r);
+    ctx.arcTo(x, y, x + hw, y, r);
+    ctx.closePath();
+  }
+  ctx.fill("evenodd");
+  ctx.restore();
+}
+
+export function paintGuide(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  step: number,
+  tex: TexMap,
+  hits: HitRect[],
+  targets?: GuideTargets,
+) {
+  const dpr = getUiDpr();
+  const copy = GUIDE_COPY[step as 1 | 2 | 3] || GUIDE_COPY[1];
+
+  let hole = { x: w * 0.22, y: h * 0.32, w: w * 0.56, h: h * 0.28 };
+  let round = true;
+  if (step === 1 && targets?.log) {
+    hole = { ...targets.log };
+    round = true;
+  } else if (step === 2 && targets?.roots) {
+    hole = { ...targets.roots };
+    round = false;
+  } else if (step === 3 && targets?.icons) {
+    hole = { ...targets.icons };
+    round = false;
+  }
+
+  drawSpotlight(ctx, w, h, hole, round);
+  if (tex.guide_ring) {
+    const pad = 8;
+    ctx.drawImage(
+      tex.guide_ring.img,
+      snapPt(hole.x - pad, dpr),
+      snapPt(hole.y - pad, dpr),
+      snapPt(hole.w + pad * 2, dpr),
+      snapPt(hole.h + pad * 2, dpr),
+    );
+  }
+
+  // bubble
+  const bw = Math.min(220, w * 0.72);
+  const bh = 72;
+  let bx = (w - bw) / 2;
+  let by = hole.y - bh - 28;
+  if (step === 2) by = hole.y + hole.h + 16;
+  if (step === 3) {
+    bx = Math.max(12, hole.x - bw - 12);
+    by = hole.y + 8;
+  }
+  if (by < 48) by = hole.y + hole.h + 16;
+  drawTexNine(ctx, tex.guide_bubble, bx, by, bw, bh, dpr);
+  if (tex.guide_tail) {
+    const tw = 28;
+    const th = 18;
+    if (step === 1) {
+      ctx.drawImage(tex.guide_tail.img, snapPt(bx + bw / 2 - tw / 2, dpr), snapPt(by + bh - 4, dpr), tw, th);
+    } else if (step === 2) {
+      ctx.save();
+      ctx.translate(snapPt(bx + bw / 2, dpr), snapPt(by + 2, dpr));
+      ctx.scale(1, -1);
+      ctx.drawImage(tex.guide_tail.img, -tw / 2, 0, tw, th);
+      ctx.restore();
+    }
+  }
+  ctx.fillStyle = INK;
+  ctx.font = fontSerif(15, "700");
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText(copy.title, snapPt(bx + bw / 2, dpr), snapPt(by + 28, dpr));
+  ctx.fillStyle = INK_SOFT;
+  ctx.font = fontSans(12);
+  ctx.fillText(copy.body, snapPt(bx + bw / 2, dpr), snapPt(by + 50, dpr));
+
+  if (step === 1 && tex.guide_hand) {
+    const t = (performance.now() % 900) / 900;
+    const press = Math.sin(t * Math.PI) * 3;
+    const sc = 1 - Math.sin(t * Math.PI) * 0.1;
+    const hx = hole.x + hole.w / 2 - 16;
+    const hy = hole.y + hole.h * 0.35 + press;
+    const hs = 48 * sc;
+    ctx.drawImage(tex.guide_hand.img, snapPt(hx, dpr), snapPt(hy, dpr), hs, hs);
+  }
+
+  // skip strip bottom
+  const skipW = 84;
+  const skipH = 32;
+  const skipX = (w - skipW) / 2;
+  const skipY = Math.min(h - 80, 712);
+  paintStripBtn(ctx, tex, skipX, skipY, skipW, skipH, "跳过 ›", dpr);
+  pushHit(hits, "guide_skip", skipX, skipY, skipW, skipH);
+
+  if (step === 3) {
+    const btnW = 200;
+    const btnH = 48;
+    const btnX = (w - btnW) / 2;
+    const btnY = skipY - 64;
+    paintLeatherBtn(ctx, tex, btnX, btnY, btnW, btnH, "知道了，开砍！", dpr);
+    pushHit(hits, "guide_next", btnX, btnY, btnW, btnH);
+  } else if (step === 2) {
+    ctx.fillStyle = "rgba(243,230,200,0.75)";
+    ctx.font = fontSans(12);
+    ctx.textAlign = "center";
+    ctx.fillText("轻点任意处继续", w / 2, skipY - 24);
+    pushHit(hits, "guide_tap", 0, 0, w, h);
+  }
+  // step1：可交互，不挡游戏点击（不推全屏 hit）
 }
 
 export function paintParchmentUi(
@@ -577,27 +693,26 @@ export function paintParchmentUi(
 ): HitRect[] {
   const hits: HitRect[] = [];
   const tex = getParchmentTextures();
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
 
   if (state.loading) {
-    paintParchmentLoading(
-      ctx,
-      w,
-      h,
-      state.loading.loaded,
-      state.loading.total,
-      state.loading.status,
-    );
+    paintParchmentLoading(ctx, w, h, state.loading.loaded, state.loading.total, state.loading.status);
     return hits;
   }
 
   const guideOn = Boolean(state.guideStep && state.guideStep >= 1 && state.guideStep <= 3);
+  let targets = state.guideTargets;
 
-  if (state.economy && state.panel !== "rank" && !guideOn) {
-    paintEconomyHud(ctx, w, h, state.economy, tex, hits);
+  if (state.economy && state.panel !== "rank") {
+    targets = paintEconomyHud(ctx, w, h, state.economy, tex, hits, {
+      adRemaining: state.adRemaining,
+      hideClaimStrip: guideOn,
+    });
   }
 
   if (guideOn) {
-    paintGuide(ctx, w, h, state.guideStep!, tex, hits);
+    paintGuide(ctx, w, h, state.guideStep!, tex, hits, targets);
   } else if (state.panel === "claim" && state.economy) {
     paintClaimOrExhausted(ctx, w, h, state.economy, tex, hits, "claim");
   } else if (state.panel === "exhausted" && state.economy) {
@@ -607,11 +722,11 @@ export function paintParchmentUi(
   }
 
   if (state.toast) {
-    ctx.fillStyle = "rgba(40,28,16,0.75)";
-    const tw = Math.min(w * 0.8, 320);
-    const th = 40;
+    const tw = Math.min(w * 0.8, 300);
+    const th = 36;
     const tx = (w - tw) / 2;
-    const ty = h * 0.18;
+    const ty = h * 0.16;
+    ctx.fillStyle = "rgba(40,28,16,0.78)";
     ctx.fillRect(tx, ty, tw, th);
     ctx.fillStyle = CREAM;
     ctx.font = fontSans(13);
@@ -630,3 +745,6 @@ export function hitTestUi(hits: HitRect[], x: number, y: number): UiHit {
   }
   return null;
 }
+
+/** 兼容旧导出名 */
+export function paintEconomyHudLegacy() {}

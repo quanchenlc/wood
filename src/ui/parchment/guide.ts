@@ -1,24 +1,23 @@
-/** 首次三步引导：本地一次，可跳过。文案占位，美术后续换视觉。 */
+/** 首次三步引导 — 规格见 ui-parchment-v2/notes-v3.md §5 */
 
-export const STORAGE_KEY_GUIDE = "fw_onboarding_guide_v1";
+export const STORAGE_KEY_GUIDE = "fw_guide_v1";
 
-export const GUIDE_STEPS = [
-  {
-    step: 1,
-    title: "点树桩劈柴",
-    body: "对准树桩点三刀，树根入垛才算一棵。",
+export type GuideMark = "done" | "skipped";
+
+export const GUIDE_COPY = {
+  1: {
+    title: "点一下木头，劈开它",
+    body: "按住左右拖动，可以转着看",
   },
-  {
-    step: 2,
-    title: "柴棚领取",
-    body: "离线攒的树根在柴棚待取，回来一键领取。",
+  2: {
+    title: "树根每天有限，砍完会慢慢长回来",
+    body: "看「剩余树根」和「生长倒计时」",
   },
-  {
-    step: 3,
-    title: "广告加速",
-    body: "看一支短片可推进疏伐；加额度可选，领取不锁。",
+  3: {
+    title: "看短片，树根长得更快",
+    body: "好友柴榜：比比谁砍得多",
   },
-] as const;
+} as const;
 
 function wxStorage():
   | {
@@ -36,42 +35,83 @@ function wxStorage():
     : undefined;
 }
 
-export function isGuideDone(): boolean {
+export function readGuideMark(): GuideMark | null {
   try {
     const raw = wxStorage()?.getStorageSync?.(STORAGE_KEY_GUIDE);
-    if (raw === "1" || raw === 1 || raw === true) return true;
+    if (raw === "done" || raw === "skipped") return raw;
+    // 兼容 0.3.2
+    if (raw === "1" || raw === 1 || raw === true) return "done";
   } catch {
     /* ignore */
   }
   try {
-    return localStorage?.getItem?.(STORAGE_KEY_GUIDE) === "1";
+    const raw = localStorage?.getItem?.(STORAGE_KEY_GUIDE);
+    if (raw === "done" || raw === "skipped") return raw;
+    if (raw === "1") return "done";
   } catch {
-    return false;
+    /* ignore */
+  }
+  return null;
+}
+
+export function isGuideDone(): boolean {
+  return readGuideMark() !== null;
+}
+
+export function markGuide(mark: GuideMark) {
+  try {
+    wxStorage()?.setStorageSync?.(STORAGE_KEY_GUIDE, mark);
+  } catch {
+    /* ignore */
+  }
+  try {
+    localStorage?.setItem?.(STORAGE_KEY_GUIDE, mark);
+  } catch {
+    /* ignore */
   }
 }
 
 export function markGuideDone() {
-  try {
-    wxStorage()?.setStorageSync?.(STORAGE_KEY_GUIDE, "1");
-  } catch {
-    /* ignore */
-  }
-  try {
-    localStorage?.setItem?.(STORAGE_KEY_GUIDE, "1");
-  } catch {
-    /* ignore */
-  }
+  markGuide("done");
 }
 
-/** harness / 调试重置 */
 export function resetGuideForTests() {
   try {
-    wxStorage()?.setStorageSync?.(STORAGE_KEY_GUIDE, "0");
+    wxStorage()?.setStorageSync?.(STORAGE_KEY_GUIDE, "");
   } catch {
     /* ignore */
   }
   try {
     localStorage?.removeItem?.(STORAGE_KEY_GUIDE);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** 埋点：控制台 + 可选 wx.reportAnalytics / 自定义钩子 */
+export function trackGuide(
+  event: "guide_step_view" | "guide_complete" | "guide_skip",
+  payload?: { step?: number },
+) {
+  const detail = { event, ...payload, t: Date.now() };
+  try {
+    console.log("[analytics]", detail);
+  } catch {
+    /* ignore */
+  }
+  try {
+    const g = globalThis as {
+      __FIREWOOD_ANALYTICS__?: (d: unknown) => void;
+      wx?: { reportAnalytics?: (name: string, data: Record<string, number>) => void };
+    };
+    g.__FIREWOOD_ANALYTICS__?.(detail);
+    if (event === "guide_step_view" && payload?.step != null) {
+      g.wx?.reportAnalytics?.("guide_step_view", { step: payload.step });
+    } else if (event === "guide_complete") {
+      g.wx?.reportAnalytics?.("guide_complete", { v: 1 });
+    } else if (event === "guide_skip" && payload?.step != null) {
+      g.wx?.reportAnalytics?.("guide_skip", { step: payload.step });
+    }
   } catch {
     /* ignore */
   }

@@ -1,107 +1,605 @@
 {
-  "name": "ui-parchment-v2",
-  "version": "2.1",
-  "total_texture_bytes": 200965,
-  "total_texture_kb": 196.3,
-  "textures": [
-    {
-      "file": "bg_parchment.jpg",
-      "width": 576,
-      "height": 1024,
-      "bytes": 104953,
-      "nine_slice_insets": null,
-      "role": "fullscreen parchment background (cover/contain)"
+ "name": "ui-parchment-v2",
+ "version": "3.0",
+ "design_space": "375x812 logical pt (CSS px); mockups rendered @2x = 750x1624",
+ "density_note": "scale = texels per logical pt. Draw size (pt) = texture px / scale. 9-slice: source insets = nine_slice_insets (px), destination insets = nine_slice_insets_pt (pt).",
+ "nine_slice_convention": "[left, top, right, bottom]",
+ "total_texture_bytes": 491827,
+ "total_texture_kb": 480.3,
+ "textures": [
+  {
+   "file": "btn_icon_ad@2x.png",
+   "width": 156,
+   "height": 156,
+   "bytes": 15346,
+   "scale": 3,
+   "logical_size": [
+    52,
+    52
+   ],
+   "nine_slice_insets_pt": null,
+   "role": "round icon button 看短片加速/额度 (rewarded video); label drawn at runtime under the disc",
+   "nine_slice_insets": null,
+   "png": "PNG8 pngquant q≥70-95, light dither, full alpha",
+   "variants": {
+    "3x": {
+     "file": "btn_icon_ad@3x.png",
+     "bytes": 15346,
+     "width": 156,
+     "height": 156
     },
-    {
-      "file": "btn_leather.png",
-      "width": 340,
-      "height": 120,
-      "bytes": 14836,
-      "nine_slice_insets": [
-        40,
-        28,
-        40,
-        28
-      ],
-      "role": "primary CTA leather button"
-    },
-    {
-      "file": "chip_boost.png",
-      "width": 280,
-      "height": 64,
-      "bytes": 7323,
-      "nine_slice_insets": [
-        20,
-        14,
-        20,
-        14
-      ],
-      "role": "economy HUD chip accent for 加速中"
-    },
-    {
-      "file": "chip_parchment.png",
-      "width": 280,
-      "height": 64,
-      "bytes": 8319,
-      "nine_slice_insets": [
-        20,
-        14,
-        20,
-        14
-      ],
-      "role": "economy HUD chip (今日已砍 / 剩余树根 / 生长倒计时)"
-    },
-    {
-      "file": "panel_vellum.png",
-      "width": 400,
-      "height": 300,
-      "bytes": 37360,
-      "nine_slice_insets": [
-        60,
-        60,
-        60,
-        60
-      ],
-      "role": "modal / ranking panel 9-slice"
-    },
-    {
-      "file": "ribbon_madder.png",
-      "width": 380,
-      "height": 75,
-      "bytes": 8891,
-      "nine_slice_insets": [
-        70,
-        18,
-        70,
-        18
-      ],
-      "role": "title ribbon (swallowtail ends)"
-    },
-    {
-      "file": "seal_wax.png",
-      "width": 128,
-      "height": 129,
-      "bytes": 7641,
-      "nine_slice_insets": null,
-      "role": "decorative wax seal accent"
-    },
-    {
-      "file": "strip_parchment.png",
-      "width": 360,
-      "height": 80,
-      "bytes": 11642,
-      "nine_slice_insets": [
-        24,
-        16,
-        24,
-        16
-      ],
-      "role": "secondary button / list-row highlight strip"
+    "2x": {
+     "file": "btn_icon_ad@2x.png",
+     "bytes": 8045,
+     "width": 104,
+     "height": 104
     }
-  ],
-  "nine_slice_convention": "insets = [left, top, right, bottom] in source pixels (1x). When shipping @2x, name files `foo@2x.png`; runtime scales insets by naturalWidth/logicalWidth.",
-  "hidpi": {
-    "convention": "optional sibling `name@2x.ext` next to 1x; preferred when devicePixelRatio ≥ 1.5, else fallback 1x",
-    "example": ["chip_parchment.png", "chip_parchment@2x.png"]
+   }
+  },
+  {
+   "file": "btn_icon_help@2x.png",
+   "width": 156,
+   "height": 156,
+   "bytes": 15768,
+   "scale": 3,
+   "logical_size": [
+    52,
+    52
+   ],
+   "nine_slice_insets_pt": null,
+   "role": "round icon button 重看新手引导; label drawn at runtime under the disc",
+   "nine_slice_insets": null,
+   "png": "PNG8 pngquant q≥70-95, light dither, full alpha",
+   "variants": {
+    "3x": {
+     "file": "btn_icon_help@3x.png",
+     "bytes": 15768,
+     "width": 156,
+     "height": 156
+    },
+    "2x": {
+     "file": "btn_icon_help@2x.png",
+     "bytes": 7635,
+     "width": 104,
+     "height": 104
+    }
+   }
+  },
+  {
+   "file": "btn_icon_rank@2x.png",
+   "width": 156,
+   "height": 156,
+   "bytes": 15826,
+   "scale": 3,
+   "logical_size": [
+    52,
+    52
+   ],
+   "nine_slice_insets_pt": null,
+   "role": "round icon button 好友柴榜; label drawn at runtime under the disc",
+   "nine_slice_insets": null,
+   "png": "PNG8 pngquant q≥70-95, light dither, full alpha",
+   "variants": {
+    "3x": {
+     "file": "btn_icon_rank@3x.png",
+     "bytes": 15826,
+     "width": 156,
+     "height": 156
+    },
+    "2x": {
+     "file": "btn_icon_rank@2x.png",
+     "bytes": 8266,
+     "width": 104,
+     "height": 104
+    }
+   }
+  },
+  {
+   "file": "btn_leather@2x.png",
+   "width": 660,
+   "height": 180,
+   "bytes": 65345,
+   "scale": 3,
+   "logical_size": [
+    220,
+    60
+   ],
+   "nine_slice_insets_pt": [
+    26,
+    18,
+    26,
+    18
+   ],
+   "role": "primary CTA (claim / watch ad)",
+   "nine_slice_insets": [
+    78,
+    54,
+    78,
+    54
+   ],
+   "png": "PNG8 pngquant q≥70-95, light dither, full alpha",
+   "variants": {
+    "3x": {
+     "file": "btn_leather@3x.png",
+     "bytes": 65345,
+     "width": 660,
+     "height": 180
+    },
+    "2x": {
+     "file": "btn_leather@2x.png",
+     "bytes": 32489,
+     "width": 440,
+     "height": 120
+    }
+   },
+   "nine_slice_insets_2x": [
+    52,
+    36,
+    52,
+    36
+   ]
+  },
+  {
+   "file": "chip_boost@2x.png",
+   "width": 450,
+   "height": 108,
+   "bytes": 26535,
+   "scale": 3,
+   "logical_size": [
+    150,
+    36
+   ],
+   "nine_slice_insets_pt": [
+    14,
+    10,
+    14,
+    10
+   ],
+   "role": "economy HUD chip accent 加速中",
+   "nine_slice_insets": [
+    42,
+    30,
+    42,
+    30
+   ],
+   "png": "PNG8 pngquant q≥70-95, light dither, full alpha",
+   "variants": {
+    "3x": {
+     "file": "chip_boost@3x.png",
+     "bytes": 26535,
+     "width": 450,
+     "height": 108
+    },
+    "2x": {
+     "file": "chip_boost@2x.png",
+     "bytes": 12374,
+     "width": 300,
+     "height": 72
+    }
+   },
+   "nine_slice_insets_2x": [
+    28,
+    20,
+    28,
+    20
+   ]
+  },
+  {
+   "file": "chip_parchment@2x.png",
+   "width": 450,
+   "height": 108,
+   "bytes": 30700,
+   "scale": 3,
+   "logical_size": [
+    150,
+    36
+   ],
+   "nine_slice_insets_pt": [
+    14,
+    10,
+    14,
+    10
+   ],
+   "role": "economy HUD chip 今日已砍/剩余树根/生长倒计时",
+   "nine_slice_insets": [
+    42,
+    30,
+    42,
+    30
+   ],
+   "png": "PNG8 pngquant q≥70-95, light dither, full alpha",
+   "variants": {
+    "3x": {
+     "file": "chip_parchment@3x.png",
+     "bytes": 30700,
+     "width": 450,
+     "height": 108
+    },
+    "2x": {
+     "file": "chip_parchment@2x.png",
+     "bytes": 14949,
+     "width": 300,
+     "height": 72
+    }
+   },
+   "nine_slice_insets_2x": [
+    28,
+    20,
+    28,
+    20
+   ]
+  },
+  {
+   "file": "guide_bubble@2x.png",
+   "width": 600,
+   "height": 192,
+   "bytes": 62664,
+   "scale": 3,
+   "logical_size": [
+    200,
+    64
+   ],
+   "nine_slice_insets_pt": [
+    18,
+    16,
+    18,
+    16
+   ],
+   "role": "onboarding speech bubble 9-slice (text at runtime)",
+   "nine_slice_insets": [
+    54,
+    48,
+    54,
+    48
+   ],
+   "png": "PNG8 pngquant q≥70-95, light dither, full alpha",
+   "variants": {
+    "3x": {
+     "file": "guide_bubble@3x.png",
+     "bytes": 62664,
+     "width": 600,
+     "height": 192
+    },
+    "2x": {
+     "file": "guide_bubble@2x.png",
+     "bytes": 32311,
+     "width": 400,
+     "height": 128
+    }
+   },
+   "nine_slice_insets_2x": [
+    36,
+    32,
+    36,
+    32
+   ]
+  },
+  {
+   "file": "guide_hand@2x.png",
+   "width": 192,
+   "height": 192,
+   "bytes": 2926,
+   "scale": 3,
+   "logical_size": [
+    64,
+    64
+   ],
+   "nine_slice_insets_pt": null,
+   "role": "tap pointer; fingertip hotspot at (30,3)pt from top-left; anim: scale 1->0.9 + 4pt press, 0.9s loop",
+   "nine_slice_insets": null,
+   "png": "PNG8 pngquant q≥70-95, light dither, full alpha",
+   "variants": {
+    "3x": {
+     "file": "guide_hand@3x.png",
+     "bytes": 2926,
+     "width": 192,
+     "height": 192
+    },
+    "2x": {
+     "file": "guide_hand@2x.png",
+     "bytes": 2082,
+     "width": 128,
+     "height": 128
+    }
+   }
+  },
+  {
+   "file": "guide_ring@2x.png",
+   "width": 288,
+   "height": 288,
+   "bytes": 6530,
+   "scale": 3,
+   "logical_size": [
+    96,
+    96
+   ],
+   "nine_slice_insets_pt": null,
+   "role": "spotlight outline (cream ink stroke) drawn around the cutout; stretch to target rect",
+   "nine_slice_insets": null,
+   "png": "PNG8 pngquant q≥70-95, light dither, full alpha",
+   "variants": {
+    "3x": {
+     "file": "guide_ring@3x.png",
+     "bytes": 6530,
+     "width": 288,
+     "height": 288
+    },
+    "2x": {
+     "file": "guide_ring@2x.png",
+     "bytes": 4125,
+     "width": 192,
+     "height": 192
+    }
+   }
+  },
+  {
+   "file": "guide_tail@2x.png",
+   "width": 84,
+   "height": 54,
+   "bytes": 842,
+   "scale": 3,
+   "logical_size": [
+    28,
+    18
+   ],
+   "nine_slice_insets_pt": null,
+   "role": "bubble tail, points down; overlap bubble bottom edge by 2pt; rotate/flip for other sides",
+   "nine_slice_insets": null,
+   "png": "PNG8 pngquant q≥70-95, light dither, full alpha",
+   "variants": {
+    "3x": {
+     "file": "guide_tail@3x.png",
+     "bytes": 842,
+     "width": 84,
+     "height": 54
+    },
+    "2x": {
+     "file": "guide_tail@2x.png",
+     "bytes": 696,
+     "width": 56,
+     "height": 36
+    }
+   }
+  },
+  {
+   "file": "panel_vellum@2x.png",
+   "width": 600,
+   "height": 450,
+   "bytes": 116337,
+   "scale": 2,
+   "logical_size": [
+    300,
+    225
+   ],
+   "nine_slice_insets_pt": [
+    40,
+    40,
+    40,
+    40
+   ],
+   "role": "modal / ranking panel 9-slice (density 2 texel/pt)",
+   "nine_slice_insets": [
+    80,
+    80,
+    80,
+    80
+   ],
+   "png": "PNG8 pngquant q≥70-95, light dither, full alpha",
+   "variants": {
+    "2x": {
+     "file": "panel_vellum@2x.png",
+     "bytes": 94671,
+     "width": 600,
+     "height": 450
+    }
+   },
+   "nine_slice_insets_2x": [
+    80,
+    80,
+    80,
+    80
+   ]
+  },
+  {
+   "file": "ribbon_madder@2x.png",
+   "width": 780,
+   "height": 156,
+   "bytes": 50427,
+   "scale": 3,
+   "logical_size": [
+    260,
+    52
+   ],
+   "nine_slice_insets_pt": [
+    48,
+    12,
+    48,
+    12
+   ],
+   "role": "title ribbon; L/R insets keep swallowtails",
+   "nine_slice_insets": [
+    144,
+    36,
+    144,
+    36
+   ],
+   "png": "PNG8 pngquant q≥70-95, light dither, full alpha",
+   "variants": {
+    "3x": {
+     "file": "ribbon_madder@3x.png",
+     "bytes": 50427,
+     "width": 780,
+     "height": 156
+    },
+    "2x": {
+     "file": "ribbon_madder@2x.png",
+     "bytes": 27777,
+     "width": 520,
+     "height": 104
+    }
+   },
+   "nine_slice_insets_2x": [
+    96,
+    24,
+    96,
+    24
+   ]
+  },
+  {
+   "file": "seal_wax@2x.png",
+   "width": 192,
+   "height": 192,
+   "bytes": 28809,
+   "scale": 3,
+   "logical_size": [
+    64,
+    64
+   ],
+   "nine_slice_insets_pt": null,
+   "role": "wax seal accent; uniform scale",
+   "nine_slice_insets": null,
+   "png": "PNG8 pngquant q≥70-95, light dither, full alpha",
+   "variants": {
+    "3x": {
+     "file": "seal_wax@3x.png",
+     "bytes": 28809,
+     "width": 192,
+     "height": 192
+    },
+    "2x": {
+     "file": "seal_wax@2x.png",
+     "bytes": 13774,
+     "width": 128,
+     "height": 128
+    }
+   }
+  },
+  {
+   "file": "strip_parchment@2x.png",
+   "width": 720,
+   "height": 144,
+   "bytes": 53772,
+   "scale": 3,
+   "logical_size": [
+    240,
+    48
+   ],
+   "nine_slice_insets_pt": [
+    16,
+    12,
+    16,
+    12
+   ],
+   "role": "secondary button / list-row highlight",
+   "nine_slice_insets": [
+    48,
+    36,
+    48,
+    36
+   ],
+   "png": "PNG8 pngquant q≥70-95, light dither, full alpha",
+   "variants": {
+    "3x": {
+     "file": "strip_parchment@3x.png",
+     "bytes": 53772,
+     "width": 720,
+     "height": 144
+    },
+    "2x": {
+     "file": "strip_parchment@2x.png",
+     "bytes": 28718,
+     "width": 480,
+     "height": 96
+    }
+   },
+   "nine_slice_insets_2x": [
+    32,
+    24,
+    32,
+    24
+   ]
   }
+ ],
+ "optional": [
+  {
+   "file": "bg_parchment.jpg",
+   "width": 576,
+   "height": 1024,
+   "bytes": 155297,
+   "scale": 3,
+   "logical_size": [
+    375,
+    667
+   ],
+   "role": "OPTIONAL (not in runtime set): splash backdrop; loading is procedural canvas",
+   "format": "JPEG q88 progressive"
+  }
+ ],
+ "removed_from_runtime": [
+  "bg_parchment.jpg (moved to optional/; loading is procedural canvas and the game opens straight into 3D)"
+ ],
+ "mockups": [
+  {
+   "file": "01_launch_3d.png",
+   "width": 750,
+   "height": 1624,
+   "bytes": 1139563
+  },
+  {
+   "file": "02_exhausted_ad.png",
+   "width": 750,
+   "height": 1624,
+   "bytes": 1137930
+  },
+  {
+   "file": "03_ranking.png",
+   "width": 750,
+   "height": 1624,
+   "bytes": 1112767
+  },
+  {
+   "file": "04_loading_to_scene.png",
+   "width": 1540,
+   "height": 1624,
+   "bytes": 1131815
+  },
+  {
+   "file": "05_safe_zones.png",
+   "width": 750,
+   "height": 1624,
+   "bytes": 1137552
+  },
+  {
+   "file": "06_guide_step1.png",
+   "width": 750,
+   "height": 1624,
+   "bytes": 1010156
+  },
+  {
+   "file": "06_guide_step2.png",
+   "width": 750,
+   "height": 1624,
+   "bytes": 990699
+  },
+  {
+   "file": "06_guide_step3.png",
+   "width": 750,
+   "height": 1624,
+   "bytes": 999275
+  },
+  {
+   "file": "07_sharpness_before_after.png",
+   "width": 1120,
+   "height": 698,
+   "bytes": 151344
+  },
+  {
+   "file": "overview.png",
+   "width": 1180,
+   "height": 1368,
+   "bytes": 1459988
+  }
+ ],
+ "naming": "name@2x.png is the default runtime slice (2 texels per pt); name@3x.png optional for dpr3 where present. 9-slice insets: nine_slice_insets_2x (px in @2x), nine_slice_insets_pt (dest).",
+ "total_2x_bytes": 287912
 }

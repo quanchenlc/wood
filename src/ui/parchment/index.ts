@@ -1,6 +1,9 @@
 export {
   loadParchmentTextures,
   getParchmentTextures,
+  ensureUiSubpackage,
+  setUiDpr,
+  getUiDpr,
   parchmentUrl,
   at2xName,
   NINE_SLICE,
@@ -16,11 +19,15 @@ export {
   type PanelMode,
   type UiHit,
   type HitRect,
+  type GuideTargets,
 } from "./paint";
 export {
-  GUIDE_STEPS,
+  GUIDE_COPY,
   isGuideDone,
+  markGuide,
   markGuideDone,
   resetGuideForTests,
+  trackGuide,
+  readGuideMark,
   STORAGE_KEY_GUIDE,
 } from "./guide";

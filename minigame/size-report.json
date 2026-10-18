@@ -1,7 +1,7 @@
 {
   "appid": "wx3371f99b1b0e73d1",
-  "mainPackageBytes": 1367470,
-  "mainPackage": "1.30 MB",
+  "mainPackageBytes": 1168686,
+  "mainPackage": "1.11 MB",
   "mainUnder4MB": true,
   "assetsSubpackageBytes": 5500988,
   "assetsSubpackage": "5.25 MB",
@@ -9,6 +9,10 @@
     "assets": {
       "bytes": 5500988,
       "size": "5.25 MB"
+    },
+    "ui-parchment": {
+      "bytes": 674808,
+      "size": "0.64 MB"
     },
     "art-set1": {
       "bytes": 2622053,
@@ -27,8 +31,8 @@
       "size": "2.03 MB"
     }
   },
-  "subpackagesTotalBytes": 13201172,
-  "subpackagesTotal": "12.59 MB",
+  "subpackagesTotalBytes": 13875980,
+  "subpackagesTotal": "13.23 MB",
   "bundle": "1.05 MB",
   "largestMain": [
     {
@@ -36,32 +40,32 @@
       "size": "1.05 MB"
     },
     {
-      "file": "ui/parchment/bg_parchment.jpg",
-      "size": "0.10 MB"
-    },
-    {
-      "file": "ui/parchment/panel_vellum.png",
-      "size": "0.04 MB"
-    },
-    {
-      "file": "ui/parchment/btn_leather.png",
-      "size": "0.01 MB"
-    },
-    {
-      "file": "ui/parchment/strip_parchment.png",
-      "size": "0.01 MB"
-    },
-    {
       "file": "adapter/audio.js",
       "size": "0.01 MB"
     },
     {
-      "file": "ui/parchment/ribbon_madder.png",
+      "file": "adapter/index.js",
       "size": "0.01 MB"
     },
     {
-      "file": "ui/parchment/chip_parchment.png",
+      "file": "adapter/fetch.js",
       "size": "0.01 MB"
+    },
+    {
+      "file": "adapter/abort.js",
+      "size": "0.00 MB"
+    },
+    {
+      "file": "adapter/document.js",
+      "size": "0.00 MB"
+    },
+    {
+      "file": "adapter/xhr.js",
+      "size": "0.00 MB"
+    },
+    {
+      "file": "adapter/blob.js",
+      "size": "0.00 MB"
     }
   ]
 }

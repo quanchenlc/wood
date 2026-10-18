@@ -38,14 +38,16 @@ import {
 } from "./art/parchmentLook";
 import type { ArtSetId } from "./art/types";
 import { isArtSetId } from "./art/registry";
-import { COPY_C, getEconomy } from "./economy";
+import { COPY_C, DESIGN_C, getEconomy } from "./economy";
+import { ScenePresenter } from "./core/scenePresent";
 import {
   isGuideDone,
   loadParchmentTextures,
-  markGuideDone,
+  markGuide,
   resetGuideForTests,
+  trackGuide,
 } from "./ui/parchment";
-import type { PanelMode, ParchmentUiState } from "./ui/parchment";
+import type { GuideTargets, PanelMode, ParchmentUiState } from "./ui/parchment";
 
 const renderer = createRenderer();
 const scene = createScene();
@@ -85,12 +87,25 @@ let clearGroundFade: (() => void) | null = null;
 let clearStumpDiscFade: (() => void) | null = null;
 let hemi: THREE.HemisphereLight | null = null;
 const economy = getEconomy();
+const presenter = new ScenePresenter(renderer);
 let uiPanel: PanelMode = "none";
 let uiToast: string | null = null;
 let toastUntil = 0;
 let uiBusy = false;
 /** 首次引导：1–3；null 表示已完成/跳过 */
-let guideStep: number | null = isGuideDone() ? null : 1;
+let guideStep: number | null = null;
+let guideAdvanceAt = 0;
+let guideTargets: GuideTargets = {};
+let lastGuideTracked = 0;
+
+function initGuideStep() {
+  if (isGuideDone()) {
+    guideStep = null;
+    return;
+  }
+  // 开局无树根额度 → 从 2/3 开始
+  guideStep = economy.canActiveChop() ? 1 : 2;
+}
 
 function showToast(text: string, ms = 2200) {
   uiToast = text;
@@ -98,9 +113,12 @@ function showToast(text: string, ms = 2200) {
   syncParchmentHud();
 }
 
-function finishGuide() {
+function finishGuide(mark: "done" | "skipped" = "done") {
+  const step = guideStep;
   guideStep = null;
-  markGuideDone();
+  markGuide(mark);
+  if (mark === "done") trackGuide("guide_complete");
+  else trackGuide("guide_skip", { step: step ?? 0 });
   syncParchmentHud();
 }
 
@@ -108,7 +126,13 @@ function syncParchmentHud() {
   const hud = ensureHud();
   if (!hud?.setParchmentUi) return;
   if (uiToast && performance.now() > toastUntil) uiToast = null;
+  if (guideStep && guideStep !== lastGuideTracked) {
+    trackGuide("guide_step_view", { step: guideStep });
+    lastGuideTracked = guideStep;
+  }
   const snap = economy.snapshot();
+  const adLeft =
+    DESIGN_C.ads.AD_OFFLINE_SKIP.dailyLimit - snap.state.ad_daily_offline_skip;
   const state: ParchmentUiState = {
     panel: uiPanel,
     toast: uiToast,
@@ -116,6 +140,8 @@ function syncParchmentHud() {
     economy: snap,
     selfRank: { name: "我", pieces: snap.state.total_pieces, rank: 5 },
     guideStep,
+    guideTargets,
+    adRemaining: Math.max(0, adLeft),
   };
   hud.setParchmentUi(state);
 }
@@ -126,13 +152,44 @@ function openExhaustedPanel() {
   syncParchmentHud();
 }
 
-function openClaimIfNeeded() {
-  if (guideStep) return;
-  const snap = economy.snapshot();
-  if (snap.state.pending_claim > 0) {
-    uiPanel = "claim";
-    syncParchmentHud();
+function projectLogTarget(): GuideTargets["log"] | undefined {
+  if (!game) return undefined;
+  const pieces = game.getSplittablePieces();
+  if (!pieces.length) return undefined;
+  const box = new THREE.Box3();
+  for (const { mesh } of pieces) box.expandByObject(mesh);
+  if (box.isEmpty()) return undefined;
+  const corners = [
+    new THREE.Vector3(box.min.x, box.min.y, box.min.z),
+    new THREE.Vector3(box.min.x, box.min.y, box.max.z),
+    new THREE.Vector3(box.min.x, box.max.y, box.min.z),
+    new THREE.Vector3(box.min.x, box.max.y, box.max.z),
+    new THREE.Vector3(box.max.x, box.min.y, box.min.z),
+    new THREE.Vector3(box.max.x, box.min.y, box.max.z),
+    new THREE.Vector3(box.max.x, box.max.y, box.min.z),
+    new THREE.Vector3(box.max.x, box.max.y, box.max.z),
+  ];
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  const v = new THREE.Vector3();
+  for (const c of corners) {
+    v.copy(c).project(camera);
+    const x = ((v.x + 1) / 2) * window.innerWidth;
+    const y = ((-v.y + 1) / 2) * window.innerHeight;
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y);
+    maxY = Math.max(maxY, y);
   }
+  const pad = 24;
+  return {
+    x: minX - pad,
+    y: minY - pad,
+    w: maxX - minX + pad * 2,
+    h: maxY - minY + pad * 2,
+  };
 }
 
 async function handleParchmentHit() {
@@ -142,22 +199,35 @@ async function handleParchmentHit() {
   if (!pt) return false;
   const hit = hud.hitTestParchment(pt.x, pt.y);
   if (!hit) return false;
+
+  // 引导第 1 步：不吞游戏点击（除 skip）
+  if (guideStep === 1 && hit !== "guide_skip") {
+    return false;
+  }
+
   controller.cancelPendingClick();
   if (uiBusy) return true;
 
-  if (hit === "guide_next") {
+  if (hit === "guide_next" || hit === "guide_tap") {
     if (guideStep && guideStep < 3) {
       guideStep += 1;
       syncParchmentHud();
     } else {
-      finishGuide();
-      openClaimIfNeeded();
+      finishGuide("done");
     }
     return true;
   }
   if (hit === "guide_skip") {
-    finishGuide();
-    openClaimIfNeeded();
+    finishGuide("skipped");
+    return true;
+  }
+  if (hit === "help_open") {
+    // 玩法重看：不清 storage，完成/跳过时再写 done|skipped
+    guideStep = economy.canActiveChop() ? 1 : 2;
+    lastGuideTracked = 0;
+    guideAdvanceAt = 0;
+    uiPanel = "none";
+    syncParchmentHud();
     return true;
   }
   if (hit === "rank_open") {
@@ -165,12 +235,14 @@ async function handleParchmentHit() {
     syncParchmentHud();
     return true;
   }
-  if (hit === "panel") {
-    // 点在面板空白处：吞掉点击，不关面板、不劈柴
+  if (hit === "claim_strip") {
+    uiPanel = "claim";
+    syncParchmentHud();
     return true;
   }
+  if (hit === "panel") return true;
   if (hit === "rank_close" || hit === "dismiss") {
-    if (guideStep) return true; // 引导中点遮罩不关
+    if (guideStep) return true;
     uiPanel = "none";
     syncParchmentHud();
     return true;
@@ -195,11 +267,10 @@ async function handleParchmentHit() {
       showToast(res.reason === "fail" || res.reason === "closed" ? COPY_C.adFail : "今日次数已用完");
     } else if (placement === "AD_QUOTA_PLUS") {
       showToast(COPY_C.quotaPlus);
-      if (economy.snapshot().state.pending_claim > 0) uiPanel = "claim";
-      else uiPanel = "none";
+      uiPanel = "none";
     } else {
       showToast(`${COPY_C.speedUp} +${res.gained ?? 0}`);
-      uiPanel = "claim";
+      uiPanel = "none";
     }
     syncParchmentHud();
     return true;
@@ -387,7 +458,8 @@ function handleArtSwitcherClick() {
 }
 
 async function boot() {
-  void loadParchmentTextures().then(() => syncParchmentHud());
+  presenter.applyScreenSize(window.innerWidth, window.innerHeight);
+  void loadParchmentTextures(presenter.getUiDpr()).then(() => syncParchmentHud());
   const initial = await artSets.initFromStorage((p, text) => {
     progress.step();
     ensureHud()?.setStatus?.(text);
@@ -438,13 +510,20 @@ async function boot() {
     pile,
     economy: {
       canActiveChop: () =>
-        !guideStep && uiPanel === "none" && economy.canActiveChop(),
+        (guideStep === 1 || !guideStep) &&
+        uiPanel === "none" &&
+        economy.canActiveChop(),
       shouldBlockSpawn: () => !economy.canActiveChop(),
       onRootStacked: () => {
         economy.tryActiveStack();
         syncParchmentHud();
       },
       onQuotaBlocked: () => openExhaustedPanel(),
+      onChopSettled: () => {
+        if (guideStep === 1 && guideAdvanceAt <= 0) {
+          guideAdvanceAt = performance.now() + 600;
+        }
+      },
     },
   });
   debugPile = pile;
@@ -453,48 +532,16 @@ async function boot() {
   progress.finish();
   syncArtSwitcherHud(null);
   economy.settle();
+  initGuideStep();
   uiPanel = "none";
   syncParchmentHud();
-  if (!guideStep) {
-    openClaimIfNeeded();
-    showHint();
-  }
-}
-
-function showHint() {
-  const coarse =
-    typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
-  const actionText = "点击劈开";
-
-  const hud = ensureHud();
-  if (hud) {
-    hud.showHint(actionText);
-    const dismiss = () => {
-      hud.hideHint();
-      window.removeEventListener("pointerdown", dismiss);
-    };
-    window.addEventListener("pointerdown", dismiss);
-    return;
-  }
-
-  const hint = document.getElementById("hint");
-  if (!hint) return;
-  const action = document.getElementById("hint-action");
-  if (action && coarse) action.textContent = actionText;
-  hint.hidden = false;
-
-  const dismiss = () => {
-    hint.classList.add("fade-out");
-    setTimeout(() => hint.remove(), 900);
-    window.removeEventListener("pointerdown", dismiss);
-  };
-  window.addEventListener("pointerdown", dismiss);
 }
 
 boot().catch((err) => console.error("启动失败:", err));
 
 window.addEventListener("resize", () => {
   handleResize(camera, renderer);
+  presenter.applyScreenSize(window.innerWidth, window.innerHeight);
   post.setSize(window.innerWidth, window.innerHeight);
 });
 document.addEventListener("contextmenu", (e) => e.preventDefault());
@@ -523,7 +570,7 @@ function frame() {
 
   controller.update(dt);
   void handleParchmentHit();
-  if (uiPanel === "none" && !guideStep) handleArtSwitcherClick();
+  if (uiPanel === "none" && (!guideStep || guideStep === 1)) handleArtSwitcherClick();
   physics.update(dt);
   axe.update(dt);
   game?.update(dt);
@@ -532,15 +579,28 @@ function frame() {
   grass.update(dt);
   gobo.update(dt);
 
-  // 经济 HUD 倒计时刷新
-  if (Math.floor(now / 500) !== Math.floor((now - dt * 1000) / 500)) {
+  if (guideStep === 1) {
+    guideTargets = { ...guideTargets, log: projectLogTarget() };
+    if (guideAdvanceAt > 0 && performance.now() >= guideAdvanceAt) {
+      guideAdvanceAt = 0;
+      guideStep = 2;
+      syncParchmentHud();
+    }
+  } else if (guideStep === 2 || guideStep === 3) {
+    // roots/icons 由 paintEconomyHud 每帧给出，sync 时带上
+  }
+
+  // 经济 HUD / 引导手势刷新
+  if (guideStep === 1 || Math.floor(now / 500) !== Math.floor((now - dt * 1000) / 500)) {
     syncParchmentHud();
   } else if (uiToast && performance.now() > toastUntil) {
     syncParchmentHud();
   }
 
-  post.composer.render();
-  // 小游戏 loading / 提示叠在 WebGL 之上（canvas 自绘，不用系统 UI）
+  presenter.present(() => {
+    post.composer.render();
+  });
+  // HUD：独立 DOM 层或与屏缓冲 1:1 的 WebGL 叠加（不用系统 UI）
   compositeHud(renderer);
 }
 frame();
@@ -598,10 +658,17 @@ if (enableDebugHooks) {
           uiPanel = p;
           syncParchmentHud();
         },
-        skipGuide: () => finishGuide(),
+        skipGuide: () => finishGuide("skipped"),
         resetGuide: () => {
           resetGuideForTests();
-          guideStep = 1;
+          guideStep = economy.canActiveChop() ? 1 : 2;
+          lastGuideTracked = 0;
+          uiPanel = "none";
+          syncParchmentHud();
+        },
+        setGuideStep: (n: number) => {
+          guideStep = Math.max(1, Math.min(3, Math.floor(n)));
+          lastGuideTracked = 0;
           uiPanel = "none";
           syncParchmentHud();
         },

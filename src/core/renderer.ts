@@ -14,10 +14,10 @@ export function createRenderer(): THREE.WebGLRenderer {
     powerPreference: "high-performance",
   });
 
-  // 3D DPR≤1.5（perf）；2D HUD 另走全 device DPR，见 platform/hud.ts
+  // 初值；小游戏由 ScenePresenter 把屏缓冲提到设备 DPR，3D 走 ≤1.5 RT
   const maxDpr = IS_MINIGAME ? 1.5 : 2;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxDpr));
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(window.innerWidth, window.innerHeight, false);
 
   renderer.shadowMap.enabled = true;
   // three r186 起移除了 PCFSoftShadowMap,统一用 PCF 配合 shadow.radius 做软化
