@@ -392,11 +392,62 @@ if (audioParamFails.length) {
   console.error(audioParamFails.slice(0, 8).join("\n"));
 }
 
-const verLog = logs.find((l) => /\[firewood\].*0\.1\.5/.test(l));
+const verLog = logs.find((l) => /\[firewood\].*0\.1\.6/.test(l));
 if (!verLog) {
-  console.error("ERROR: missing 0.1.5 version log in console");
+  console.error("ERROR: missing 0.1.6 version log in console");
 } else {
   console.log("version log:", verLog);
+}
+
+// 视觉回归：截 stump 区域，底座平均色若仍过暗/过绿则 warning（不硬失败，避免光照抖动）
+try {
+  const stumpShot = join(outDir, "02-start-idle.png");
+  if (existsSync(stumpShot)) {
+    const { default: sharp } = await import("sharp");
+    // 中下部树桩底座区域（竖屏 375x812 @2x → 750x1624 图；取中央偏下一块）
+    const meta = await sharp(stumpShot).metadata();
+    const W = meta.width || 750;
+    const H = meta.height || 1624;
+    const crop = {
+      left: Math.floor(W * 0.28),
+      top: Math.floor(H * 0.48),
+      width: Math.floor(W * 0.44),
+      height: Math.floor(H * 0.22),
+    };
+    const { data, info } = await sharp(stumpShot)
+      .extract(crop)
+      .removeAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    let r = 0,
+      g = 0,
+      b = 0,
+      n = info.width * info.height;
+    for (let i = 0; i < data.length; i += 3) {
+      r += data[i];
+      g += data[i + 1];
+      b += data[i + 2];
+    }
+    r /= n;
+    g /= n;
+    b /= n;
+    const greenDom = g > r + 18 && g > b + 25;
+    const tooDark = (r + g + b) / 3 < 35;
+    console.log(
+      `stump-region mean RGB=(${r.toFixed(1)},${g.toFixed(1)},${b.toFixed(1)}) greenDom=${greenDom} tooDark=${tooDark}`,
+    );
+    if (greenDom || tooDark) {
+      console.warn(
+        "WARNING: stump base region looks overly green/dark — check normal=PNG + decode colorSpace",
+      );
+    }
+    writeFileSync(
+      join(outDir, "stump-region-stats.json"),
+      JSON.stringify({ r, g, b, greenDom, tooDark, crop }, null, 2),
+    );
+  }
+} catch (e) {
+  console.warn("WARNING: stump visual check skipped", e && e.message);
 }
 
 const forbiddenFromLogs = logs.filter((l) =>

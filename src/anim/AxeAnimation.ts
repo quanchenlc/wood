@@ -71,9 +71,21 @@ export class AxeAnimation {
       this.axeModel = modelGltf.scene;
       this.axeModel.position.set(0, 0, 0);
       this.axeModel.traverse((obj) => {
-        if ((obj as THREE.Mesh).isMesh) {
-          obj.castShadow = true;
-          obj.receiveShadow = true;
+        if (!(obj as THREE.Mesh).isMesh) return;
+        const mesh = obj as THREE.Mesh;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        // 对齐 stump：色图 sRGB、去掉材质 tint、压金属度
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        for (const m of mats) {
+          const mat = m as THREE.MeshStandardMaterial;
+          if (!mat) continue;
+          if (mat.map) mat.map.colorSpace = THREE.SRGBColorSpace;
+          if (mat.emissiveMap) mat.emissiveMap.colorSpace = THREE.SRGBColorSpace;
+          if (mat.color) mat.color.set(0xffffff);
+          if (typeof mat.metalness === "number") mat.metalness = 0;
+          if (typeof mat.roughness === "number") mat.roughness = Math.max(mat.roughness, 0.55);
+          mat.needsUpdate = true;
         }
       });
       this.animNull.add(this.axeModel);

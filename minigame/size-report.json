@@ -1,10 +1,10 @@
 {
   "appid": "wx3371f99b1b0e73d1",
-  "mainPackageBytes": 1116339,
-  "mainPackage": "1.06 MB",
+  "mainPackageBytes": 1119433,
+  "mainPackage": "1.07 MB",
   "mainUnder4MB": true,
-  "assetsSubpackageBytes": 4114372,
-  "assetsSubpackage": "3.92 MB",
+  "assetsSubpackageBytes": 4535455,
+  "assetsSubpackage": "4.33 MB",
   "bundle": "1.01 MB",
   "largestMain": [
     {
@@ -24,6 +24,10 @@
       "size": "0.01 MB"
     },
     {
+      "file": "adapter/abort.js",
+      "size": "0.00 MB"
+    },
+    {
       "file": "adapter/document.js",
       "size": "0.00 MB"
     },
@@ -33,10 +37,6 @@
     },
     {
       "file": "adapter/blob.js",
-      "size": "0.00 MB"
-    },
-    {
-      "file": "adapter/assets-loader.js",
       "size": "0.00 MB"
     }
   ]

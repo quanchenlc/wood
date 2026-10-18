@@ -42,7 +42,7 @@ export const TEXTURES = {
 
 export const MODELS = {
   get stump() {
-    // 小游戏：.gltf + 分包内独立 jpg（≤1024），禁止嵌图 GLB / Blob / btoa
+    // 小游戏：.gltf + 色图 jpg≤1024 + 法线 png≤512，禁止嵌图 GLB / Blob / btoa
     return USE_EXTERNAL_GLTF
       ? href("/assets/stump.gltf")
       : href("/assets/stump_v02_mesh_warm_ktx2_2048.glb");

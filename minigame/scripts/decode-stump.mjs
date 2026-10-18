@@ -1,6 +1,9 @@
 /**
- * 用 headless Chromium + three.js KTX2Loader 把 stump GLB 里的 KTX2
- * 贴图解成 JPEG，再经 GLTFExporter 导出无 KHR_texture_basisu 的 GLB。
+ * 用 headless Chromium + three.js KTX2Loader 把 stump/axe GLB 里的 KTX2
+ * 贴图解成未压缩图，再经 GLTFExporter 导出无 KHR_texture_basisu 的 GLB。
+ *
+ * P0：GPU 回读必须带正确 colorSpace（sRGB map → SRGBColorSpace），
+ * 否则按 linear 写出亮度≈0.33、发黑发脏。compressed 禁止 createImageBitmap。
  */
 import { createServer } from "node:http";
 import { readFileSync, writeFileSync, existsSync, statSync } from "node:fs";
@@ -43,8 +46,10 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 
-const renderer = new THREE.WebGLRenderer({ antialias: false });
+const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true });
 renderer.setSize(64, 64);
+// 默认 output 是 sRGB；blit 到 RT 时会另设，避免和默认搅在一起
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
 
 const ktx2 = new KTX2Loader()
@@ -54,10 +59,20 @@ const ktx2 = new KTX2Loader()
 const loader = new GLTFLoader().setKTX2Loader(ktx2);
 const gltf = await loader.loadAsync('/input.glb');
 
-// 把压缩贴图画到 canvas，换成普通 CanvasTexture，便于 exporter 出 JPEG/PNG
+/**
+ * 把压缩贴图 GPU 回读到 canvas，换成普通 CanvasTexture，便于 exporter 出 JPEG/PNG。
+ * compressed 只用 GPU 回读，不走 createImageBitmap。
+ */
 async function materializeTexture(tex) {
   if (!tex || !tex.isTexture) return tex;
-  if (tex.isCanvasTexture || (tex.image && tex.image.tagName === 'IMG')) return tex;
+  // 已是 CPU 可读位图且非压缩：直接用
+  if (
+    !tex.isCompressedTexture &&
+    (tex.isCanvasTexture ||
+      (tex.image && (tex.image.tagName === 'IMG' || tex.image.tagName === 'CANVAS')))
+  ) {
+    return tex;
+  }
   const img = tex.image;
   const w = img?.width || img?.image?.width || tex.source?.data?.width;
   const h = img?.height || img?.image?.height || tex.source?.data?.height;
@@ -66,27 +81,62 @@ async function materializeTexture(tex) {
   c.width = w;
   c.height = h;
   const ctx = c.getContext('2d');
+  const prevTarget = renderer.getRenderTarget();
+  const prevOutput = renderer.outputColorSpace;
+  const texCS = tex.colorSpace || THREE.NoColorSpace;
   try {
-    // CompressedTexture / ImageBitmap / HTMLCanvas
-    if (typeof createImageBitmap === 'function' && (img instanceof ImageBitmap || img?.data)) {
-      const bmp = img instanceof ImageBitmap ? img : await createImageBitmap(img);
-      ctx.drawImage(bmp, 0, 0);
-    } else if (img instanceof HTMLCanvasElement || img instanceof HTMLImageElement) {
+    if (
+      !tex.isCompressedTexture &&
+      (img instanceof HTMLCanvasElement || img instanceof HTMLImageElement)
+    ) {
       ctx.drawImage(img, 0, 0);
     } else {
-      // 回读 GPU：用临时场景贴到全屏四边形
-      const rt = new THREE.WebGLRenderTarget(w, h);
+      // CompressedTexture 等：只走 GPU 回读（禁止 createImageBitmap）
+      //
+      // 根因：普通 RT 按 working(linear) 写出；sRGB map 经 shader decode 后写线性
+      // → 亮度≈0.33。构造 RT 时必须传入 colorSpace: tex.colorSpace。
+      //
+      // Basis/KTX2 在 GPU 上已是 sRGB 编码字节；若再走 sRGB→linear→sRGB 会过亮(~170)。
+      // blit 时：关掉 ColorManagement、tex/RT/output 均 NoColorSpace，原样拷 texel；
+      // 导出的 CanvasTexture 再挂回 texCS，供后续 JPEG/PNG 与运行时使用。
+      const rt = new THREE.WebGLRenderTarget(w, h, {
+        type: THREE.UnsignedByteType,
+        format: THREE.RGBAFormat,
+        // 客户端要求：sRGB map 必须带 SRGBColorSpace（记录意图；blit 中临时改 NoColorSpace）
+        colorSpace: texCS,
+        depthBuffer: false,
+        stencilBuffer: false,
+      });
+
+      const prevCM = THREE.ColorManagement.enabled;
+      const prevTexCS = tex.colorSpace;
+      THREE.ColorManagement.enabled = false;
+      tex.colorSpace = THREE.NoColorSpace;
+      rt.texture.colorSpace = THREE.NoColorSpace;
+
       const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-      const mat = new THREE.MeshBasicMaterial({ map: tex });
+      const mat = new THREE.MeshBasicMaterial({
+        map: tex,
+        depthTest: false,
+        depthWrite: false,
+        toneMapped: false,
+      });
       const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat);
       const sc = new THREE.Scene();
       sc.add(mesh);
+
+      // 勿与默认 sRGB output 搅在一起（NoColorSpace 不能当 output，会缺 config）
+      renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
       renderer.setRenderTarget(rt);
+      renderer.clear();
       renderer.render(sc, cam);
-      renderer.setRenderTarget(null);
+
+      tex.colorSpace = prevTexCS;
+      THREE.ColorManagement.enabled = prevCM;
+
       const buf = new Uint8Array(w * h * 4);
       renderer.readRenderTargetPixels(rt, 0, 0, w, h, buf);
-      const data = new ImageData(new Uint8ClampedArray(buf), w, h);
+      const data = new ImageData(new Uint8ClampedArray(buf.buffer), w, h);
       // WebGL Y-flip
       const flip = ctx.createImageData(w, h);
       for (let y = 0; y < h; y++) {
@@ -100,10 +150,15 @@ async function materializeTexture(tex) {
     }
   } catch (e) {
     console.warn('texture bake failed', e);
+    renderer.setRenderTarget(prevTarget);
+    renderer.outputColorSpace = prevOutput;
     return tex;
   }
+  renderer.setRenderTarget(prevTarget);
+  renderer.outputColorSpace = prevOutput;
+
   const out = new THREE.CanvasTexture(c);
-  out.colorSpace = tex.colorSpace;
+  out.colorSpace = texCS;
   out.wrapS = tex.wrapS;
   out.wrapT = tex.wrapT;
   out.magFilter = tex.magFilter;
@@ -113,7 +168,6 @@ async function materializeTexture(tex) {
   return out;
 }
 
-gltf.scene.traverse(async () => {});
 const meshes = [];
 gltf.scene.traverse((o) => { if (o.isMesh) meshes.push(o); });
 for (const mesh of meshes) {
