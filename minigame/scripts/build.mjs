@@ -461,44 +461,88 @@ function validateExportedGltf(destAssets, outStem) {
   console.log(`[build] validate ${outStem}.gltf: ok (dequantized + clamp)`);
 }
 
-async function resizeStandaloneTextures(destAssets) {
-  // 色图 JPEG；程序化原木用的 *_n.jpg 仍按文件名缩（不改扩展名以免改 assets.ts）
-  const files = readdirSync(destAssets).filter((n) => /\.jpe?g$/i.test(n));
+function isNormalMapName(name) {
+  return /_n(?:ormal)?(?:_|\.|$)/i.test(name) || /normal/i.test(name);
+}
+
+/**
+ * 色图 JPEG 缩/压；法线 PNG 只缩尺寸、保持 PNG（美术 set1–3 法线勿转 JPEG）。
+ * @param {string} destDir
+ * @param {{ skipStemPrefixes?: RegExp }} [opts]
+ */
+async function resizeStandaloneTextures(destDir, opts = {}) {
+  const skipStem = opts.skipStemPrefixes || /^(stump|axe)_/;
+  const files = readdirSync(destDir).filter((n) => /\.(jpe?g|png)$/i.test(n));
   for (const name of files) {
-    // 跳过刚从模型导出的（已按槽位规则处理）
-    if (/^(stump|axe)_/.test(name)) continue;
-    const abs = join(destAssets, name);
-    const isNormal = /_n(?:ormal)?(?:_|\.|$)/i.test(name) || /normal/i.test(name);
-    const max = isNormal ? NORMAL_MAX : COLOR_MAX;
-    const img = sharp(abs);
-    const meta = await img.metadata();
+    if (skipStem.test(name)) continue;
+    const abs = join(destDir, name);
+    const isPng = /\.png$/i.test(name);
+    const isNormal = isNormalMapName(name);
+    // 非法线 PNG（如 axe_orm）可缩；色图应为 JPEG
+    if (isPng && !isNormal && !/orm|occlusion|roughness|metal/i.test(name)) {
+      // 普通 PNG 色图不在此强转；只处理法线/ORM
+    }
+    const max = isNormal || /orm/i.test(name) ? NORMAL_MAX : COLOR_MAX;
+    const meta = await sharp(abs).metadata();
     const w = meta.width || 0;
     const h = meta.height || 0;
-    if (w <= max && h <= max && !isNormal) {
-      // 色图仍重压到质量 ≥85
-      const before = statSync(abs).size;
-      await sharp(abs)
-        .jpeg({ quality: COLOR_JPEG_QUALITY, mozjpeg: true })
-        .toFile(abs + ".tmp");
-      renameSync(abs + ".tmp", abs);
-      if (statSync(abs).size !== before) {
-        console.log(`[build] recompress ${name} q=${COLOR_JPEG_QUALITY}`);
+
+    if (isNormal && !isPng) {
+      console.warn(
+        `[build] WARN normal map should be PNG for art sets: ${name} (kept as-is for set0 legacy jpg)`,
+      );
+    }
+
+    if (w <= max && h <= max) {
+      if (!isNormal && !isPng) {
+        const before = statSync(abs).size;
+        await sharp(abs)
+          .jpeg({ quality: COLOR_JPEG_QUALITY, mozjpeg: true })
+          .toFile(abs + ".tmp");
+        renameSync(abs + ".tmp", abs);
+        if (statSync(abs).size !== before) {
+          console.log(`[build] recompress ${name} q=${COLOR_JPEG_QUALITY}`);
+        }
       }
       continue;
     }
-    if (w <= max && h <= max) continue;
+
     const scale = Math.min(max / w, max / h, 1);
     const nw = Math.max(1, Math.round(w * scale));
     const nh = Math.max(1, Math.round(h * scale));
     const before = statSync(abs).size;
-    await sharp(abs)
-      .resize(nw, nh, { fit: "inside", withoutEnlargement: true })
-      .jpeg({ quality: COLOR_JPEG_QUALITY, mozjpeg: true })
-      .toFile(abs + ".tmp");
+    const pipeline = sharp(abs).resize(nw, nh, { fit: "inside", withoutEnlargement: true });
+    // 按扩展名落盘：PNG 法线保持 PNG；set0 历史 JPG 法线仍写 JPEG，勿把内容写成 PNG 塞进 .jpg
+    if (isPng) {
+      await pipeline.png({ compressionLevel: 9 }).toFile(abs + ".tmp");
+    } else {
+      await pipeline.jpeg({ quality: COLOR_JPEG_QUALITY, mozjpeg: true }).toFile(abs + ".tmp");
+    }
     renameSync(abs + ".tmp", abs);
     console.log(
       `[build] resize ${name} ${w}x${h} → ${nw}x${nh} (${formatMb(before)} → ${formatMb(statSync(abs).size)})`,
     );
+  }
+}
+
+/** 校验 art-set manifest：法线路径必须是 .png（set0 除外） */
+function assertArtSetNormalPng(destDir, setId) {
+  const manPath = join(destDir, "manifest.json");
+  if (!existsSync(manPath)) return;
+  const man = JSON.parse(readFileSync(manPath, "utf8"));
+  if (man.fallback) return; // stub
+  const files = man.files || {};
+  for (const key of ["barkNormal", "endNormal", "innerNormal"]) {
+    const rel = files[key];
+    if (!rel) continue;
+    if (!/\.png$/i.test(rel)) {
+      throw new Error(
+        `[build] ${setId} manifest.${key} must be .png (got ${rel}); art delivers PNG normals only`,
+      );
+    }
+    if (!existsSync(join(destDir, rel))) {
+      throw new Error(`[build] ${setId} missing normal file ${rel}`);
+    }
   }
 }
 
@@ -640,14 +684,14 @@ async function copyAssets() {
     writeFileSync(subEntry, 'console.log("[firewood] assets subpackage ready");\n');
   }
 
-  packArtSetSubpackages();
+  await packArtSetSubpackages();
 }
 
 /**
  * set1–set3：各自分包。未交付前仅拷 manifest（fallback:set0），体积可忽略。
- * 美术交付后把完整文件放进 art-sets/setN/ 即可，构建原样拷入分包根。
+ * 美术交付后把完整文件放进 art-sets/setN/ 即可；法线 PNG 会缩到 ≤512 且保持 PNG。
  */
-function packArtSetSubpackages() {
+async function packArtSetSubpackages() {
   const gameJsonPath = join(MG, "game.json");
   const gameJson = JSON.parse(readFileSync(gameJsonPath, "utf8"));
   const subs = [
@@ -676,7 +720,6 @@ function packArtSetSubpackages() {
       console.log(`[build] art-${id}: stub manifest (fallback set0)`);
       continue;
     }
-    // 拷贝套内全部文件（manifest + 将来美术资源）
     for (const name of readdirSync(srcDir)) {
       if (name.startsWith(".")) continue;
       cpSync(join(srcDir, name), join(dest, name), { recursive: true });
@@ -684,6 +727,9 @@ function packArtSetSubpackages() {
     if (!existsSync(join(dest, "manifest.json"))) {
       throw new Error(`[build] art-${id} missing manifest.json`);
     }
+    assertArtSetNormalPng(dest, id);
+    // 不跳过 stump_/axe_：套装根目录文件都要过一遍尺寸闸
+    await resizeStandaloneTextures(dest, { skipStemPrefixes: /^$/ });
     console.log(`[build] art-${id}: packed from art-sets/${id}`);
   }
 }

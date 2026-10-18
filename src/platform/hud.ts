@@ -382,18 +382,20 @@ function roundRect(
   ctx.closePath();
 }
 
-/** 右下角套装切换：按钮 + 可选四项列表；返回命中区供 hitTest */
+/** 左下角套装切换（避开 vConsole/胶囊）：按钮 + 可选四项列表；返回命中区供 hitTest */
 function paintArtSwitcher(
   ctx: CanvasRenderingContext2D,
   w: number,
   h: number,
   state: ArtSwitcherState,
 ): { toggle: DOMRect; options: { id: string; rect: DOMRect }[] } {
-  const pad = 12;
+  // 左下角：避开右下角微信绿色 vConsole、右上角胶囊按钮
+  const safeLeft = 12;
+  const safeBottom = 20;
   const btnH = 34;
   const btnW = 96;
-  const bx = w - pad - btnW;
-  const by = h - pad - btnH;
+  const bx = safeLeft;
+  const by = h - safeBottom - btnH;
   const active = state.options.find((o) => o.id === state.activeId);
   const label = active?.label || "原版";
 
