@@ -8,6 +8,7 @@
  */
 import { createServer } from "node:http";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { extname, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import puppeteer from "puppeteer-core";
@@ -15,9 +16,10 @@ import sharp from "sharp";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "../..");
+// ARTIFACT_DIR 可选；默认 os.tmpdir()，避免硬编码 /opt/cursor/artifacts 在别的机器上失败
 const OUT = process.env.ARTIFACT_DIR
-  ? join(process.env.ARTIFACT_DIR, "texture-mad-0.1.8")
-  : "/opt/cursor/artifacts/texture-mad-0.1.8";
+  ? join(process.env.ARTIFACT_DIR, "texture-mad")
+  : join(tmpdir(), "firewood-texture-mad");
 const MAD_MAX = Number(process.env.TEXTURE_MAD_MAX || 18);
 const SIZE = 256;
 
