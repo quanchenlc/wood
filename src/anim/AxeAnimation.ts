@@ -3,30 +3,103 @@ import { MODELS } from "../config/assets";
 import type { CameraController } from "../camera/CameraController";
 import { createGltfLoader } from "../core/gltf";
 import type { ProgressFn } from "../core/loading";
+import {
+  AXE_ANIM_DURATION,
+  AXE_ANIM_FADE,
+  AXE_ANIM_ROTATION,
+  AXE_ANIM_TRANSLATION,
+} from "./axeAnimClip";
 
 /**
- * 斧头挥砍动画 —— 0.4.0 起完全用自研关键帧，不再加载 ax_anim_*.glb。
- * 节奏：预备抬起 → 下劈撞击 → 短暂停顿 → 淡出（总长约 0.28s，贴近原手感）。
+ * 斧头挥砍 —— 重放 pre-IP-clean `ax_anim_v03` 的 anim 节点 TRS 曲线（代码烘焙，不装 GLB）。
  *
- * 模型约定（build_axe_placeholder）：柄沿 +Y，刃口线平行 Y，颊面法线 ±Z，刃朝 −X。
- * 原 ax_anim 的 anim 节点把颊面转到相机 right（约 +X）；IP-clean 去掉 clip 后
- * animNull 恒为单位阵，颊面仍朝 ±Z（对着镜头），相对劈砍法线差了 90°。
- * 挂模时补 MODEL_YAW，使颊面 = ±local X；pivot.lookAt 后 local X = camera right。
+ * 原点/枢轴：procedural `axe.gltf` 的 Mesh translation/scale 与原 `ax_v01` 一致；
+ * 真正决定「相对落点怎么摆」的是 anim 父节点的位移+四元数。0.4.0 把 anim 换成单位阵
+ * 并用 rotX 手搓轨迹，等于丢掉枢轴，斧头才变成竖棍浮在空中。这里只恢复那条曲线。
  */
-const MODEL_YAW = Math.PI / 2;
-const SWING_MS = {
-  windup: 0.06,
-  strike: 0.12,
-  hold: 0.04,
-  fade: 0.06,
-};
-const SWING_TOTAL =
-  SWING_MS.windup + SWING_MS.strike + SWING_MS.hold + SWING_MS.fade;
-/** 抬起峰值 / 撞击角：撞击保持近竖直（刃口线 ≈ 世界 +Y），勿再收到 −π/2 */
-const WINDUP_ROT_X = 0.55;
-const IMPACT_ROT_X = -0.12;
-const WINDUP_POS_Y = 0.14;
-const IMPACT_POS_Y = -0.06;
+function sampleLinear(
+  times: Float32Array,
+  values: Float32Array,
+  stride: number,
+  t: number,
+  out: number[],
+) {
+  const n = times.length;
+  if (t <= times[0]) {
+    for (let c = 0; c < stride; c++) out[c] = values[c]!;
+    return;
+  }
+  if (t >= times[n - 1]!) {
+    const base = (n - 1) * stride;
+    for (let c = 0; c < stride; c++) out[c] = values[base + c]!;
+    return;
+  }
+  let i = 0;
+  while (t > times[i + 1]!) i++;
+  const u = (t - times[i]!) / (times[i + 1]! - times[i]!);
+  const a = i * stride;
+  const b = (i + 1) * stride;
+  if (stride === 4) {
+    _qa.set(values[a]!, values[a + 1]!, values[a + 2]!, values[a + 3]!);
+    _qb.set(values[b]!, values[b + 1]!, values[b + 2]!, values[b + 3]!);
+    _qa.slerp(_qb, u);
+    out[0] = _qa.x;
+    out[1] = _qa.y;
+    out[2] = _qa.z;
+    out[3] = _qa.w;
+    return;
+  }
+  for (let c = 0; c < stride; c++) {
+    out[c] = values[a + c]! + (values[b + c]! - values[a + c]!) * u;
+  }
+}
+
+/** glTF CUBICSPLINE: per-key [inTangent, value, outTangent] */
+function sampleCubic(
+  times: Float32Array,
+  values: Float32Array,
+  stride: number,
+  t: number,
+  out: number[],
+) {
+  const n = times.length;
+  if (t <= times[0]) {
+    const base = stride; // first key value
+    for (let c = 0; c < stride; c++) out[c] = values[base + c]!;
+    return;
+  }
+  if (t >= times[n - 1]!) {
+    const base = (n - 1) * stride * 3 + stride;
+    for (let c = 0; c < stride; c++) out[c] = values[base + c]!;
+    return;
+  }
+  let i = 0;
+  while (t > times[i + 1]!) i++;
+  const t0 = times[i]!;
+  const t1 = times[i + 1]!;
+  const td = t1 - t0;
+  const u = (t - t0) / td;
+  const u2 = u * u;
+  const u3 = u2 * u;
+  const base0 = i * stride * 3;
+  const base1 = (i + 1) * stride * 3;
+  const a = 2 * u3 - 3 * u2 + 1;
+  const b = u3 - 2 * u2 + u;
+  const c = -2 * u3 + 3 * u2;
+  const d = u3 - u2;
+  for (let k = 0; k < stride; k++) {
+    const p0 = values[base0 + stride + k]!;
+    const m0 = values[base0 + 2 * stride + k]! * td;
+    const p1 = values[base1 + stride + k]!;
+    const m1 = values[base1 + k]! * td;
+    out[k] = a * p0 + b * m0 + c * p1 + d * m1;
+  }
+}
+
+const _qa = new THREE.Quaternion();
+const _qb = new THREE.Quaternion();
+const _pos = [0, 0, 0];
+const _rot = [0, 0, 0, 1];
 
 export class AxeAnimation {
   private readonly scene: THREE.Scene;
@@ -36,12 +109,12 @@ export class AxeAnimation {
   private animNull: THREE.Object3D | null = null;
   private animScene: THREE.Object3D | null = null;
   private axeModel: THREE.Object3D | null = null;
-  private progress = 0;
+  private elapsed = 0;
   private readyState = false;
   private playing = false;
   private playSerial = 0;
-  /** 最近一次劈砍的切片法线（世界空间，水平） */
   private lastSliceNormal = new THREE.Vector3(1, 0, 0);
+  private lastImpactPoint = new THREE.Vector3();
 
   readonly ready: Promise<void>;
 
@@ -62,7 +135,6 @@ export class AxeAnimation {
   private async load(renderer: THREE.WebGLRenderer, onProgress?: ProgressFn) {
     const loader = createGltfLoader(renderer);
     try {
-      // 仅加载自研斧模；挥砍轨道路径代码生成
       const modelGltf = await loader.loadAsync(MODELS.axe).finally(() => onProgress?.());
       onProgress?.(); // 占位：原 animation 资源的进度 tick
 
@@ -105,8 +177,6 @@ export class AxeAnimation {
         clampMap(mat.roughnessMap, false);
         clampMap(mat.aoMap, false);
         if (mat.color) mat.color.set(0xffffff);
-        // No envMap: metalness>0 mirrors the blue sky → "flat blue box".
-        // Painted steel albedo + warm tint; ORM drives roughness only.
         mat.metalness = 0;
         mat.metalnessMap = null;
         mat.roughness = Math.max(mat.roughness ?? 0.45, 0.4);
@@ -152,9 +222,10 @@ export class AxeAnimation {
   private attachAxeModel(root: THREE.Object3D) {
     this.disposeAxeModel();
     this.axeModel = root;
+    // Mesh 节点已带与 ax_v01 相同的 translation/scale；父节点不额外 yaw/偏移
     this.axeModel.position.set(0, 0, 0);
-    // 补回原 anim 轨对模型的 90° 偏航：颊面 → local ±X（= camera right）
-    this.axeModel.rotation.set(0, MODEL_YAW, 0);
+    this.axeModel.rotation.set(0, 0, 0);
+    this.axeModel.scale.setScalar(1);
     this.prepareAxeMaterials(this.axeModel);
     this.animNull?.add(this.axeModel);
   }
@@ -182,106 +253,94 @@ export class AxeAnimation {
     return this.playSerial;
   }
 
+  get duration(): number {
+    return AXE_ANIM_DURATION;
+  }
+
   playFromImpact(point: THREE.Vector3, sliceNormal: THREE.Vector3) {
     if (!this.readyState || !this.animNull || !this.animScene) return;
     this.playSerial++;
     this.playing = true;
-    this.progress = 0;
+    this.elapsed = 0;
+    this.lastImpactPoint.copy(point);
     this.lastSliceNormal.copy(sliceNormal).setY(0);
     if (this.lastSliceNormal.lengthSq() < 1e-8) this.lastSliceNormal.set(1, 0, 0);
     else this.lastSliceNormal.normalize();
     this.pivot.position.copy(point);
     this.orientToCamera();
     this.axeModel?.scale.setScalar(1);
-    this.animNull.rotation.set(0, 0, 0);
-    this.animNull.position.set(0, 0, 0);
-    this.animNull.scale.setScalar(1);
     this.pivot.visible = true;
     this.animScene.visible = true;
-    this.applySwingPose(0);
+    this.applyClipAt(0);
   }
 
-  /**
-   * 冻结到指定姿态（harness 截图 / 断言用）。
-   * rest=起手竖直，top=抬起峰值，impact=刃口近竖直切入。
-   */
-  seekPose(pose: "rest" | "top" | "impact") {
+  /** harness：采样 clip 时刻（秒），不推进播放状态机的 finish */
+  seekTime(seconds: number) {
     if (!this.readyState || !this.animNull || !this.animScene) return;
     this.playing = true;
+    this.elapsed = Math.max(0, Math.min(AXE_ANIM_DURATION, seconds));
     this.pivot.visible = true;
     this.animScene.visible = true;
-    this.axeModel?.scale.setScalar(1);
     this.orientToCamera();
-    if (pose === "rest") this.applySwingPose(0);
-    else if (pose === "top") this.applySwingPose(SWING_MS.windup);
-    else this.applySwingPose(SWING_MS.windup + SWING_MS.strike + SWING_MS.hold * 0.5);
+    this.applyClipAt(this.elapsed);
   }
 
-  /** 世界空间：颊面法线（应 ≈ 切片法线 / camera right）、刃口线（应 ≈ 竖直） */
-  getBladeMetrics(): {
-    faceNormal: THREE.Vector3;
-    edgeDir: THREE.Vector3;
-    handleDir: THREE.Vector3;
-    sliceNormal: THREE.Vector3;
+  /** 世界空间刃尖（模型局部刃口近似点）与落点 */
+  getImpactDebug(): {
+    bladeTip: THREE.Vector3;
+    impactPoint: THREE.Vector3;
+    pivot: THREE.Vector3;
+    elapsed: number;
+    visible: boolean;
   } {
-    // Geometry space (pre–MODEL_YAW): cheek ±Z, edge/handle +Y
-    const faceNormal = new THREE.Vector3(0, 0, 1);
-    const edgeDir = new THREE.Vector3(0, 1, 0);
-    const handleDir = new THREE.Vector3(0, 1, 0);
+    // 刃口：走 Mesh 节点局部点（与 ax_v01 同构的 glTF Mesh translation/scale 已在节点上），
+    // 再乘世界矩阵。避免用 AABB.min.y——斜砍时包围盒底角不是刃口。
+    const bladeTip = new THREE.Vector3(-0.162, 0.02, 0);
     if (this.axeModel) {
       this.axeModel.updateWorldMatrix(true, true);
-      faceNormal.transformDirection(this.axeModel.matrixWorld).normalize();
-      edgeDir.transformDirection(this.axeModel.matrixWorld).normalize();
-      handleDir.copy(edgeDir);
+      // 子级 Mesh 节点带 translation/scale；局部点落在 AuxScene 根下
+      let meshNode: THREE.Object3D | null = null;
+      this.axeModel.traverse((o) => {
+        if (meshNode) return;
+        if ((o as THREE.Mesh).isMesh) meshNode = o;
+      });
+      const target = meshNode ?? this.axeModel;
+      bladeTip.applyMatrix4(target.matrixWorld);
     }
     return {
-      faceNormal,
-      edgeDir,
-      handleDir,
-      sliceNormal: this.lastSliceNormal.clone(),
+      bladeTip,
+      impactPoint: this.lastImpactPoint.clone(),
+      pivot: this.pivot.position.clone(),
+      elapsed: this.elapsed,
+      visible: this.pivot.visible && !!this.animScene?.visible,
     };
   }
 
   update(dt: number) {
     if (!this.playing || !this.readyState || !this.animNull) return;
     this.orientToCamera();
-    this.progress += dt / SWING_TOTAL;
-    const t = Math.min(1, this.progress);
-    const elapsed = t * SWING_TOTAL;
-    this.applySwingPose(elapsed);
-    if (t >= 1) this.finish();
+    this.elapsed += dt;
+    this.applyClipAt(this.elapsed);
+    if (this.elapsed >= AXE_ANIM_DURATION) this.finish();
   }
 
-  private applySwingPose(elapsed: number) {
+  private applyClipAt(t: number) {
     if (!this.animNull) return;
-    let rotX = 0;
-    let posY = 0;
-    let scale = 1;
-
-    if (elapsed <= SWING_MS.windup) {
-      const u = elapsed / Math.max(1e-6, SWING_MS.windup);
-      const e = u * u;
-      rotX = e * WINDUP_ROT_X;
-      posY = e * WINDUP_POS_Y;
-    } else if (elapsed <= SWING_MS.windup + SWING_MS.strike) {
-      const u = (elapsed - SWING_MS.windup) / SWING_MS.strike;
-      const e = u * u * (3 - 2 * u);
-      rotX = WINDUP_ROT_X + e * (IMPACT_ROT_X - WINDUP_ROT_X);
-      posY = WINDUP_POS_Y + e * (IMPACT_POS_Y - WINDUP_POS_Y);
-    } else if (elapsed <= SWING_MS.windup + SWING_MS.strike + SWING_MS.hold) {
-      rotX = IMPACT_ROT_X;
-      posY = IMPACT_POS_Y;
+    const tt = Math.max(0, Math.min(AXE_ANIM_DURATION, t));
+    if (AXE_ANIM_TRANSLATION.interp === "CUBICSPLINE") {
+      sampleCubic(AXE_ANIM_TRANSLATION.times, AXE_ANIM_TRANSLATION.values, 3, tt, _pos);
     } else {
-      const u =
-        (elapsed - SWING_MS.windup - SWING_MS.strike - SWING_MS.hold) / SWING_MS.fade;
-      rotX = IMPACT_ROT_X;
-      posY = IMPACT_POS_Y;
-      scale = Math.max(0, 1 - u);
+      sampleLinear(AXE_ANIM_TRANSLATION.times, AXE_ANIM_TRANSLATION.values, 3, tt, _pos);
     }
-
-    this.animNull.rotation.x = rotX;
-    this.animNull.position.y = posY;
+    sampleLinear(AXE_ANIM_ROTATION.times, AXE_ANIM_ROTATION.values, 4, tt, _rot);
+    this.animNull.position.set(_pos[0]!, _pos[1]!, _pos[2]!);
+    this.animNull.quaternion.set(_rot[0]!, _rot[1]!, _rot[2]!, _rot[3]!);
     this.animNull.scale.setScalar(1);
+
+    // 原版：clip 末尾 5 帧淡出
+    const remaining = AXE_ANIM_DURATION - tt;
+    const scale =
+      remaining <= AXE_ANIM_FADE ? Math.max(0, remaining / AXE_ANIM_FADE) : 1;
     this.axeModel?.scale.setScalar(scale);
   }
 
@@ -299,6 +358,7 @@ export class AxeAnimation {
     if (this.animNull) {
       this.animNull.position.set(0, 0, 0);
       this.animNull.rotation.set(0, 0, 0);
+      this.animNull.quaternion.identity();
       this.animNull.scale.setScalar(1);
     }
     this.axeModel?.scale.setScalar(1);

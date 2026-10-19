@@ -1160,27 +1160,48 @@ if (enableDebugHooks) {
       axe: () => ({
         play: () =>
           axe.playFromImpact(new THREE.Vector3(0, 0.2, 0), controller.getRight()),
-        seekPose: (pose: "rest" | "top" | "impact") => {
-          const n = controller.getRight().clone().setY(0);
-          if (n.lengthSq() < 1e-8) n.set(1, 0, 0);
-          else n.normalize();
-          axe.playFromImpact(new THREE.Vector3(0, 0.55, 0), n);
-          axe.seekPose(pose);
-        },
-        bladeMetrics: () => {
-          const m = axe.getBladeMetrics();
-          return {
-            faceNormal: m.faceNormal.toArray() as [number, number, number],
-            edgeDir: m.edgeDir.toArray() as [number, number, number],
-            handleDir: m.handleDir.toArray() as [number, number, number],
-            sliceNormal: m.sliceNormal.toArray() as [number, number, number],
-            faceDotSlice: m.faceNormal.dot(m.sliceNormal),
-            edgeDotUp: Math.abs(m.edgeDir.y),
-          };
-        },
+        seekTime: (seconds: number) => axe.seekTime(seconds),
+        duration: () => axe.duration,
         busy: () => axe.busy,
         playCount: () => axe.playCount,
+        impactDebug: () => {
+          const d = axe.getImpactDebug();
+          return {
+            bladeTip: d.bladeTip.toArray() as [number, number, number],
+            impactPoint: d.impactPoint.toArray() as [number, number, number],
+            pivot: d.pivot.toArray() as [number, number, number],
+            elapsed: d.elapsed,
+            visible: d.visible,
+          };
+        },
       }),
+      /** CSS 像素：世界坐标 → 画布 client 坐标（与截图像素 / deviceScaleFactor 对齐时再乘 dpr） */
+      projectWorld: (xyz: [number, number, number] | number[]) => {
+        const v = new THREE.Vector3(xyz[0] ?? 0, xyz[1] ?? 0, xyz[2] ?? 0);
+        v.project(camera);
+        const el = renderer.domElement;
+        const cssW = el.clientWidth || 1;
+        const cssH = el.clientHeight || 1;
+        return {
+          x: (v.x * 0.5 + 0.5) * cssW,
+          y: (-v.y * 0.5 + 0.5) * cssH,
+          ndcZ: v.z,
+        };
+      },
+      /** 当前树桩顶面中心（劈砍落点参考）的 CSS 投影 */
+      projectLogTop: () => {
+        const y = currentStump?.topY ?? 0.2;
+        const v = new THREE.Vector3(0, y, 0);
+        v.project(camera);
+        const el = renderer.domElement;
+        const cssW = el.clientWidth || 1;
+        const cssH = el.clientHeight || 1;
+        return {
+          x: (v.x * 0.5 + 0.5) * cssW,
+          y: (-v.y * 0.5 + 0.5) * cssH,
+          worldY: y,
+        };
+      },
       pile: () => ({
         height: debugPile?.height ?? 0,
         isAnimating: debugPile?.isAnimating ?? false,
