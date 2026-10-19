@@ -10,7 +10,7 @@ import { spawnSync } from "node:child_process";
 import sharp from "sharp";
 import { Document, NodeIO } from "@gltf-transform/core";
 import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
-import { simplify, cloneDocument, dedup, weld } from "@gltf-transform/functions";
+import { simplify, cloneDocument, dedup } from "@gltf-transform/functions";
 import { MeshoptSimplifier } from "meshoptimizer";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -63,9 +63,12 @@ async function makeCollider(outPath, radius = TARGET_R, height = TARGET_H) {
     .setMode(4);
   const mesh = doc.createMesh("stump_collider").addPrimitive(prim);
   const collider = doc.createNode("stump_collider").setMesh(mesh);
+  // Keep well inside ground disc (14*FOOT≈4.27). Prior −5.3 / −3.2 sat on the rim
+  // and read as floating above the horizon. Y: mesh bottom ≈ -H → y = GROUND_Y + H.
+  // Behind-left of hero stump, well inside leafy disc (not on horizon rim).
   const instance = doc
     .createNode("instance")
-    .setTranslation([-5.3, 0, 0])
+    .setTranslation([-1.15, -0.05, -0.85])
     .setScale([-1, 1, 1]);
   const scene = doc.createScene("data").addChild(collider).addChild(instance);
   doc.getRoot().setDefaultScene(scene);
@@ -75,6 +78,7 @@ async function makeCollider(outPath, radius = TARGET_R, height = TARGET_H) {
 async function writeHeroAndLod(doc, outDir) {
   for (const b of doc.getRoot().listBuffers()) b.setURI("stump.bin");
   await io.write(join(outDir, "stump.gltf"), doc);
+  forceClampSamplers(join(outDir, "stump.gltf"));
   await MeshoptSimplifier.ready;
   const lodDoc = cloneDocument(doc);
   await lodDoc.transform(
@@ -82,6 +86,7 @@ async function writeHeroAndLod(doc, outDir) {
   );
   for (const b of lodDoc.getRoot().listBuffers()) b.setURI("stump_lod.bin");
   await io.write(join(outDir, "stump_lod.gltf"), lodDoc);
+  forceClampSamplers(join(outDir, "stump_lod.gltf"));
 }
 
 /** Soft-edged forest floor: leaves/chips in center → fade to ground green. */
@@ -130,10 +135,11 @@ function genSolidBlockPy(outDir, opts) {
     oval = 0.0,
     ridge = 0.04,
   } = opts;
+  const script = join(__dirname, "gen_sealed_block.py");
   const r = spawnSync(
     "python3",
     [
-      "/tmp/ip-clean-dl/gen_sealed_block.py",
+      script,
       outDir,
       String(rTop),
       String(rBot),
@@ -150,16 +156,45 @@ function genSolidBlockPy(outDir, opts) {
   if (r.status !== 0) throw new Error("sealed block mesh gen failed");
 }
 
+const CLAMP_TO_EDGE = 33071;
+
+/** Ensure written glTF samplers are ClampToEdge (never REPEAT 10497). */
+function forceClampSamplers(gltfPath) {
+  const gltf = JSON.parse(readFileSync(gltfPath, "utf8"));
+  if (!gltf.samplers || !gltf.samplers.length) {
+    gltf.samplers = [{ magFilter: 9729, minFilter: 9987, wrapS: CLAMP_TO_EDGE, wrapT: CLAMP_TO_EDGE }];
+  } else {
+    for (const s of gltf.samplers) {
+      s.wrapS = CLAMP_TO_EDGE;
+      s.wrapT = CLAMP_TO_EDGE;
+    }
+  }
+  writeFileSync(gltfPath, `${JSON.stringify(gltf)}\n`);
+}
+
 async function makeAtlas(outDir) {
-  // bark (top 512) + end-grain (bottom 512) — 1024 atlas
-  const barkBuf = await sharp(join(ASSETS, "outsidebark.jpg")).resize(1024, 512).jpeg().toBuffer();
-  const topBuf = await sharp(join(ASSETS, "top.jpg")).resize(512, 512).jpeg().toBuffer();
+  // bark top ~448 + warm wood pad + end-grain bottom — pad kills mip bleed grey rim at v=0.5
+  const barkH = 448;
+  const padH = 64;
+  const endH = 512;
+  const barkBuf = await sharp(join(ASSETS, "outsidebark.jpg")).resize(1024, barkH).jpeg().toBuffer();
+  const topMeta = await sharp(join(ASSETS, "top.jpg")).resize(64, 64).stats();
+  const edgeRgb = {
+    r: Math.round(topMeta.channels[0].mean),
+    g: Math.round(topMeta.channels[1].mean),
+    b: Math.round(topMeta.channels[2].mean),
+  };
+  // Cover full bottom with end grain (overscan) so rim UVs stay wood-colored
+  const topFull = await sharp(join(ASSETS, "top.jpg"))
+    .resize(1024, endH + padH, { fit: "cover" })
+    .jpeg()
+    .toBuffer();
   await sharp({
-    create: { width: 1024, height: 1024, channels: 3, background: "#8a7a68" },
+    create: { width: 1024, height: 1024, channels: 3, background: edgeRgb },
   })
     .composite([
       { input: barkBuf, top: 0, left: 0 },
-      { input: topBuf, top: 512, left: 256 },
+      { input: topFull, top: barkH, left: 0 },
     ])
     .jpeg({ quality: 88 })
     .toFile(join(outDir, "stump_baseColor.jpg"));
@@ -174,7 +209,9 @@ async function processVariant(id, outDir, meshOpts, leafSrc) {
   await makeSoftGround(join(outDir, "ground_floor.jpg"), leafSrc);
   genSolidBlockPy(outDir, meshOpts);
   let doc = await io.read(join(outDir, "stump.gltf"));
-  await doc.transform(dedup(), weld());
+  // dedup only — do NOT weld: seam column shares XYZ but needs distinct UVs (u=0 vs u=1).
+  // Welding re-merges them and brings back the dark vertical stripe.
+  await doc.transform(dedup());
   await writeHeroAndLod(doc, outDir);
   await makeCollider(join(outDir, "stump_data.glb"));
   // drop png normals if any leftover
@@ -200,7 +237,7 @@ async function main() {
   await processVariant(
     "A",
     OUT_A,
-    { rTop: 0.34, rBot: 0.44, h: 0.40, uneven: 0.008, seed: 2, oval: 0.02, ridge: 0.035, segs: 64, stacks: 14 },
+    { rTop: 0.34, rBot: 0.44, h: 0.40, uneven: 0.008, seed: 2, oval: 0.02, ridge: 0.018, segs: 64, stacks: 14 },
     leaf,
   );
   // B: taller flare, more oval/ridge — distinct but still solid block

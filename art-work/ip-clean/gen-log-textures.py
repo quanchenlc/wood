@@ -211,6 +211,24 @@ def gen_bark(w=2048, h=1024) -> tuple[Image.Image, Image.Image]:
     rgb[fleck, 2] = np.maximum(rgb[fleck, 2] - 8, 0)
 
     rgb = grade_warm(rgb, BARK_MEAN, contrast=1.4)
+    # Soft-wrap left/right so ClampToEdge seam (u=0↔u=1) is not a dark stripe
+    blend = 96
+    for x in range(blend):
+        t = (x + 0.5) / blend
+        t = t * t * (3 - 2 * t)
+        left = rgb[:, x].copy()
+        right = rgb[:, w - 1 - x].copy()
+        mid = 0.5 * (left + right)
+        # Pull both edges toward their average so u=0 and u=1 match
+        rgb[:, x] = left * (1 - t) + mid * t
+        rgb[:, w - 1 - x] = right * (1 - t) + mid * t
+    # Kill ultra-dark furrows in the seam neighborhood (common on bark scans)
+    edge_w = 24
+    for x in list(range(edge_w)) + list(range(w - edge_w, w)):
+        lum_c = 0.299 * rgb[:, x, 0] + 0.587 * rgb[:, x, 1] + 0.114 * rgb[:, x, 2]
+        lift = np.clip(110 - lum_c, 0, 55)[:, None]
+        rgb[:, x] = np.clip(rgb[:, x] + lift, 0, 255)
+
     albedo = Image.fromarray(rgb.astype(np.uint8))
 
     if nrm_src is not None:
@@ -230,32 +248,64 @@ def gen_bark(w=2048, h=1024) -> tuple[Image.Image, Image.Image]:
 
 
 def gen_end(size=1024) -> tuple[Image.Image, Image.Image]:
+    """End grain: irregular rings, eccentric pith, pore noise — not a bullseye target."""
     yy, xx = np.mgrid[0:size, 0:size]
-    cx = cy = size / 2
+    # Clearly eccentric pith (offset ~18% of radius)
+    cx = size / 2 + size * 0.16
+    cy = size / 2 - size * 0.12
     dx = (xx - cx) / (size / 2)
     dy = (yy - cy) / (size / 2)
-    r = np.sqrt(dx * dx + dy * dy)
-    ang = np.arctan2(dy, dx)
-    rings = 0.5 + 0.5 * np.sin(r * 48 + fbm(size, size, 3, 3.0, 0.5) * 4.0)
-    grain = fbm(size, size, 4, 16.0, 2.2)
-    rgb = np.zeros((size, size, 3), dtype=np.float64)
-    for c, m in enumerate(END_MEAN):
-        rgb[..., c] = m + (rings - 0.5) * 44 + (grain - 0.5) * 14
-    # heartwood slightly cooler-darker, still warm
-    heart = np.clip(1.0 - r * 1.3, 0, 1)[..., None]
-    rgb = rgb * (1 - 0.12 * heart) + np.array([170, 145, 110]) * 0.12 * heart
-    crack_ang = 0.4
-    dang = np.minimum(np.abs(ang - crack_ang), 2 * math.pi - np.abs(ang - crack_ang))
-    crack = (dang < 0.04) & (r > 0.06) & (r < 0.97)
-    crack_f = np.asarray(
-        Image.fromarray((crack.astype(np.uint8) * 255)).filter(ImageFilter.GaussianBlur(0.8)),
+    # Strong elliptical + lobed warp so rings aren't a bullseye
+    ang0 = np.arctan2(dy, dx)
+    ecc = 1.0 + 0.22 * np.cos(2 * ang0 + 0.6) + 0.12 * np.sin(3 * ang0 - 0.4) + 0.06 * np.cos(5 * ang0 + 1.2)
+    r = np.sqrt(dx * dx + dy * dy) * ecc
+    # Domain-warp radius + angle so rings wobble
+    warp = fbm(size, size, 4, 1.6, 1.3) - 0.5
+    r = r + 0.09 * warp + 0.04 * (fbm(size, size, 5, 5.0, 2.1) - 0.5)
+    ang = np.arctan2(dy, dx) + 0.35 * (fbm(size, size, 3, 1.4, 0.7) - 0.5)
+    ring_phase = fbm(size, size, 6, 2.0, 0.4) * 14.0
+    ring_freq = 28 + 18 * fbm(size, size, 5, 1.6, 0.9) + 9 * np.sin(ang * 2 + 1.1) + 5 * np.sin(ang * 5 - 0.3)
+    rings = 0.5 + 0.5 * np.sin(r * ring_freq + ring_phase)
+    rings = rings * (0.55 + 0.45 * fbm(size, size, 4, 3.8, 1.5))
+    # Break perfect periodicity with secondary ring set
+    rings2 = 0.5 + 0.5 * np.sin(r * (ring_freq * 0.37 + 4) + ring_phase * 0.6 + 1.7)
+    rings = 0.72 * rings + 0.28 * rings2
+    grain = fbm(size, size, 7, 22.0, 2.6)
+    pores = (value_noise(size, size, 90, 1.0) > 0.74).astype(np.float64)
+    pores = np.asarray(
+        Image.fromarray((pores * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(0.6)),
         dtype=np.float64,
     ) / 255.0
+    rgb = np.zeros((size, size, 3), dtype=np.float64)
+    for c, m in enumerate(END_MEAN):
+        rgb[..., c] = m + (rings - 0.5) * 44 + (grain - 0.5) * 24 - pores * 18
+    # Heartwood around eccentric pith
+    heart = np.clip(1.0 - r * 1.35, 0, 1)[..., None]
+    rgb = rgb * (1 - 0.18 * heart) + np.array([168, 142, 108]) * 0.18 * heart
+    # A few irregular checks (not one laser crack)
+    crack_f = np.zeros((size, size), dtype=np.float64)
+    for crack_ang, ww, r0, r1 in (
+        (0.35, 0.04, 0.06, 0.98),
+        (-1.8, 0.028, 0.15, 0.75),
+        (2.4, 0.022, 0.12, 0.6),
+        (1.1, 0.016, 0.25, 0.85),
+    ):
+        dang = np.minimum(np.abs(ang - crack_ang), 2 * math.pi - np.abs(ang - crack_ang))
+        crack = (dang < ww) & (r > r0) & (r < r1)
+        crack_f = np.maximum(
+            crack_f,
+            np.asarray(
+                Image.fromarray((crack.astype(np.uint8) * 255)).filter(ImageFilter.GaussianBlur(1.0)),
+                dtype=np.float64,
+            )
+            / 255.0,
+        )
     rgb = rgb * (1 - 0.55 * crack_f[..., None])
+    # Fill full square with wood — no circular grey fade (that caused the stump-top grey rim)
     rgb = strip_blue_cast(rgb)
     rgb = grade_warm(rgb, END_MEAN, contrast=1.15)
-    height = rings * 0.4 + grain * 0.2 - crack_f * 0.9
-    return Image.fromarray(rgb.astype(np.uint8)), to_normal_gl(height, 5.5)
+    height = rings * 0.35 + grain * 0.25 - crack_f * 0.85 - pores * 0.15
+    return Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8)), to_normal_gl(height, 5.5)
 
 
 def gen_inner(size=1024) -> tuple[Image.Image, Image.Image]:

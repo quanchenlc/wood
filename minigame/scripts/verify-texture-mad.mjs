@@ -1,6 +1,7 @@
 /**
  * 构建后廉价贴图回归：
- * 1) stump：web KTX2 vs minigame JPG 的 MAD（抓住 decode Y-flip 回归）
+ * 1) stump：albedo 方差 + 暖色门禁；public vs minigame stump_baseColor 拷贝一致性
+ *    （0.4.0 起已无 web KTX2，禁止再和自身渲染比 MAD→0.00）
  * 2) axe：渲染木柄占位（不再 vs Fiskars web）；确认加载成功并出图
  *
  * 用法：node minigame/scripts/verify-texture-mad.mjs
@@ -271,31 +272,60 @@ async function assertWoodAxeLooksPlausible(pngPath) {
 const results = {};
 let failed = false;
 
-// stump MAD（decode flip 回归门禁）
+/** stump albedo：有纹理 + 暖色；public/minigame 拷贝一致（有意义的门禁，非自比） */
+async function assertStumpAlbedoSane() {
+  const pub = join(ROOT, "public/assets/stump_baseColor.jpg");
+  const mg = join(ROOT, "minigame/subpackages/assets/assets/stump_baseColor.jpg");
+  if (!existsSync(pub) || !existsSync(mg)) {
+    throw new Error(`[mad] missing stump_baseColor.jpg (pub=${existsSync(pub)} mg=${existsSync(mg)})`);
+  }
+  const { data: a, info } = await sharp(pub).resize(SIZE, SIZE).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const { data: b } = await sharp(mg).resize(SIZE, SIZE).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  let sum = 0;
+  let sumSq = 0;
+  let madCopy = 0;
+  let warm = 0;
+  const n = SIZE * SIZE;
+  for (let i = 0; i < n; i++) {
+    const o = i * 3;
+    const r = a[o];
+    const g = a[o + 1];
+    const bl = a[o + 2];
+    const lum = 0.299 * r + 0.587 * g + 0.114 * bl;
+    sum += lum;
+    sumSq += lum * lum;
+    madCopy += Math.abs(r - b[o]) + Math.abs(g - b[o + 1]) + Math.abs(bl - b[o + 2]);
+    if (r > bl + 8) warm++;
+  }
+  const mean = sum / n;
+  const variance = sumSq / n - mean * mean;
+  const copyMad = madCopy / (n * 3);
+  const warmRatio = warm / n;
+  console.log(
+    `[mad] stump albedo: var=${variance.toFixed(1)} warmRatio=${warmRatio.toFixed(3)} copyMAD=${copyMad.toFixed(2)} (${info.width}x${info.height})`,
+  );
+  if (variance < 80) {
+    throw new Error(`[mad] stump_baseColor looks flat (variance=${variance.toFixed(1)})`);
+  }
+  if (warmRatio < 0.45) {
+    throw new Error(`[mad] stump_baseColor not warm enough (warmRatio=${warmRatio.toFixed(3)})`);
+  }
+  if (copyMad > 2.5) {
+    throw new Error(`[mad] public vs minigame stump_baseColor diverge (copyMAD=${copyMad.toFixed(2)})`);
+  }
+  // Still render mg stump for evidence
+  await shot("mg-stump", "stump-mg.png");
+  return { variance: Number(variance.toFixed(1)), warmRatio: Number(warmRatio.toFixed(3)), copyMad: Number(copyMad.toFixed(2)), ok: true };
+}
+
 {
-  const web = await shot("web-stump", "stump-web.png");
-  const mg = await shot("mg-stump", "stump-mg.png");
-  const mad = await madMasked(web, mg);
-  results.stump = { mad: Number(mad.toFixed(2)), max: MAD_MAX, ok: mad <= MAD_MAX };
-  console.log(`[mad] stump: MAD=${mad.toFixed(2)} (max ${MAD_MAX}) ${mad <= MAD_MAX ? "ok" : "FAIL"}`);
-  if (mad > MAD_MAX) failed = true;
-  const w = SIZE;
-  await sharp({
-    create: { width: w * 2 + 8, height: w + 28, channels: 3, background: { r: 24, g: 24, b: 24 } },
-  })
-    .composite([
-      { input: web, left: 0, top: 28 },
-      { input: mg, left: w + 8, top: 28 },
-      {
-        input: Buffer.from(
-          `<svg width="${w * 2 + 8}" height="28"><text x="8" y="20" fill="#ddd" font-size="14">Web KTX2</text><text x="${w + 16}" y="20" fill="#ddd" font-size="14">MG JPG MAD=${mad.toFixed(1)}</text></svg>`,
-        ),
-        left: 0,
-        top: 0,
-      },
-    ])
-    .png()
-    .toFile(join(OUT, "stump-compare.png"));
+  try {
+    results.stump = await assertStumpAlbedoSane();
+  } catch (e) {
+    console.error(String(e && e.message ? e.message : e));
+    results.stump = { ok: false, error: String(e && e.message ? e.message : e) };
+    failed = true;
+  }
 }
 
 // 木柄斧：出图 + 非 Fiskars 橙斑检查（不再 vs web KTX2）

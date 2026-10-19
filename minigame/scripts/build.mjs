@@ -928,9 +928,43 @@ function checkIpHashes() {
   }
 }
 
+/** set0 预烘焙 stump glTF 必须 ClampToEdge(33071)，禁止 REPEAT(10497) 溜进分包 */
+function assertSet0StumpClamp() {
+  const CLAMP = 33071;
+  const destAssets = join(SUB_ASSETS, "assets");
+  const files = [
+    "stump.gltf",
+    "stump_lod.gltf",
+    "stump-a/stump.gltf",
+    "stump-a/stump_lod.gltf",
+    "stump-b/stump.gltf",
+    "stump-b/stump_lod.gltf",
+  ];
+  for (const rel of files) {
+    const p = join(destAssets, rel);
+    if (!existsSync(p)) {
+      throw new Error(`[build] missing set0 stump ${rel}`);
+    }
+    const gltf = JSON.parse(readFileSync(p, "utf8"));
+    const samplers = gltf.samplers || [];
+    if (!samplers.length) {
+      throw new Error(`[build] ${rel} has no samplers`);
+    }
+    for (const s of samplers) {
+      if (s.wrapS !== CLAMP || s.wrapT !== CLAMP) {
+        throw new Error(
+          `[build] ${rel} sampler must be ClampToEdge(${CLAMP}), got wrapS=${s.wrapS} wrapT=${s.wrapT}`,
+        );
+      }
+    }
+  }
+  console.log("[build] set0 stump ClampToEdge(33071): ok (6 glTFs)");
+}
+
 emitRuntimeAppConfig();
 await bundle();
 await copyAssets();
+assertSet0StumpClamp();
 copyUiParchmentSubpackage();
 verifyTextureMad();
 syncProjectConfig();

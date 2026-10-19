@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { MODELS } from "../config/assets";
-import { IS_MINIGAME, GROUND_Y, INCH } from "../config/constants";
+import { IS_MINIGAME, GROUND_Y, INCH, FOOT } from "../config/constants";
 import { createGltfLoader } from "../core/gltf";
 import type { ProgressFn } from "../core/loading";
 import { assetUrl } from "../platform/env";
@@ -43,11 +43,13 @@ function prepareStumpMaterials(root: THREE.Object3D, opts: { castShadow: boolean
     if (!mat) return;
     if (mat.map) {
       mat.map.colorSpace = THREE.SRGBColorSpace;
+      mat.map.flipY = false;
       mat.map.wrapS = THREE.ClampToEdgeWrapping;
       mat.map.wrapT = THREE.ClampToEdgeWrapping;
       mat.map.needsUpdate = true;
     }
     if (mat.normalMap) {
+      mat.normalMap.flipY = false;
       mat.normalMap.wrapS = THREE.ClampToEdgeWrapping;
       mat.normalMap.wrapT = THREE.ClampToEdgeWrapping;
       mat.normalMap.needsUpdate = true;
@@ -121,9 +123,19 @@ export async function loadStump(
       placement.updateWorldMatrix(true, false);
       placement.matrixWorld.decompose(farRoot.position, farRoot.quaternion, farRoot.scale);
     } else {
-      farRoot.position.set(-5.3, 0, 0);
+      // Behind-left, well inside leafy disc; slight sink into GROUND_Y
+      farRoot.position.set(-1.15, -0.05, -0.85);
       farRoot.scale.set(-1, 1, 1);
     }
+    // Stay clear of disc rim so silhouette doesn't read as floating over sky
+    const groundR = 14 * FOOT * 0.55;
+    const dist = Math.hypot(farRoot.position.x, farRoot.position.z);
+    if (dist > groundR) {
+      const s = groundR / dist;
+      farRoot.position.x *= s;
+      farRoot.position.z *= s;
+    }
+    if (farRoot.position.y > -0.02) farRoot.position.y = -0.05;
     scene.add(farRoot);
   } catch (err) {
     console.warn("树桩模型加载失败,改用兜底几何体:", err);
