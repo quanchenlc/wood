@@ -46,5 +46,9 @@ export {
   OPEN_MS,
   CLOSE_MS,
   invertEase,
+  layoutFor,
+  isLandscape,
+  adaptMotion,
   type DrawerMotion,
+  type DrawerLayout,
 } from "./motion";

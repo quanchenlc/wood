@@ -435,15 +435,20 @@ async function handleParchmentHit() {
     return true;
   }
   if (hit === "rank_open") {
-    closeDrawer();
-    setTimeout(() => {
-      uiPanel = "rank";
-      syncParchmentHud();
-    }, CLOSE_MS);
+    // 0.3.5：柴榜为抽屉内页，不收起、不弹层
+    drawerPage = "rank";
+    uiPanel = "none";
+    syncParchmentHud();
+    return true;
+  }
+  if (hit === "rank_back" || hit === "rank_close") {
+    drawerPage = "main";
+    uiPanel = "none";
+    syncParchmentHud();
     return true;
   }
   if (hit === "panel") return true;
-  if (hit === "rank_close" || hit === "dismiss" || hit === "exhausted_ok") {
+  if (hit === "dismiss" || hit === "exhausted_ok") {
     if (guideStep) return true;
     uiPanel = "none";
     syncParchmentHud();

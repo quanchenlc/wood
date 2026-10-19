@@ -1,60 +1,45 @@
-# manifest.json 校验报告
+# manifest validation — D_fix_v2
 
-脚本：src/build_manifest.py（生成+校验同一次运行）
+- PASS btn_icon_ad@2x.png size=(104, 104) bytes=8045 log_ok=True insets_ok=True
+- PASS btn_icon_ad@3x.png size=(156, 156) bytes=15346 log_ok=True insets_ok=True
+- PASS btn_icon_help@2x.png size=(104, 104) bytes=7635 log_ok=True insets_ok=True
+- PASS btn_icon_help@3x.png size=(156, 156) bytes=15768 log_ok=True insets_ok=True
+- PASS btn_icon_rank@2x.png size=(104, 104) bytes=8266 log_ok=True insets_ok=True
+- PASS btn_icon_rank@3x.png size=(156, 156) bytes=15826 log_ok=True insets_ok=True
+- PASS btn_leather@2x.png size=(440, 120) bytes=32489 log_ok=True insets_ok=True
+- PASS btn_leather@3x.png size=(660, 180) bytes=65345 log_ok=True insets_ok=True
+- PASS guide_bubble@2x.png size=(400, 128) bytes=32311 log_ok=True insets_ok=True
+- PASS guide_bubble@3x.png size=(600, 192) bytes=62664 log_ok=True insets_ok=True
+- PASS guide_hand@2x.png size=(128, 128) bytes=2082 log_ok=True insets_ok=True
+- PASS guide_hand@3x.png size=(192, 192) bytes=2926 log_ok=True insets_ok=True
+- PASS guide_ring@2x.png size=(192, 192) bytes=4125 log_ok=True insets_ok=True
+- PASS guide_ring@3x.png size=(288, 288) bytes=6530 log_ok=True insets_ok=True
+- PASS guide_tail@2x.png size=(56, 36) bytes=696 log_ok=True insets_ok=True
+- PASS guide_tail@3x.png size=(84, 54) bytes=842 log_ok=True insets_ok=True
+- PASS icon_check@2x.png size=(40, 40) bytes=686 log_ok=True insets_ok=True
+- PASS icon_check@3x.png size=(60, 60) bytes=684 log_ok=True insets_ok=True
+- PASS panel_vellum@2x.png size=(600, 450) bytes=94671 log_ok=True insets_ok=True
+- PASS ribbon_madder@2x.png size=(520, 104) bytes=27777 log_ok=True insets_ok=True
+- PASS ribbon_madder@3x.png size=(780, 156) bytes=50427 log_ok=True insets_ok=True
+- PASS roll_paper@2x.png size=(320, 48) bytes=11014 log_ok=True insets_ok=True
+- PASS roll_paper@3x.png size=(480, 72) bytes=20401 log_ok=True insets_ok=True
+- PASS roll_shadow@2x.png size=(4, 32) bytes=185 log_ok=True insets_ok=True
+- PASS roll_shadow@3x.png size=(6, 48) bytes=131 log_ok=True insets_ok=True
+- PASS strip_parchment@2x.png size=(480, 96) bytes=28718 log_ok=True insets_ok=True
+- PASS strip_parchment@3x.png size=(720, 144) bytes=53772 log_ok=True insets_ok=True
+- PASS tag_parchment@2x.png size=(208, 80) bytes=11956 log_ok=True insets_ok=True
+- PASS tag_parchment@3x.png size=(312, 120) bytes=23082 log_ok=True insets_ok=True
+- PASS tag_madder@2x.png size=(208, 80) bytes=10211 log_ok=True insets_ok=True
+- PASS tag_madder@3x.png size=(312, 120) bytes=18439 log_ok=True insets_ok=True
+- PASS paper_tile@2x.jpg size=(512, 512) bytes=21899 log_ok=True insets_ok=True
+- PASS paper_tile@3x.jpg size=(1024, 1024) bytes=93419 log_ok=True insets_ok=True
+- PASS tear_edge@2x.png size=(1624, 64) bytes=18605 log_ok=True insets_ok=True
+- PASS tear_edge@3x.png size=(2436, 96) bytes=32362 log_ok=True insets_ok=True
+- PASS absent btn_icon_style
+- PASS absent drawer_vellum
 
-| file | variant | exists | px | expected (pt×scale) | insets px | expected | OK |
-|---|---|---|---|---|---|---|---|
-| btn_icon_ad@2x.png | 2x | ✓ | [104, 104] | [104, 104] | None | None | ✓ |
-| btn_icon_ad@3x.png | 3x | ✓ | [156, 156] | [156, 156] | None | None | ✓ |
-| btn_icon_help@2x.png | 2x | ✓ | [104, 104] | [104, 104] | None | None | ✓ |
-| btn_icon_help@3x.png | 3x | ✓ | [156, 156] | [156, 156] | None | None | ✓ |
-| btn_icon_rank@2x.png | 2x | ✓ | [104, 104] | [104, 104] | None | None | ✓ |
-| btn_icon_rank@3x.png | 3x | ✓ | [156, 156] | [156, 156] | None | None | ✓ |
-| btn_leather@2x.png | 2x | ✓ | [440, 120] | [440, 120] | [52, 36, 52, 36] | [52, 36, 52, 36] | ✓ |
-| btn_leather@3x.png | 3x | ✓ | [660, 180] | [660, 180] | [78, 54, 78, 54] | [78, 54, 78, 54] | ✓ |
-| guide_bubble@2x.png | 2x | ✓ | [400, 128] | [400, 128] | [36, 32, 36, 32] | [36, 32, 36, 32] | ✓ |
-| guide_bubble@3x.png | 3x | ✓ | [600, 192] | [600, 192] | [54, 48, 54, 48] | [54, 48, 54, 48] | ✓ |
-| guide_hand@2x.png | 2x | ✓ | [128, 128] | [128, 128] | None | None | ✓ |
-| guide_hand@3x.png | 3x | ✓ | [192, 192] | [192, 192] | None | None | ✓ |
-| guide_ring@2x.png | 2x | ✓ | [192, 192] | [192, 192] | None | None | ✓ |
-| guide_ring@3x.png | 3x | ✓ | [288, 288] | [288, 288] | None | None | ✓ |
-| guide_tail@2x.png | 2x | ✓ | [56, 36] | [56, 36] | None | None | ✓ |
-| guide_tail@3x.png | 3x | ✓ | [84, 54] | [84, 54] | None | None | ✓ |
-| panel_vellum@2x.png | 2x | ✓ | [600, 450] | [600, 450] | [80, 80, 80, 80] | [80, 80, 80, 80] | ✓ |
-| ribbon_madder@2x.png | 2x | ✓ | [520, 104] | [520, 104] | [96, 24, 96, 24] | [96, 24, 96, 24] | ✓ |
-| ribbon_madder@3x.png | 3x | ✓ | [780, 156] | [780, 156] | [144, 36, 144, 36] | [144, 36, 144, 36] | ✓ |
-| strip_parchment@2x.png | 2x | ✓ | [480, 96] | [480, 96] | [32, 24, 32, 24] | [32, 24, 32, 24] | ✓ |
-| strip_parchment@3x.png | 3x | ✓ | [720, 144] | [720, 144] | [48, 36, 48, 36] | [48, 36, 48, 36] | ✓ |
-| tag_parchment@2x.png | 2x | ✓ | [208, 80] | [208, 80] | [28, 24, 28, 24] | [28, 24, 28, 24] | ✓ |
-| tag_parchment@3x.png | 3x | ✓ | [312, 120] | [312, 120] | [42, 36, 42, 36] | [42, 36, 42, 36] | ✓ |
-| tag_madder@2x.png | 2x | ✓ | [208, 80] | [208, 80] | [28, 24, 28, 24] | [28, 24, 28, 24] | ✓ |
-| tag_madder@3x.png | 3x | ✓ | [312, 120] | [312, 120] | [42, 36, 42, 36] | [42, 36, 42, 36] | ✓ |
-| btn_icon_style@2x.png | 2x | ✓ | [104, 104] | [104, 104] | None | None | ✓ |
-| btn_icon_style@3x.png | 3x | ✓ | [156, 156] | [156, 156] | None | None | ✓ |
-| icon_check@2x.png | 2x | ✓ | [40, 40] | [40, 40] | None | None | ✓ |
-| icon_check@3x.png | 3x | ✓ | [60, 60] | [60, 60] | None | None | ✓ |
-| drawer_vellum@2x.png | 2x | ✓ | [400, 280] | [400, 280] | [56, 48, 56, 88] | [56, 48, 56, 88] | ✓ |
-| drawer_vellum@3x.png | 3x | ✓ | [600, 420] | [600, 420] | [84, 72, 84, 132] | [84, 72, 84, 132] | ✓ |
-| roll_paper@2x.png | 2x | ✓ | [320, 48] | [320, 48] | [32, 0, 32, 0] | [32, 0, 32, 0] | ✓ |
-| roll_paper@3x.png | 3x | ✓ | [480, 72] | [480, 72] | [48, 0, 48, 0] | [48, 0, 48, 0] | ✓ |
-| roll_shadow@2x.png | 2x | ✓ | [4, 32] | [4, 32] | None | None | ✓ |
-| roll_shadow@3x.png | 3x | ✓ | [6, 48] | [6, 48] | None | None | ✓ |
+@2x set: 313.8 KB
+@3x set (files present): 466.8 KB
+total textures dir: 780.6 KB
 
-可选（不进包，放在 optional/，路径相对 textures/）：
-
-| file | variant | exists | px | expected (pt×scale) | insets px | expected | OK |
-|---|---|---|---|---|---|---|---|
-| chip_parchment@2x.png | 2x | ✓ | [300, 72] | [300, 72] | [28, 20, 28, 20] | [28, 20, 28, 20] | ✓ |
-| chip_parchment@3x.png | 3x | ✓ | [450, 108] | [450, 108] | [42, 30, 42, 30] | [42, 30, 42, 30] | ✓ |
-| chip_boost@2x.png | 2x | ✓ | [300, 72] | [300, 72] | [28, 20, 28, 20] | [28, 20, 28, 20] | ✓ |
-| chip_boost@3x.png | 3x | ✓ | [450, 108] | [450, 108] | [42, 30, 42, 30] | [42, 30, 42, 30] | ✓ |
-| seal_wax@2x.png | 2x | ✓ | [128, 128] | [128, 128] | None | None | ✓ |
-| seal_wax@3x.png | 3x | ✓ | [192, 192] | [192, 192] | None | None | ✓ |
-| btn_icon_menu@2x.png | 2x | ✓ | [104, 104] | [104, 104] | None | None | ✓ |
-| btn_icon_menu@3x.png | 3x | ✓ | [156, 156] | [156, 156] | None | None | ✓ |
-| btn_icon_menu_s@2x.png | 2x | ✓ | [80, 80] | [80, 80] | None | None | ✓ |
-| btn_icon_menu_s@3x.png | 3x | ✓ | [120, 120] | [120, 120] | None | None | ✓ |
-
-textures/ 里未登记的文件：无
-结果：**PASS**（0 项不符）
-@2x 套 328.6 KB · @3x 套（panel 用 @2x）533.6 KB · textures/ 合计（两套都放）769.8 KB
+## RESULT: PASS

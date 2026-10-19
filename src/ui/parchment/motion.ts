@@ -1,13 +1,16 @@
-/** 抽屉展开/卷回曲线 — 对齐 D_final/src/motion_math.py */
+/** 抽屉展开/卷回曲线 — 对齐 D_final/src/motion_math.py；H1 随竖/横屏布局变化 */
 
 export const OPEN_MS = 350;
 export const CLOSE_MS = 250;
 const OPEN_EASE = [0.4, 0.3, 0.4, 1] as const;
 const CLOSE_EASE = [0.55, 0, 0.8, 0.35] as const;
-const H0 = 20;
-const H1 = 400;
+const H0_PORTRAIT = 20;
+const H1_PORTRAIT = 400;
 const D0 = 40;
 const D1 = 14;
+/** 横屏近铺满：顶/底各 8pt（D_fix_v2） */
+export const LANDSCAPE_INSET = 8;
+const TEAR_H = 32;
 
 function bezier(x1: number, y1: number, x2: number, y2: number) {
   return (t: number) => {
@@ -29,8 +32,81 @@ function bezier(x1: number, y1: number, x2: number, y2: number) {
 const easeOpen = bezier(...OPEN_EASE);
 const easeClose = bezier(...CLOSE_EASE);
 
-export function clipH(p: number) {
-  return H0 + (H1 - H0) * p;
+export interface DrawerLayout {
+  landscape: boolean;
+  screenW: number;
+  screenH: number;
+  h0: number;
+  h1: number;
+  paperY: number;
+  paperX: number;
+  paperMode: "cover" | "tile";
+  bodyH: number;
+  tearH: number;
+  tearOverlap: number;
+  capsuleTop: number;
+  capsuleLeft: number;
+  contentLeft: number;
+  contentRight: number;
+}
+
+export function isLandscape(w: number, h: number): boolean {
+  return w > h;
+}
+
+export function layoutFor(
+  w: number,
+  h: number,
+  capsule?: { top?: number; left?: number; bottom?: number } | null,
+): DrawerLayout {
+  const landscape = isLandscape(w, h);
+  const capTop = capsule?.top ?? (landscape ? 18 : 48);
+  const capLeft = capsule?.left ?? (landscape ? w - 7 - 87 : w - 7 - 87);
+  if (landscape) {
+    const h1 = h - LANDSCAPE_INSET;
+    const paperY = LANDSCAPE_INSET;
+    const bodyH = h1 - paperY - 18;
+    const left = 24;
+    const right = Math.min(w - 24, capLeft - 20);
+    return {
+      landscape: true,
+      screenW: w,
+      screenH: h,
+      h0: LANDSCAPE_INSET + 12,
+      h1,
+      paperY,
+      paperX: -12,
+      paperMode: "tile",
+      bodyH,
+      tearH: TEAR_H,
+      tearOverlap: 10,
+      capsuleTop: capTop,
+      capsuleLeft: capLeft,
+      contentLeft: left,
+      contentRight: Math.max(left + 200, right),
+    };
+  }
+  return {
+    landscape: false,
+    screenW: w,
+    screenH: h,
+    h0: H0_PORTRAIT,
+    h1: H1_PORTRAIT,
+    paperY: -8,
+    paperX: -16,
+    paperMode: "cover",
+    bodyH: H1_PORTRAIT - 22,
+    tearH: TEAR_H,
+    tearOverlap: 10,
+    capsuleTop: capTop,
+    capsuleLeft: capLeft,
+    contentLeft: 24,
+    contentRight: w - 24,
+  };
+}
+
+export function clipH(p: number, h0 = H0_PORTRAIT, h1 = H1_PORTRAIT) {
+  return h0 + (h1 - h0) * p;
 }
 export function diam(p: number) {
   return Math.sqrt(D1 * D1 + (D0 * D0 - D1 * D1) * (1 - p));
@@ -38,8 +114,8 @@ export function diam(p: number) {
 export function rollAlpha(p: number) {
   return p < 0.93 ? 1 : Math.max(0, (1 - p) / 0.07);
 }
-export function tagTop(p: number) {
-  return Math.max(48, clipH(p) - 16 + 1.25 * (diam(p) - D1));
+export function tagTop(p: number, h0 = H0_PORTRAIT, h1 = H1_PORTRAIT, minY = 48) {
+  return Math.max(minY, clipH(p, h0, h1) - 16 + 1.25 * (diam(p) - D1));
 }
 export function contentAlphaOpen(ms: number) {
   const t = Math.min(1, Math.max(0, (ms - 203) / 120));
@@ -61,17 +137,31 @@ export interface DrawerMotion {
   contentTY: number;
 }
 
-/** 打开：q 为线性 0→1（时间比例） */
-export function stateOpen(q: number): DrawerMotion {
+/** 按当前屏宽高把基于竖屏 H1=400 的 motion 映射到竖/横布局 */
+export function adaptMotion(m: DrawerMotion, layout: DrawerLayout): DrawerMotion {
+  const ch = clipH(m.p, layout.h0, layout.h1);
+  return {
+    ...m,
+    clipH: ch,
+    rollY: ch,
+    tagY: tagTop(m.p, layout.h0, layout.h1, layout.capsuleTop),
+  };
+}
+
+/** 打开：q 为线性 0→1（时间比例）；默认竖屏 H1=400 */
+export function stateOpen(q: number, layout?: DrawerLayout): DrawerMotion {
   const ms = q * OPEN_MS;
   const p = easeOpen(q);
+  const h0 = layout?.h0 ?? H0_PORTRAIT;
+  const h1 = layout?.h1 ?? H1_PORTRAIT;
+  const minY = layout?.capsuleTop ?? 48;
   return {
     p,
-    clipH: clipH(p),
+    clipH: clipH(p, h0, h1),
     d: diam(p),
-    rollY: clipH(p),
+    rollY: clipH(p, h0, h1),
     rollA: rollAlpha(p),
-    tagY: tagTop(p),
+    tagY: tagTop(p, h0, h1, minY),
     contentA: contentAlphaOpen(ms),
     dim: dimOpen(ms),
     contentTY: 6 * (1 - contentAlphaOpen(ms)),
@@ -79,24 +169,24 @@ export function stateOpen(q: number): DrawerMotion {
 }
 
 /** 收起：q 为线性 0→1（从开到关的进度） */
-export function stateClose(q: number): DrawerMotion {
+export function stateClose(q: number, layout?: DrawerLayout): DrawerMotion {
   const ms = q * CLOSE_MS;
-  // 内容先在 0–80ms 淡出
   const ca = ms < 80 ? 1 - ms / 80 : 0;
   const contentTY = ms < 80 ? -4 * (ms / 80) : -4;
-  // p 从 1 降到 0：用收起曲线
   const p = 1 - easeClose(q);
   const dim = 0.3 * (1 - Math.min(1, ms / CLOSE_MS));
-  // 末段 210–250ms 滚筒淡出
   let ra = rollAlpha(p);
   if (ms >= 210) ra *= Math.max(0, 1 - (ms - 210) / 40);
+  const h0 = layout?.h0 ?? H0_PORTRAIT;
+  const h1 = layout?.h1 ?? H1_PORTRAIT;
+  const minY = layout?.capsuleTop ?? 48;
   return {
     p,
-    clipH: clipH(p),
+    clipH: clipH(p, h0, h1),
     d: diam(p),
-    rollY: clipH(p),
+    rollY: clipH(p, h0, h1),
     rollA: ra,
-    tagY: tagTop(p),
+    tagY: tagTop(p, h0, h1, minY),
     contentA: ca,
     dim,
     contentTY,
@@ -106,7 +196,6 @@ export function stateClose(q: number): DrawerMotion {
 /** 从当前 p 反解打开/关闭的线性 q（二分） */
 export function invertEase(p: number, open: boolean): number {
   const ease = open ? easeOpen : easeClose;
-  // open: ease(q)=p; close: 1-ease(q)=p → ease(q)=1-p
   const target = open ? p : 1 - p;
   let lo = 0;
   let hi = 1;
@@ -118,14 +207,23 @@ export function invertEase(p: number, open: boolean): number {
   return (lo + hi) / 2;
 }
 
-export function motionAt(p: number, contentA: number, dim: number, contentTY = 0): DrawerMotion {
+export function motionAt(
+  p: number,
+  contentA: number,
+  dim: number,
+  contentTY = 0,
+  layout?: DrawerLayout,
+): DrawerMotion {
+  const h0 = layout?.h0 ?? H0_PORTRAIT;
+  const h1 = layout?.h1 ?? H1_PORTRAIT;
+  const minY = layout?.capsuleTop ?? 48;
   return {
     p,
-    clipH: clipH(p),
+    clipH: clipH(p, h0, h1),
     d: diam(p),
-    rollY: clipH(p),
+    rollY: clipH(p, h0, h1),
     rollA: rollAlpha(p),
-    tagY: tagTop(p),
+    tagY: tagTop(p, h0, h1, minY),
     contentA,
     dim,
     contentTY,

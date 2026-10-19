@@ -5,21 +5,21 @@ export type TexId =
   | "btn_icon_ad"
   | "btn_icon_help"
   | "btn_icon_rank"
-  | "btn_icon_style"
   | "btn_leather"
-  | "drawer_vellum"
   | "guide_bubble"
   | "guide_hand"
   | "guide_ring"
   | "guide_tail"
   | "icon_check"
   | "panel_vellum"
+  | "paper_tile"
   | "ribbon_madder"
   | "roll_paper"
   | "roll_shadow"
   | "strip_parchment"
   | "tag_madder"
-  | "tag_parchment";
+  | "tag_parchment"
+  | "tear_edge";
 
 export interface ManifestVariant {
   file: string;

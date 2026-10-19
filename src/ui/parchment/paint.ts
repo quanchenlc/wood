@@ -4,15 +4,19 @@ import type { EconomySnapshot } from "../../economy/types";
 import { getParchmentTextures, getUiDpr, type ParchmentTex, type TexMap } from "./assets";
 import { GUIDE_COPY } from "./guide";
 import {
+  adaptMotion,
+  type DrawerLayout,
   type DrawerMotion,
+  layoutFor,
   motionAt,
   stateClose,
   stateOpen,
 } from "./motion";
 import { drawNineSlice, snapPt, snapRect, type Insets } from "./nineSlice";
 
+/** rank 弹层已废弃；保留类型以防旧调用 */
 export type PanelMode = "none" | "exhausted" | "rank";
-export type DrawerPage = "main" | "style";
+export type DrawerPage = "main" | "style" | "rank";
 
 export interface GuideTargets {
   log?: { x: number; y: number; w: number; h: number };
@@ -53,6 +57,7 @@ export type UiHit =
   | "ad_skip"
   | "rank_open"
   | "rank_close"
+  | "rank_back"
   | "help_open"
   | "style_open"
   | "style_back"
@@ -168,20 +173,72 @@ function formatRemain(n: number): string {
   return String(n);
 }
 
-function capsuleTopPt(fallback = 48): number {
+function capsuleRect(
+  fallbackTop = 48,
+  screenW = 375,
+): {
+  top: number;
+  left: number;
+  bottom: number;
+  right: number;
+  width: number;
+  height: number;
+} {
+  const landscape = screenW > 500;
+  const fallbackLeft = landscape ? screenW - 7 - 87 : 281;
+  const fallback = {
+    top: landscape ? 18 : fallbackTop,
+    left: fallbackLeft,
+    bottom: (landscape ? 18 : fallbackTop) + 32,
+    right: fallbackLeft + 87,
+    width: 87,
+    height: 32,
+  };
   try {
     const wx = (globalThis as {
-      wx?: { getMenuButtonBoundingClientRect?: () => { top?: number; height?: number } };
+      wx?: {
+        getMenuButtonBoundingClientRect?: () => {
+          top?: number;
+          left?: number;
+          bottom?: number;
+          right?: number;
+          width?: number;
+          height?: number;
+        };
+      };
     }).wx;
     const r = wx?.getMenuButtonBoundingClientRect?.();
-    if (r?.top != null) return r.top;
+    if (r?.top != null) {
+      let left = r.left ?? fallbackLeft;
+      let top = r.top;
+      // harness / 竖屏胶囊坐标在横屏下不可用 → 回退到右上角
+      if (landscape && left < screenW * 0.45) {
+        left = fallbackLeft;
+        top = Math.min(top, 24);
+      }
+      return {
+        top,
+        left,
+        bottom: r.bottom ?? top + (r.height ?? 32),
+        right: r.right ?? left + (r.width ?? 87),
+        width: r.width ?? 87,
+        height: r.height ?? 32,
+      };
+    }
   } catch {
     /* ignore */
   }
   return fallback;
 }
 
-export function getTagHitRect(capsuleTop = capsuleTopPt()): {
+function capsuleTopPt(fallback = 48, screenW = 375): number {
+  return capsuleRect(fallback, screenW).top;
+}
+
+export function getTagHitRect(
+  capsuleTop = capsuleTopPt(),
+  screenW = 375,
+): {
   x: number;
   y: number;
   w: number;
@@ -190,15 +247,76 @@ export function getTagHitRect(capsuleTop = capsuleTopPt()): {
 } {
   const visW = 96;
   const visH = 32;
-  const vx = (375 - visW) / 2;
+  const vx = (screenW - visW) / 2;
   const vy = capsuleTop;
   return {
-    x: 375 / 2 - 64,
+    x: screenW / 2 - 64,
     y: Math.max(40, capsuleTop - 8),
     w: 128,
     h: 48,
     visual: { x: vx, y: vy, w: visW, h: visH },
   };
+}
+
+/** paper_tile：cover（竖屏）或 tile（横屏），禁止九宫格纸身 */
+function drawPaperFill(
+  ctx: CanvasRenderingContext2D,
+  tex: ParchmentTex | undefined,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  mode: "cover" | "tile",
+  dpr: number,
+) {
+  const r = snapRect(x, y, w, h, dpr);
+  if (!tex) {
+    ctx.fillStyle = "#e8d4a8";
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    return;
+  }
+  const img = tex.img;
+  const iw = img.naturalWidth || img.width;
+  const ih = img.naturalHeight || img.height;
+  if (mode === "tile") {
+    // 用 pattern 缩放，避免逐块 snap 产生竖缝
+    const tileCss = Math.max(1, iw / tex.density);
+    const scale = tileCss / iw;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(r.x, r.y, r.w, r.h);
+    ctx.clip();
+    ctx.translate(r.x, r.y);
+    ctx.scale(scale, scale);
+    const pat = ctx.createPattern(img, "repeat");
+    if (pat) {
+      ctx.fillStyle = pat;
+      ctx.fillRect(0, 0, r.w / scale + 1, r.h / scale + 1);
+    } else {
+      // fallback：整块 drawImage 叠 0.5pt 防缝
+      const tileH = ih * scale;
+      for (let py = 0; py < r.h; py += tileCss - 0.5) {
+        for (let px = 0; px < r.w; px += tileCss - 0.5) {
+          ctx.drawImage(img, px / scale, py / scale, iw + 1, ih + 1);
+        }
+      }
+      void tileH;
+    }
+    ctx.restore();
+    return;
+  }
+  // cover：等比放大铺满，居中裁切（单张放大勿超过 ~1.5× 时仍用 cover）
+  const s = Math.max(r.w / iw, r.h / ih);
+  const bw = iw * s;
+  const bh = ih * s;
+  const ox = r.x + (r.w - bw) / 2;
+  const oy = r.y + (r.h - bh) / 2;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(r.x, r.y, r.w, r.h);
+  ctx.clip();
+  ctx.drawImage(img, ox, oy, bw, bh);
+  ctx.restore();
 }
 
 function paintTag(
@@ -367,75 +485,228 @@ function paintDrawerIcon(
   return { x, y, w: size, h: size + 22 };
 }
 
-function paintDrawerContent(
+function paintDrawerBackHeader(
   ctx: CanvasRenderingContext2D,
-  w: number,
+  layout: DrawerLayout,
+  title: string,
+  backHit: UiHit,
+  hits: HitRect[],
+  headerY: number,
+) {
+  const left = layout.contentLeft;
+  const right = layout.contentRight;
+  const mid = (left + right) / 2;
+  ctx.fillStyle = INK;
+  ctx.font = fontSans(14, "700");
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillText("‹ 返回", left, headerY);
+  pushHit(hits, backHit, left - 8, headerY - 18, 72, 36);
+  ctx.font = fontSerif(17, "700");
+  ctx.textAlign = "center";
+  ctx.fillText(title, mid, headerY);
+  ctx.strokeStyle = "rgba(58,42,24,0.28)";
+  ctx.beginPath();
+  ctx.moveTo(left, headerY + 18);
+  ctx.lineTo(right, headerY + 18);
+  ctx.stroke();
+}
+
+function paintRankPage(
+  ctx: CanvasRenderingContext2D,
+  layout: DrawerLayout,
+  tex: TexMap,
+  hits: HitRect[],
+  state: ParchmentUiState,
+  dpr: number,
+) {
+  const left = layout.contentLeft;
+  const right = layout.contentRight;
+  const headerY = layout.landscape ? 58 : 100;
+  paintDrawerBackHeader(ctx, layout, "好友柴榜", "rank_back", hits, headerY);
+
+  // sharedCanvas @ device dpr，嵌在内容区
+  const listTop = headerY + 24;
+  const listBottom = layout.landscape
+    ? layout.screenH - 40
+    : Math.min(layout.h1 - 48, layout.screenH * 0.48);
+  const listH = Math.max(120, listBottom - listTop);
+  const listW = right - left;
+  try {
+    const wx = (globalThis as {
+      wx?: {
+        getOpenDataContext?: () => { canvas?: HTMLCanvasElement };
+      };
+    }).wx;
+    const od = wx?.getOpenDataContext?.();
+    if (od?.canvas) {
+      od.canvas.width = Math.floor(listW * dpr);
+      od.canvas.height = Math.floor(listH * dpr);
+    }
+  } catch {
+    /* ignore */
+  }
+
+  const pieces = state.selfRank?.pieces ?? state.economy?.state.total_pieces ?? 0;
+  const selfName = state.selfRank?.name ?? "我";
+  const rows = [
+    { rk: "1", name: "林间樵夫", sc: Math.max(pieces + 200, 1280) },
+    { rk: "2", name: selfName, sc: Math.max(pieces, 960), self: true },
+    { rk: "3", name: "雾里砍柴", sc: Math.max(pieces - 40, 740) },
+    { rk: "4", name: "晚风", sc: Math.max(pieces - 80, 510) },
+    { rk: "5", name: "小斧头", sc: Math.max(pieces - 120, 380) },
+    { rk: "6", name: "松果", sc: Math.max(pieces - 160, 220) },
+  ];
+
+  if (layout.landscape) {
+    const colW = (listW - 20) / 2;
+    rows.forEach((row, i) => {
+      const col = i % 2;
+      const rowI = Math.floor(i / 2);
+      const x0 = left + col * (colW + 20);
+      const y = listTop + 8 + rowI * 40;
+      const ax = x0 + 16;
+      const ay = y + 12;
+      ctx.beginPath();
+      ctx.arc(ax, ay, 12, 0, Math.PI * 2);
+      ctx.fillStyle = row.self ? "#c4a882" : "#b4966e";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(58,42,24,0.45)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = INK;
+      ctx.font = fontSans(11, "700");
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(row.rk, ax, ay);
+      ctx.font = fontSans(13);
+      ctx.textAlign = "left";
+      ctx.fillText(row.name, x0 + 36, ay);
+      ctx.textAlign = "right";
+      ctx.font = fontSerif(13, "600");
+      ctx.fillStyle = INK_SOFT;
+      ctx.fillText(String(row.sc), x0 + colW - 4, ay);
+    });
+    ctx.fillStyle = INK_SOFT;
+    ctx.font = fontSans(11);
+    ctx.textAlign = "center";
+    ctx.fillText(
+      "开放数据域 · sharedCanvas 按设备 dpr 创建",
+      (left + right) / 2,
+      layout.screenH - 28,
+    );
+  } else {
+    rows.slice(0, 5).forEach((row, i) => {
+      const y = listTop + 8 + i * 44;
+      const ax = left + 16;
+      const ay = y + 14;
+      ctx.beginPath();
+      ctx.arc(ax, ay, 14, 0, Math.PI * 2);
+      ctx.fillStyle = row.self ? "#c4a882" : "#b4966e";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(58,42,24,0.45)";
+      ctx.stroke();
+      ctx.fillStyle = INK;
+      ctx.font = fontSans(11, "700");
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(row.rk, ax, ay);
+      ctx.font = fontSans(14);
+      ctx.textAlign = "left";
+      ctx.fillText(row.name, left + 42, ay);
+      ctx.textAlign = "right";
+      ctx.font = fontSerif(14, "600");
+      ctx.fillStyle = INK_SOFT;
+      ctx.fillText(`${row.sc} 根`, right, ay);
+      if (i < 4) {
+        ctx.strokeStyle = "rgba(58,42,24,0.16)";
+        ctx.beginPath();
+        ctx.moveTo(left + 42, y + 36);
+        ctx.lineTo(right, y + 36);
+        ctx.stroke();
+      }
+    });
+    ctx.fillStyle = INK_SOFT;
+    ctx.font = fontSans(11);
+    ctx.textAlign = "center";
+    ctx.fillText(
+      "列表在开放数据域绘制 · sharedCanvas@dpr",
+      layout.screenW / 2,
+      listTop + 8 + 5 * 44 + 16,
+    );
+  }
+  void tex;
+}
+
+function paintStylePage(
+  ctx: CanvasRenderingContext2D,
+  layout: DrawerLayout,
+  tex: TexMap,
+  hits: HitRect[],
+  state: ParchmentUiState,
+  dpr: number,
+) {
+  const left = layout.contentLeft;
+  const right = layout.contentRight;
+  const w = layout.screenW;
+  const headerY = layout.landscape ? 58 : 108;
+  paintDrawerBackHeader(ctx, layout, "选择风格", "style_back", hits, headerY);
+  const opts = state.styleOptions || [];
+  const rowW = Math.min(layout.landscape ? 420 : w - 48, right - left);
+  const rowX = layout.landscape ? (left + right - rowW) / 2 : 24;
+  opts.forEach((opt, i) => {
+    const y = headerY + 28 + i * (layout.landscape ? 44 : 48);
+    const active = opt.id === state.styleId;
+    if (active) drawTexNine(ctx, tex.strip_parchment, rowX, y + 2, rowW, 42, dpr);
+    ctx.beginPath();
+    ctx.arc(rowX + 28, y + 24, 11, 0, Math.PI * 2);
+    ctx.fillStyle = opt.color;
+    ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = INK;
+    ctx.font = fontSans(15);
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(opt.label, rowX + 52, y + 24);
+    if (active && tex.icon_check) {
+      ctx.drawImage(
+        tex.icon_check.img,
+        snapPt(rowX + rowW - 36, dpr),
+        snapPt(y + 12, dpr),
+        20,
+        20,
+      );
+    }
+    pushHit(hits, "style_pick", rowX, y, rowW, 48, opt.id);
+  });
+  ctx.fillStyle = INK_SOFT;
+  ctx.font = fontSans(11);
+  ctx.textAlign = "center";
+  ctx.fillText(
+    "切换即时生效，下次启动保留",
+    (left + right) / 2,
+    headerY + 28 + opts.length * 48 + 12,
+  );
+}
+
+function paintDrawerMain(
+  ctx: CanvasRenderingContext2D,
+  layout: DrawerLayout,
   snap: EconomySnapshot,
   tex: TexMap,
   hits: HitRect[],
   state: ParchmentUiState,
   dpr: number,
-  contentTY: number,
 ): GuideTargets {
   const targets: GuideTargets = {};
-  ctx.save();
-  ctx.translate(0, contentTY);
   const s = snap.state;
-  const page = state.drawerPage || "main";
+  const left = layout.contentLeft;
+  const right = layout.contentRight;
+  const mid = (left + right) / 2;
+  const w = layout.screenW;
 
-  if (page === "style") {
-    ctx.fillStyle = INK_SOFT;
-    ctx.font = fontSans(15);
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.fillText("〈", 24, 108);
-    pushHit(hits, "style_back", 16, 86, 44, 44);
-    ctx.fillStyle = INK;
-    ctx.font = fontSerif(17, "700");
-    ctx.textAlign = "center";
-    ctx.fillText("风格", w / 2, 108);
-    ctx.strokeStyle = "rgba(58,42,24,0.3)";
-    ctx.beginPath();
-    ctx.moveTo(24, 128);
-    ctx.lineTo(w - 24, 128);
-    ctx.stroke();
-    const opts = state.styleOptions || [];
-    opts.forEach((opt, i) => {
-      const y = 136 + i * 48;
-      const active = opt.id === state.styleId;
-      if (active) drawTexNine(ctx, tex.strip_parchment, 24, y + 2, w - 48, 44, dpr);
-      ctx.beginPath();
-      ctx.arc(55, y + 24, 11, 0, Math.PI * 2);
-      ctx.fillStyle = opt.color;
-      ctx.fill();
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.fillStyle = INK;
-      ctx.font = fontSans(15);
-      ctx.textAlign = "left";
-      ctx.textBaseline = "middle";
-      ctx.fillText(opt.label, 80, y + 24);
-      if (active && tex.icon_check) {
-        ctx.drawImage(
-          tex.icon_check.img,
-          snapPt(w - 60, dpr),
-          snapPt(y + 14, dpr),
-          20,
-          20,
-        );
-      }
-      pushHit(hits, "style_pick", 24, y, w - 48, 48, opt.id);
-    });
-    ctx.fillStyle = INK_SOFT;
-    ctx.font = fontSans(11);
-    ctx.textAlign = "center";
-    ctx.fillText("切换即时生效，下次启动保留", w / 2, 388);
-    ctx.restore();
-    return targets;
-  }
-
-  // stats 3 cols
   const cols = [
     { label: COPY_C.hudToday, value: String(s.today_pieces) },
     { label: COPY_C.hudRemaining, value: String(s.daily_remaining) },
@@ -448,7 +719,90 @@ function paintDrawerContent(
           : formatCountdown(snap.nextRootMs),
     },
   ];
-  const cxs = [62.5, 187.5, 312.5];
+
+  const claimLabel =
+    state.claimFlash ||
+    (s.pending_claim > 0
+      ? `免费领取 柴棚 ${s.pending_claim} 根`
+      : `柴棚空了 · 下一批 ${formatCountdown(snap.nextRootMs)}`);
+
+  const icons: {
+    id: "btn_icon_rank" | "btn_icon_ad" | "btn_icon_help";
+    label: string;
+    hit: UiHit;
+    badge?: number;
+  }[] = [
+    { id: "btn_icon_rank", label: "好友柴榜", hit: "rank_open" },
+    {
+      id: "btn_icon_ad",
+      label: "看短片加速",
+      hit: "ad_skip",
+      badge: state.adRemaining,
+    },
+    { id: "btn_icon_help", label: "玩法", hit: "help_open" },
+  ];
+
+  if (layout.landscape) {
+    const top = Math.max(56, (layout.capsuleTop || 18) + 6);
+    cols.forEach((c, i) => {
+      const cx = left + ((right - left) * (i + 0.5)) / 3;
+      ctx.fillStyle = INK_SOFT;
+      ctx.font = fontSans(11);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "alphabetic";
+      ctx.fillText(c.label, cx, top);
+      ctx.fillStyle = INK;
+      ctx.font = fontSerif(i === 2 && snap.boosting ? 15 : 20, "700");
+      ctx.fillText(c.value, cx, top + 22);
+    });
+    let y = top + 44;
+    ctx.strokeStyle = "rgba(58,42,24,0.3)";
+    ctx.beginPath();
+    ctx.moveTo(left, y);
+    ctx.lineTo(right, y);
+    ctx.stroke();
+    y += 12;
+    const bw = Math.min(420, right - left);
+    const bx = left + (right - left - bw) / 2;
+    if (s.pending_claim > 0 || state.claimFlash) {
+      paintLeatherBtn(ctx, tex, bx, y, bw, 44, claimLabel, dpr);
+      pushHit(hits, "claim_free", bx, y, bw, 44);
+      targets.claim = { x: bx, y, w: bw, h: 44 };
+    } else {
+      ctx.fillStyle = "rgba(92,74,50,0.55)";
+      ctx.font = fontSans(13);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(claimLabel, mid, y + 22);
+    }
+    y += 56;
+    const gap = 140;
+    const start = mid - gap;
+    icons.forEach((ic, i) => {
+      const cx = start + i * gap;
+      const box = paintDrawerIcon(ctx, tex, ic.id, cx, y, ic.label, dpr, ic.badge);
+      pushHit(hits, ic.hit, box.x, box.y, box.w, box.h);
+    });
+    y += 78;
+    const sw = 260;
+    const sx = mid - sw / 2;
+    paintStripBtn(
+      ctx,
+      tex,
+      sx,
+      y,
+      sw,
+      34,
+      `风格：${state.styleLabel || "羊皮纸"} 〉`,
+      dpr,
+    );
+    pushHit(hits, "style_open", sx, y, sw, 34);
+    targets.styleRow = { x: sx, y, w: sw, h: 34 };
+    return targets;
+  }
+
+  // portrait
+  const cxs = [w / 6, w / 2, (5 * w) / 6];
   cols.forEach((c, i) => {
     ctx.fillStyle = INK_SOFT;
     ctx.font = fontSans(11);
@@ -465,16 +819,10 @@ function paintDrawerContent(
   ctx.lineTo(w - 24, 152);
   ctx.stroke();
 
-  // claim
-  const claimLabel =
-    state.claimFlash ||
-    (s.pending_claim > 0
-      ? `免费领取 柴棚 ${s.pending_claim} 根`
-      : `柴棚空了 · 下一批 ${formatCountdown(snap.nextRootMs)}`);
   if (s.pending_claim > 0 || state.claimFlash) {
-    paintLeatherBtn(ctx, tex, 32, 164, 311, 48, claimLabel, dpr);
-    pushHit(hits, "claim_free", 32, 164, 311, 48);
-    targets.claim = { x: 32, y: 164, w: 311, h: 48 };
+    paintLeatherBtn(ctx, tex, 32, 164, w - 64, 48, claimLabel, dpr);
+    pushHit(hits, "claim_free", 32, 164, w - 64, 48);
+    targets.claim = { x: 32, y: 164, w: w - 64, h: 48 };
   } else {
     ctx.fillStyle = "rgba(92,74,50,0.55)";
     ctx.font = fontSans(13);
@@ -483,29 +831,12 @@ function paintDrawerContent(
     ctx.fillText(claimLabel, w / 2, 188);
   }
 
-  // 3 icons (no style button — style is row only)
-  const icons: {
-    id: "btn_icon_rank" | "btn_icon_ad" | "btn_icon_help";
-    label: string;
-    hit: UiHit;
-    badge?: number;
-  }[] = [
-    { id: "btn_icon_rank", label: "好友柴榜", hit: "rank_open" },
-    {
-      id: "btn_icon_ad",
-      label: "看短片加速",
-      hit: "ad_skip",
-      badge: state.adRemaining,
-    },
-    { id: "btn_icon_help", label: "玩法", hit: "help_open" },
-  ];
   icons.forEach((ic, i) => {
     const cx = cxs[i];
     const box = paintDrawerIcon(ctx, tex, ic.id, cx, 228, ic.label, dpr, ic.badge);
     pushHit(hits, ic.hit, box.x, box.y, box.w, box.h);
   });
 
-  // style row
   const sw = 230;
   const sx = (w - sw) / 2;
   const sy = 306;
@@ -521,9 +852,36 @@ function paintDrawerContent(
   );
   pushHit(hits, "style_open", sx, sy, sw, 36);
   targets.styleRow = { x: sx, y: sy, w: sw, h: 36 };
-
-  ctx.restore();
   return targets;
+}
+
+function paintDrawerContent(
+  ctx: CanvasRenderingContext2D,
+  layout: DrawerLayout,
+  snap: EconomySnapshot,
+  tex: TexMap,
+  hits: HitRect[],
+  state: ParchmentUiState,
+  dpr: number,
+  contentTY: number,
+): GuideTargets {
+  const targets: GuideTargets = {};
+  ctx.save();
+  ctx.translate(0, contentTY);
+  const page = state.drawerPage || "main";
+  if (page === "style") {
+    paintStylePage(ctx, layout, tex, hits, state, dpr);
+    ctx.restore();
+    return targets;
+  }
+  if (page === "rank") {
+    paintRankPage(ctx, layout, tex, hits, state, dpr);
+    ctx.restore();
+    return targets;
+  }
+  const t = paintDrawerMain(ctx, layout, snap, tex, hits, state, dpr);
+  ctx.restore();
+  return t;
 }
 
 function paintDrawerShell(
@@ -535,40 +893,62 @@ function paintDrawerShell(
   hits: HitRect[],
   state: ParchmentUiState,
   dpr: number,
+  layout: DrawerLayout,
 ): GuideTargets {
-  const { clipH: ch, d, rollY, rollA, tagY, contentA, dim, contentTY, p } = motion;
-  // mask
+  const m = adaptMotion(motion, layout);
+  const { clipH: ch, d, rollY, rollA, tagY, contentA, dim, contentTY, p } = m;
+
   if (dim > 0.001) {
     ctx.fillStyle = `rgba(30,20,10,${dim})`;
     ctx.fillRect(0, 0, w, h);
-    pushHit(hits, "drawer_mask", 0, ch, w, h - ch);
+    pushHit(hits, "drawer_mask", 0, ch, w, Math.max(0, h - ch));
   }
+
+  const paperX = layout.paperX;
+  const paperY = layout.paperY;
+  const paperW = w - 2 * paperX;
+  const bodyH = layout.bodyH;
+  const tearY = paperY + bodyH - layout.tearOverlap;
+
   ctx.save();
   ctx.beginPath();
   ctx.rect(0, 0, w, ch);
   ctx.clip();
-  // paper shadow
-  ctx.shadowColor = "rgba(40,28,16,0.45)";
+
+  // soft drop shadow under paper
+  ctx.shadowColor = "rgba(25,15,5,0.40)";
   ctx.shadowBlur = 5;
   ctx.shadowOffsetY = 3;
-  drawTexNine(ctx, tex.drawer_vellum, -28, -24, 431, 424, dpr);
+  drawPaperFill(ctx, tex.paper_tile, paperX, paperY, paperW, bodyH, layout.paperMode, dpr);
   ctx.shadowColor = "transparent";
   ctx.shadowBlur = 0;
   ctx.shadowOffsetY = 0;
 
+  // tear_edge：仅左右九宫格，高 32pt，上叠约 10pt
+  drawTexNine(ctx, tex.tear_edge, paperX, tearY, paperW, layout.tearH, dpr);
+
   let targets: GuideTargets = {};
   if (contentA > 0.01 && state.economy) {
     ctx.globalAlpha = contentA;
-    targets = paintDrawerContent(ctx, w, state.economy, tex, hits, state, dpr, contentTY);
+    targets = paintDrawerContent(
+      ctx,
+      layout,
+      state.economy,
+      tex,
+      hits,
+      state,
+      dpr,
+      contentTY,
+    );
     ctx.globalAlpha = 1;
   }
   ctx.restore();
 
-  // roll
+  // roll on clip edge
   if (rollA > 0.01 && p < 0.999) {
     ctx.globalAlpha = rollA;
-    const rollW = 395;
-    const rollX = -10;
+    const rollW = paperW + 20;
+    const rollX = paperX - 4;
     const endW = 16 * (d / 24);
     if (tex.roll_shadow) {
       const sh = 0.6 * d;
@@ -584,7 +964,6 @@ function paintDrawerShell(
     ctx.globalAlpha = 1;
   }
 
-  // tag on paper edge
   const snap = state.economy;
   const remain = snap?.state.daily_remaining ?? 0;
   const exhausted = Boolean(snap?.quotaExhausted && remain <= 0);
@@ -598,7 +977,7 @@ function paintDrawerShell(
     dpr,
     wScreen: w,
   });
-  const tagHit = getTagHitRect(state.capsuleTop ?? 48);
+  const tagHit = getTagHitRect(state.capsuleTop ?? layout.capsuleTop, w);
   pushHit(hits, "tag", tagHit.x, Math.min(tagHit.y, tagY - 8), tagHit.w, 48);
 
   return targets;
@@ -641,7 +1020,7 @@ export function paintParchmentLoading(
   ctx.fillText(`${status || COPY_C.loading} ${pct}%`, w / 2, barY + 28);
   ctx.globalAlpha = 0.35;
   ctx.font = fontSans(11);
-  ctx.fillText("v0.3.4 · 极简抽屉", w / 2, h - 24);
+  ctx.fillText("v0.3.5 · 抽屉高清横屏", w / 2, h - 24);
   ctx.globalAlpha = 1;
 }
 
@@ -731,88 +1110,6 @@ function paintExhaustedPanel(
   ctx.textAlign = "center";
   ctx.fillText("知道了", w / 2, y + 10);
   pushHit(hits, "exhausted_ok", w / 2 - 40, y - 10, 80, 44);
-}
-
-function paintRankPanel(
-  ctx: CanvasRenderingContext2D,
-  w: number,
-  h: number,
-  snap: EconomySnapshot | null,
-  tex: TexMap,
-  hits: HitRect[],
-  self?: { name: string; pieces: number; rank: number },
-) {
-  const dpr = getUiDpr();
-  // 开放数据域 sharedCanvas 按设备 dpr 建（若可用）
-  try {
-    const wx = (globalThis as {
-      wx?: {
-        getOpenDataContext?: () => { canvas?: HTMLCanvasElement };
-      };
-    }).wx;
-    const od = wx?.getOpenDataContext?.();
-    if (od?.canvas) {
-      const cssW = w;
-      const cssH = Math.min(520, h * 0.7);
-      od.canvas.width = Math.floor(cssW * dpr);
-      od.canvas.height = Math.floor(cssH * dpr);
-    }
-  } catch {
-    /* ignore */
-  }
-
-  ctx.fillStyle = "rgba(40,28,16,0.42)";
-  ctx.fillRect(0, 0, w, h);
-  pushHit(hits, "dismiss", 0, 0, w, h);
-  const pw = Math.min(320, w * 0.9);
-  const ph = Math.min(520, h * 0.7);
-  const px = (w - pw) / 2;
-  const py = (h - ph) / 2 - 8;
-  pushHit(hits, "panel", px, py, pw, ph);
-  drawTexNine(ctx, tex.panel_vellum, px, py, pw, ph, dpr);
-  const rw = Math.min(pw * 0.88, 260);
-  drawTexNine(ctx, tex.ribbon_madder, (w - rw) / 2, py - 18, rw, 40, dpr);
-  ctx.fillStyle = CREAM;
-  ctx.font = fontSerif(16, "700");
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(`${COPY_C.rankTitle} · 本周`, w / 2, py + 2);
-
-  const pieces = self?.pieces ?? snap?.state.total_pieces ?? 0;
-  const name = self?.name ?? "我";
-  const ranks = ["壹", "贰", "叁", "肆", "伍", "陆", "柒", "捌"];
-  const rows = [
-    { name: "林间老樵", pieces: Math.max(pieces + 200, 1284) },
-    { name: "阿菜", pieces: Math.max(pieces + 80, 960) },
-    { name: "松下客", pieces: Math.max(pieces + 40, 720) },
-    { name: "柴门客", pieces: Math.max(pieces + 10, 600) },
-    { name, pieces, self: true },
-    { name: "南枝", pieces: Math.max(0, pieces - 40) },
-    { name: "晚风", pieces: Math.max(0, pieces - 80) },
-    { name: "山客", pieces: Math.max(0, pieces - 120) },
-  ].sort((a, b) => b.pieces - a.pieces);
-
-  let y = py + 56;
-  rows.slice(0, 8).forEach((row, i) => {
-    const rh = 40;
-    if (row.self || row.name === name) {
-      drawTexNine(ctx, tex.strip_parchment, px + 14, y - 2, pw - 28, rh, dpr);
-    }
-    ctx.fillStyle = INK;
-    ctx.font = fontSerif(14, "700");
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.fillText(ranks[i] || String(i + 1), px + 24, y + rh / 2);
-    ctx.font = fontSans(13);
-    ctx.fillText(row.name, px + 56, y + rh / 2);
-    ctx.textAlign = "right";
-    ctx.font = fontSerif(13, "600");
-    ctx.fillText(`${row.pieces.toLocaleString()} 根`, px + pw - 24, y + rh / 2);
-    y += rh;
-  });
-
-  paintLeatherBtn(ctx, tex, (w - 140) / 2, py + ph - 42, 140, 40, COPY_C.back, dpr);
-  pushHit(hits, "rank_close", (w - 140) / 2, py + ph - 42, 140, 40);
 }
 
 function paintGuide(
@@ -1053,8 +1350,15 @@ export function paintParchmentUi(
   const guideOn = Boolean(state.guideStep && state.guideStep >= 1 && state.guideStep <= 3);
   const motion = resolveDrawerMotion(state);
   const drawerVisible = Boolean(motion && motion.p > 0.001);
-  const panelOpen = state.panel !== "none";
-  const capTop = state.capsuleTop ?? capsuleTopPt();
+  // rank 已改为抽屉内页；panel===rank 不再画弹层
+  const panelOpen = state.panel === "exhausted";
+  const cap = capsuleRect(state.capsuleTop ?? 48, w);
+  const capTop = state.capsuleTop ?? cap.top;
+  const layout = layoutFor(w, h, {
+    top: capTop,
+    left: cap.left,
+    bottom: cap.bottom,
+  });
   const snap = state.economy;
   const remain = snap?.state.daily_remaining ?? 0;
   const exhausted = Boolean(snap && remain <= 0);
@@ -1073,7 +1377,7 @@ export function paintParchmentUi(
       wScreen: w,
     });
     guideTargets.tag = tagVis;
-    const hit = getTagHitRect(capTop);
+    const hit = getTagHitRect(capTop, w);
     pushHit(hits, "tag", hit.x, hit.y, hit.w, hit.h);
   }
 
@@ -1089,7 +1393,7 @@ export function paintParchmentUi(
   }
 
   if (drawerVisible && motion) {
-    const t = paintDrawerShell(ctx, w, h, tex, motion, hits, state, dpr);
+    const t = paintDrawerShell(ctx, w, h, tex, motion, hits, state, dpr, layout);
     guideTargets = { ...guideTargets, ...t };
   }
 
@@ -1106,13 +1410,11 @@ export function paintParchmentUi(
     );
     // keep tag hittable during guide
     if (!drawerVisible) {
-      const hit = getTagHitRect(capTop);
+      const hit = getTagHitRect(capTop, w);
       pushHit(hits, "tag", hit.x, hit.y, hit.w, hit.h);
     }
   } else if (state.panel === "exhausted" && snap) {
     paintExhaustedPanel(ctx, w, h, snap, tex, hits);
-  } else if (state.panel === "rank") {
-    paintRankPanel(ctx, w, h, snap, tex, hits, state.selfRank);
   }
 
   if (state.toast) {

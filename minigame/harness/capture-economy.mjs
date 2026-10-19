@@ -1,5 +1,5 @@
 /**
- * 0.3.4 minimal-drawer-ui — DPR3 @ 375×812
+ * 0.3.5 drawer-hires-landscape — portrait 375×812 + landscape 812×375 @ DPR3
  */
 import { createServer } from "node:http";
 import {
@@ -71,7 +71,7 @@ function startServer() {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const outDir = join(ARTIFACTS, "minigame-034");
+const outDir = join(ARTIFACTS, "minigame-035");
 mkdirSync(outDir, { recursive: true });
 
 const server = await startServer();
@@ -81,7 +81,6 @@ const browser = await puppeteer.launch({
   args: ["--no-sandbox", "--disable-gpu", "--use-gl=swiftshader"],
 });
 const page = await browser.newPage();
-await page.setViewport({ width: 375, height: 812, deviceScaleFactor: 3 });
 let warn404 = 0;
 page.on("console", (m) => {
   const t = m.text();
@@ -95,93 +94,105 @@ page.on("requestfailed", (req) => {
   if (req.url().includes("@")) warn404++;
 });
 
-await page.goto(`http://127.0.0.1:${PORT}/harness/index.html`, {
-  waitUntil: "domcontentloaded",
-  timeout: 120000,
-});
-
-for (let i = 0; i < 100; i++) {
-  const ready = await page.evaluate(
-    () => typeof window.__fw?.economy === "function" && typeof window.__fw?.art === "function",
-  );
-  if (ready) break;
-  await sleep(400);
-}
-await sleep(1800);
-
-await page.evaluate(async () => {
-  await window.__fw.art().switchTo("set4");
-  for (let i = 0; i < 60; i++) {
-    if (!window.__fw.art().isSwitching()) break;
-    await new Promise((r) => setTimeout(r, 200));
+async function waitReady() {
+  for (let i = 0; i < 100; i++) {
+    const ready = await page.evaluate(
+      () => typeof window.__fw?.economy === "function" && typeof window.__fw?.art === "function",
+    );
+    if (ready) return;
+    await sleep(400);
   }
-});
-await sleep(800);
-
-// skip guide for idle shots
-await page.evaluate(() => {
-  window.__fw.economy().skipGuide();
-  window.__fw.economy().setRemaining(12);
-  window.__fw.economy().openPanel("none");
-  window.__fw.economy().closeDrawer?.();
-});
-await sleep(600);
-await page.screenshot({ path: join(outDir, "01_idle.png"), type: "png" });
-
-// drawer keyframes via setDrawerQ (linear q ≈ open ease samples)
-for (const [name, q] of [
-  ["02_drawer_30", 0.3],
-  ["03_drawer_60", 0.6],
-  ["04_drawer_100", 1.0],
-]) {
-  await page.evaluate((qq) => window.__fw.economy().setDrawerQ(qq), q);
-  await sleep(400);
-  await page.screenshot({ path: join(outDir, `${name}.png`), type: "png" });
+  throw new Error("fw not ready");
 }
 
-await page.evaluate(() => {
-  window.__fw.economy().closeDrawer();
-  window.__fw.economy().setRemaining(0);
-  window.__fw.economy().showExhaustedBubble();
-});
-await sleep(500);
-await page.screenshot({ path: join(outDir, "05_exhausted_bubble.png"), type: "png" });
+async function prepBase() {
+  await page.evaluate(async () => {
+    await window.__fw.art().switchTo("set4");
+    for (let i = 0; i < 60; i++) {
+      if (!window.__fw.art().isSwitching()) break;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+  });
+  await sleep(600);
+  await page.evaluate(() => {
+    window.__fw.economy().skipGuide();
+    window.__fw.economy().setRemaining(12);
+    window.__fw.economy().openPanel("none");
+    window.__fw.economy().closeDrawer?.();
+  });
+  await sleep(400);
+}
 
-await page.evaluate(() => window.__fw.economy().openPanel("exhausted"));
-await sleep(500);
-await page.screenshot({ path: join(outDir, "06_exhausted_panel.png"), type: "png" });
+async function shootPortrait() {
+  await page.setViewport({ width: 375, height: 812, deviceScaleFactor: 3 });
+  await page.goto(`http://127.0.0.1:${PORT}/harness/index.html`, {
+    waitUntil: "domcontentloaded",
+    timeout: 120000,
+  });
+  await waitReady();
+  await sleep(1200);
+  await prepBase();
 
-await page.evaluate(() => {
-  window.__fw.economy().openPanel("none");
-  window.__fw.economy().setRemaining(12);
-  window.__fw.economy().setDrawerQ(1);
-  window.__fw.economy().setDrawerPage("style");
-});
-await sleep(500);
-await page.screenshot({ path: join(outDir, "07_style_list.png"), type: "png" });
+  await page.screenshot({ path: join(outDir, "p01_idle.png"), type: "png" });
 
-await page.evaluate(() => {
-  window.__fw.economy().closeDrawer();
-  window.__fw.economy().openPanel("rank");
-});
-await sleep(500);
-await page.screenshot({ path: join(outDir, "08_rank.png"), type: "png" });
+  await page.evaluate(() => window.__fw.economy().setDrawerQ(1));
+  await sleep(450);
+  await page.screenshot({ path: join(outDir, "p02_drawer.png"), type: "png" });
 
-await page.evaluate(() => {
-  window.__fw.economy().openPanel("none");
-  window.__fw.economy().resetGuide();
-  window.__fw.economy().setGuideStep(1);
-});
-await sleep(700);
-await page.screenshot({ path: join(outDir, "09_guide_step1.png"), type: "png" });
+  // seam close-up: crop bottom tear region of drawer
+  await page.screenshot({
+    path: join(outDir, "p02b_seam_closeup.png"),
+    type: "png",
+    clip: { x: 0, y: 350, width: 375, height: 80 },
+  });
 
-await page.evaluate(() => window.__fw.economy().setGuideStep(2));
-await sleep(500);
-await page.screenshot({ path: join(outDir, "10_guide_step2.png"), type: "png" });
+  await page.evaluate(() => window.__fw.economy().setDrawerPage("rank"));
+  await sleep(450);
+  await page.screenshot({ path: join(outDir, "p03_rank.png"), type: "png" });
 
-await page.evaluate(() => window.__fw.economy().setGuideStep(3));
-await sleep(900);
-await page.screenshot({ path: join(outDir, "11_guide_step3.png"), type: "png" });
+  await page.evaluate(() => window.__fw.economy().setDrawerPage("style"));
+  await sleep(450);
+  await page.screenshot({ path: join(outDir, "p04_style.png"), type: "png" });
+}
+
+async function shootLandscape() {
+  await page.setViewport({ width: 812, height: 375, deviceScaleFactor: 3 });
+  // force resize path
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event("resize"));
+  });
+  await sleep(800);
+  await page.evaluate(() => {
+    window.__fw.economy().skipGuide();
+    window.__fw.economy().setRemaining(12);
+    window.__fw.economy().openPanel("none");
+    window.__fw.economy().closeDrawer?.();
+  });
+  await sleep(500);
+
+  await page.screenshot({ path: join(outDir, "l01_idle.png"), type: "png" });
+
+  await page.evaluate(() => window.__fw.economy().setDrawerQ(1));
+  await sleep(500);
+  await page.screenshot({ path: join(outDir, "l02_drawer.png"), type: "png" });
+
+  await page.screenshot({
+    path: join(outDir, "l02b_seam_closeup.png"),
+    type: "png",
+    clip: { x: 0, y: 300, width: 812, height: 60 },
+  });
+
+  await page.evaluate(() => window.__fw.economy().setDrawerPage("rank"));
+  await sleep(500);
+  await page.screenshot({ path: join(outDir, "l03_rank.png"), type: "png" });
+
+  await page.evaluate(() => window.__fw.economy().setDrawerPage("style"));
+  await sleep(500);
+  await page.screenshot({ path: join(outDir, "l04_style.png"), type: "png" });
+}
+
+await shootPortrait();
+await shootLandscape();
 
 const version = require("../version.js");
 const meta = await page.evaluate(() => {
@@ -190,12 +201,20 @@ const meta = await page.evaluate(() => {
     snap: window.__fw.economy().snapshot(),
     guide: window.__fw.economy().guideStep(),
     hud: c
-      ? { w: c.width, h: c.height, cssW: window.innerWidth, dpr: c.width / window.innerWidth }
+      ? {
+          w: c.width,
+          h: c.height,
+          cssW: window.innerWidth,
+          cssH: window.innerHeight,
+          dpr: c.width / window.innerWidth,
+        }
       : null,
+    orientation: window.innerWidth > window.innerHeight ? "landscape" : "portrait",
   };
 });
 meta.version = version;
 meta.warn404 = warn404;
+meta.deviceOrientation = require("../game.json").deviceOrientation;
 writeFileSync(join(outDir, "meta.json"), JSON.stringify(meta, null, 2));
 console.log("wrote", outDir, "hud", meta.hud, "404-ish", warn404);
 await browser.close();
