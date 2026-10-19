@@ -114,4 +114,5 @@ See `ui-parchment-D/notes.md` (public-domain / CC0 scans and project-authored sl
 ## Verification
 
 - Forbidden SHA-256 list: `scripts/ip-forbidden-hashes.json` (recorded before deletion).
-- CI gate: `node scripts/check-ip-hashes.mjs` (fails if any shipped file matches).
+- Forbidden ax_anim_v03 keyframe floats: `scripts/ip-forbidden-keyframes.json` (baked TRS from the discarded clip — must not reappear as literal curves in source or bundle).
+- CI gate: `node scripts/check-ip-hashes.mjs` (fails on matching hashes or ≥8 consecutive keyframe floats within 1e-4).
