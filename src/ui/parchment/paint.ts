@@ -771,42 +771,44 @@ function paintStylePage(
   ctx.clip();
 
   if (layout.landscape) {
-    // 双列 300×42：风格 72/122/172；木桩小节 + A/B 同行
+    // 双列 300×42：风格 72/122/172；第 3 行右空位放「木桩」+ A/B 紧凑双钮（无第 4 行）
     const rowW = 300;
     const rowH = 42;
     const colGapY = 50;
     const col1X = left;
-    const col2X = 698 - rowW;
+    const col2X = 698 - rowW; // 398
     const listTop = 72;
+    const stumpRowY = listTop + 2 * colGapY; // 172 — same line as 羊皮纸
     opts.forEach((opt, i) => {
       const col = i % 2;
       const rowI = Math.floor(i / 2);
       const y = listTop + rowI * colGapY;
-      if (y + rowH > footnoteY - 4) return;
       const x = col === 0 ? col1X : col2X;
       paintStyleRow(ctx, tex, opt, opt.id === state.styleId, x, y, rowW, rowH, dpr);
       pushHit(hits, "style_pick", x, y, rowW, rowH, opt.id);
     });
-    // After 3 style rows (y 72/122/172): heading + A/B row; keep ≥12pt above tear
-    const styleRows = Math.ceil(Math.max(1, opts.length) / 2);
-    const headY = listTop + styleRows * colGapY - 14; // ~208
-    const stumpY = Math.min(headY + 18, footnoteY - rowH - 4); // ~226, clamp under footnote
+    // Empty right slot of row 3: label ≥8pt above options, two ~140×42 side-by-side
+    const stumpLabelY = stumpRowY - 8 - 6; // 8pt gap above row
     ctx.fillStyle = INK_SOFT;
     ctx.font = fontSans(12, "600");
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    ctx.fillText("木桩", col1X, headY + 8);
+    ctx.fillText("木桩", col2X, stumpLabelY);
+    const stumpBtnW = 140;
+    const stumpGap = 20;
     STUMP_STYLE_OPTS.forEach((opt, i) => {
-      const x = i === 0 ? col1X : col2X;
-      const active = opt.id === stumpId;
-      paintStyleRow(ctx, tex, opt, active, x, stumpY, rowW, rowH, dpr);
-      pushHit(hits, "style_pick", x, stumpY, rowW, rowH, opt.id);
+      const x = col2X + i * (stumpBtnW + stumpGap);
+      paintStyleRow(ctx, tex, opt, opt.id === stumpId, x, stumpRowY, stumpBtnW, rowH, dpr);
+      pushHit(hits, "style_pick", x, stumpRowY, stumpBtnW, rowH, opt.id);
     });
+    // Footnote: ≥10pt below last strip, ≥12pt above tear
+    const lastStripBottom = stumpRowY + rowH;
+    const landFootnoteY = Math.min(tearY - 12, Math.max(lastStripBottom + 12, footnoteY));
     ctx.fillStyle = INK_SOFT;
     ctx.font = fontSans(11);
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("切换即时生效，下次启动保留", (left + right) / 2, footnoteY);
+    ctx.fillText("切换即时生效，下次启动保留", (left + right) / 2, landFootnoteY);
     ctx.restore();
     return;
   }
