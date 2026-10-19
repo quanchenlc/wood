@@ -3,5 +3,5 @@ module.exports = {
   VERSION: "0.4.3",
   BUILD_NOTE: "stump-clamp-visual",
   /** 短提交标识，发版前由提交写入 */
-  BUILD_REV: "pending",
+  BUILD_REV: "6604ea3",
 };
