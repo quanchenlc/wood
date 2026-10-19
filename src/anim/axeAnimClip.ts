@@ -28,8 +28,8 @@ export type AxeKey = {
 /**
  * Five keys; smoothstep between neighbours.
  * Quaternions are Euler(rotX, 0, 0) only — keeps cheek +Z / edge +Y in pivot space.
- * Positions place the mesh tip (Mesh local −X) on the pivot at impact; a small
- * negative Y bite sinks the edge into the log top without parking on the bark face.
+ * Impact places the mesh tip on the pivot with a small −Y bite and enough rotX
+ * foreshortening to keep the handle clear of the top tab.
  */
 export const AXE_KEYS: readonly AxeKey[] = [
   // wind-up — raised; strong rotX keeps handle clear of the top tab

@@ -104,13 +104,14 @@ export class AxeAnimation {
         clampMap(mat.metalnessMap, false);
         clampMap(mat.roughnessMap, false);
         clampMap(mat.aoMap, false);
-        // Painted steel: no envMap (sky tint → translucent ghost). Warm grade,
+        // Painted steel: no envMap (sky tint → translucent ghost). Warm grade +
         // metalness 0 so the cheek reads as solid opaque steel on the log top.
         if (mat.color) mat.color.setRGB(1.1, 1.05, 0.95);
         mat.metalness = 0;
         mat.metalnessMap = null;
         mat.roughness = Math.max(mat.roughness ?? 0.45, 0.42);
         mat.envMapIntensity = 0;
+        if (mat.emissive) mat.emissive.setRGB(0, 0, 0);
         mat.transparent = false;
         mat.opacity = 1;
         mat.depthWrite = true;
