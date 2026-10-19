@@ -13,8 +13,11 @@ import {
 /**
  * 斧头挥砍 —— 项目自撰关键姿态 + smoothstep 插值。
  *
- * 测量目标来自 pre-clean 实机观感（闲置隐藏、落点贴齐木顶、不挡顶栏），
- * 不含 ax_anim / screen.toys 的关键帧数据。
+ * 测量目标来自 pre-clean 实机观感（闲置隐藏、落点贴齐木顶、柄自上方落下、
+ * 颊面朝相机、不挡顶栏）。不含 ax_anim / screen.toys 的关键帧数据。
+ *
+ * 模型约定：柄 +Y，刃口 −X，颊面 ±Z。pivot.lookAt 后 −Z 朝向相机一侧，
+ * 颊面 +Z 朝镜头（宽面剪影）；animNull 仅做 rotX 下劈。
  */
 const _qa = new THREE.Quaternion();
 const _qb = new THREE.Quaternion();
@@ -218,7 +221,8 @@ export class AxeAnimation {
     elapsed: number;
     visible: boolean;
   } {
-    const bladeTip = new THREE.Vector3(-0.162, 0.02, 0);
+    // Blade tip in axe.gltf Mesh local space (see build_axe_placeholder XE).
+    const bladeTip = new THREE.Vector3(-0.162, 0.05, 0);
     if (this.axeModel) {
       this.axeModel.updateWorldMatrix(true, true);
       let meshNode: THREE.Object3D | null = null;

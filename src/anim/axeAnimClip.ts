@@ -3,37 +3,30 @@
  *
  * Measured goals from a pre-clean playthrough (not its keyframe data):
  * - idle: axe hidden
- * - wind-up: raised beside the log, below the top HUD band
- * - impact (~0.12s): blade tip on the log top centre; handle laid across
- *   so the mesh stays clear of the top drawer tab
+ * - wind-up: raised, clear of the top HUD band
+ * - impact (~0.12s): tip on log top; handle from above; blade edge into the
+ *   log (−Y); cheek ≈ +X; head attached to the handle
  * - follow-through then fade
  *
- * Keys / timing / easing are project-authored. No ax_anim / screen.toys curves.
+ * Tip placement accounts for axe.gltf Mesh translation/scale. Keys / timing /
+ * easing are project-authored — no ax_anim keyframe arrays.
  */
 
 export const AXE_ANIM_DURATION = 0.78;
 export const AXE_ANIM_FADE = 0.14;
-/** Align with GameController pendingSplit ≈ 0.1s */
 export const AXE_ANIM_IMPACT_AT = 0.12;
 
 export type AxeKey = {
   t: number;
-  /** anim-node local position relative to impact pivot */
   p: readonly [number, number, number];
-  /** anim-node local quaternion xyzw (unit) */
   q: readonly [number, number, number, number];
 };
 
 /** Five keys; smoothstep (cubic) between neighbours. */
 export const AXE_KEYS: readonly AxeKey[] = [
-  // wind-up — mid height, camera-right; mesh top stays under the HUD tab
-  { t: 0, p: [0.4423, 0.3204, 0.0378], q: [-0.05887, 0.5171, -0.27922, 0.80696] },
-  // pre-strike
-  { t: 0.08, p: [0.1966, 0.0313, -0.0065], q: [-0.2549, 0.43192, -0.41817, 0.75737] },
-  // impact — tip on log top centre; handle nearly horizontal (no tab overlap)
-  { t: AXE_ANIM_IMPACT_AT, p: [0.0615, -0.107, 0.0519], q: [-0.44511, 0.29964, -0.53519, 0.65243] },
-  // follow-through
-  { t: 0.36, p: [-0.0818, -0.3918, 0.1913], q: [-0.52695, 0.20983, -0.55678, 0.60687] },
-  // exit / fade hold
-  { t: AXE_ANIM_DURATION, p: [-0.1429, -0.6408, 0.3737], q: [-0.59664, 0.13064, -0.52708, 0.59089] },
+  { t: 0, p: [0.3105, 0.0264, -0.2335], q: [-0.17904, -0.67468, -0.19349, -0.68943] },
+  { t: 0.08, p: [0.1292, -0.1602, -0.4037], q: [-0.21495, -0.66296, -0.2253, -0.68083] },
+  { t: AXE_ANIM_IMPACT_AT, p: [0.0283, -0.273, -0.4894], q: [-0.24964, -0.65044, -0.25721, -0.66966] },
+  { t: 0.36, p: [-0.117, -0.4096, -0.4444], q: [-0.32101, -0.65596, -0.31477, -0.6063] },
+  { t: AXE_ANIM_DURATION, p: [-0.1962, -0.5969, -0.3207], q: [-0.36385, -0.64749, -0.36385, -0.56213] },
 ];

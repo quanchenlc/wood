@@ -1158,8 +1158,24 @@ if (enableDebugHooks) {
       look: (deg: number) => controller.setAzimuth((deg * Math.PI) / 180),
       nudge: (direction: number) => controller.nudgeAzimuth(direction),
       axe: () => ({
-        play: () =>
-          axe.playFromImpact(new THREE.Vector3(0, 0.2, 0), controller.getRight()),
+        play: () => {
+          const y = (() => {
+            try {
+              const pieces = game.getSplittablePieces?.() ?? [];
+              if (pieces.length) {
+                const box = new THREE.Box3();
+                for (const { mesh } of pieces) box.expandByObject(mesh);
+                if (Number.isFinite(box.max.y)) return box.max.y;
+              }
+            } catch {
+              /* fall through */
+            }
+            return 0.2;
+          })();
+          axe.playFromImpact(new THREE.Vector3(0, y, 0), controller.getRight());
+        },
+        playAt: (x: number, y: number, z: number) =>
+          axe.playFromImpact(new THREE.Vector3(x, y, z), controller.getRight()),
         seekTime: (seconds: number) => axe.seekTime(seconds),
         duration: () => axe.duration,
         busy: () => axe.busy,
@@ -1190,7 +1206,17 @@ if (enableDebugHooks) {
       },
       /** 当前树桩顶面中心（劈砍落点参考）的 CSS 投影 */
       projectLogTop: () => {
-        const y = currentStump?.topY ?? 0.2;
+        let y = 0.2;
+        try {
+          const pieces = game.getSplittablePieces?.() ?? [];
+          if (pieces.length) {
+            const box = new THREE.Box3();
+            for (const { mesh } of pieces) box.expandByObject(mesh);
+            if (Number.isFinite(box.max.y)) y = box.max.y;
+          }
+        } catch {
+          /* keep fallback */
+        }
         const v = new THREE.Vector3(0, y, 0);
         v.project(camera);
         const el = renderer.domElement;

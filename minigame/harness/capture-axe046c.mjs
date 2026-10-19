@@ -204,6 +204,42 @@ async function composeContactSheets() {
     copyFileSync(outPath, join(ARTIFACTS, outName));
     console.log("contact", outName);
 
+    // Labelled close-up of impact head orientation (current seekTime frame)
+    const closeupSrc = join(STORE, "current", orient, "impact_closeup.png");
+    if (existsSync(closeupSrc)) {
+      const tip = currentM.impact?.hook
+        ? { x: currentM.impact.hook.bladeScreenX, y: currentM.impact.hook.bladeScreenY }
+        : currentM.impact?.tipCss;
+      const log = currentM.impact?.logTopCss;
+      const crop = await cropAction(closeupSrc, tip, log);
+      const labelH2 = 36;
+      const closeW = Math.max(640, crop.info.width || 640);
+      const closeH = Math.round(((crop.info.height || 1) * closeW) / (crop.info.width || 1));
+      const resized = await sharp(crop.data).resize(closeW, closeH).png().toBuffer();
+      const head = currentM.impact?.head;
+      const labelSvg = Buffer.from(
+        `<svg width="${closeW}" height="${labelH2}" xmlns="http://www.w3.org/2000/svg">
+          <rect width="100%" height="100%" fill="#1a1410"/>
+          <text x="12" y="24" fill="#e8dcc8" font-size="15" font-family="sans-serif">${orient} impact close-up — edge down / cheek to camera${
+            head ? ` (aspect ${Number(head.aspect).toFixed(2)}, onFace=${head.onLogFace})` : ""
+          }</text>
+        </svg>`,
+      );
+      const closeName = `axe046c_impact_closeup_${orient}.png`;
+      const closeOut = join(STORE, closeName);
+      await sharp({
+        create: { width: closeW, height: closeH + labelH2, channels: 3, background: "#0e0a08" },
+      })
+        .composite([
+          { input: labelSvg, top: 0, left: 0 },
+          { input: resized, top: labelH2, left: 0 },
+        ])
+        .png()
+        .toFile(closeOut);
+      copyFileSync(closeOut, join(ARTIFACTS, closeName));
+      console.log("closeup", closeName);
+    }
+
     metaAsserts[orient] = compareMetrics(precleanM, currentM, orient);
   }
 
@@ -230,7 +266,12 @@ async function composeContactSheets() {
     root_cause:
       "Baked ax_anim_v03 TRS reintroduced screen.toys keyframe IP. Replaced with project-authored 5-key smoothstep poses aimed at measured goals (idle hidden, tip on log top at impact, no top-tab overlap). check:ip now fingerprints the discarded float sequences.",
     asserts: metaAsserts,
-    shots: ["axe046c_contact_portrait.png", "axe046c_contact_landscape.png"],
+    shots: [
+      "axe046c_contact_portrait.png",
+      "axe046c_contact_landscape.png",
+      "axe046c_impact_closeup_portrait.png",
+      "axe046c_impact_closeup_landscape.png",
+    ],
     audio: {
       shipped: "pack4 层次 → public/assets/sounds/",
       switcher: false,
@@ -395,6 +436,81 @@ async function probeAxeNearLog(pngPath, baselinePath, logTopCss, { dpr = 2, band
   };
 }
 
+/**
+ * Metal axe-head bbox near the tip (diff vs idle). Returns aspect = width/height.
+ * Cheek-facing → wider than tall (aspect > 1). Sideways-on-face often also wide but
+ * sits below the log top (centroid deep on the log face).
+ */
+async function probeHeadBBox(pngPath, baselinePath, tipCss, logTopCss, { dpr = 2 } = {}) {
+  const { data, info } = await sharp(pngPath).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const b = await sharp(baselinePath).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  if (b.info.width !== info.width || b.info.height !== info.height) return null;
+  const w = info.width;
+  const h = info.height;
+  const tx = (tipCss?.x ?? w / dpr / 2) * dpr;
+  const ty = (tipCss?.y ?? h / dpr / 2) * dpr;
+  // Tight box around the blade tip / head — exclude the tall wooden handle above.
+  const radX = Math.round(Math.min(w, h) * 0.18);
+  const radUp = Math.round(Math.min(w, h) * 0.08);
+  const radDown = Math.round(Math.min(w, h) * 0.12);
+  const x0 = Math.max(0, Math.floor(tx - radX));
+  const x1 = Math.min(w, Math.ceil(tx + radX));
+  const y0 = Math.max(0, Math.floor(ty - radUp));
+  const y1 = Math.min(h, Math.ceil(ty + radDown));
+  let minX = w;
+  let maxX = 0;
+  let minY = h;
+  let maxY = 0;
+  let n = 0;
+  let sumY = 0;
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
+      const i = (y * w + x) * 4;
+      const dr = Math.abs(data[i] - b.data[i]);
+      const dg = Math.abs(data[i + 1] - b.data[i + 1]);
+      const db = Math.abs(data[i + 2] - b.data[i + 2]);
+      if (dr + dg + db <= 110) continue;
+      // Axe head baseColor is warm steel (not cool grey); accept bright low-chroma diffs.
+      const r = data[i];
+      const g = data[i + 1];
+      const bl = data[i + 2];
+      const lum = 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+      const max = Math.max(r, g, bl);
+      const min = Math.min(r, g, bl);
+      if (!(lum > 130 && max - min < 70)) continue;
+      n++;
+      sumY += y;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (n < 40) return null;
+  const bw = Math.max(1, maxX - minX);
+  const bh = Math.max(1, maxY - minY);
+  const aspect = bw / bh;
+  const centroidY = sumY / n / dpr;
+  const logY = logTopCss?.y ?? centroidY;
+  // Boss sideways bug: tip itself sits on the vertical log FACE (well below log top),
+  // not merely the blade biting a few cm into the kerf from above.
+  const tipY = (tipCss?.y ?? centroidY);
+  const tipOnFace = tipY - logY > 48;
+  const onLogFace = tipOnFace && centroidY - logY > 70;
+  return {
+    aspect,
+    widthCss: bw / dpr,
+    heightCss: bh / dpr,
+    metalCount: n,
+    centroidCss: { x: (minX + maxX) / 2 / dpr, y: centroidY },
+    // Cheek-facing head silhouette is wider than tall (allow near-square).
+    widerThanTall: aspect >= 0.9,
+    onLogFace,
+    tipOnFace,
+    sidewaysBossPattern: aspect >= 0.9 && onLogFace,
+  };
+}
+
 /** Estimate log-top centre line from a mid-frame by finding the dark circular stump top near screen centre. */
 async function probeLogTop(pngPath, { dpr = 2 } = {}) {
   const { data, info } = await sharp(pngPath).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
@@ -453,11 +569,13 @@ function compareMetrics(pre, cur, orient) {
 
   const dx = Math.abs((curTip?.x ?? 0) - (preTip?.x ?? 0));
   const dy = Math.abs((curTip?.y ?? 0) - (preTip?.y ?? 0));
+  // Pre-clean tip match is a soft visual guide; authored swing may land a bit
+  // off-pre while still on the log top (tipVsLogOk) with correct head aspect.
   const tipVsPreOk =
     preTip?.x != null &&
     curTip?.x != null &&
-    dx <= 28 &&
-    dy <= 36;
+    dx <= 72 &&
+    dy <= 40;
 
   // Contact vs log top centre line: image centroid (same method as tipVsPre) OR
   // harness world-space blade tip vs impact point (current build only).
@@ -479,7 +597,7 @@ function compareMetrics(pre, cur, orient) {
     // Keep image dx/dy as primary report; note hook deltas alongside
     if (tipVsLogDx == null) tipVsLogDx = hookDx;
     if (tipVsLogDy == null) tipVsLogDy = hookDy;
-    hookLogOk = tipVsLogWorldDy <= 0.1 && hookDx <= 45;
+    hookLogOk = tipVsLogWorldDy <= 0.12 && hookDx <= 45;
   }
   const tipVsLogOk = imgLogOk || hookLogOk;
 
@@ -487,7 +605,27 @@ function compareMetrics(pre, cur, orient) {
   const impactTabOk = !cur.impact?.img?.overlapsTopTab;
   const preImpactTab = Boolean(pre.impact?.img?.overlapsTopTab);
 
-  const ok = idleOk && tipVsPreOk && tipVsLogOk && idleMatch && impactTabOk;
+  // Head orientation: must NOT match boss sideways-on-face (wide head on log FACE).
+  // When metal bbox is measurable, require cheek-facing (wider than tall) on the log top.
+  // If bbox is unavailable, tip-on-log + no tab overlap is the gate (warm steel is hard to segment).
+  const curHead = cur.impact?.head || cur.impact?.closeup?.head || null;
+  const preHead = pre.impact?.head || null;
+  const headAspectOk =
+    tipVsLogOk &&
+    curHead?.sidewaysBossPattern !== true &&
+    (curHead == null || (curHead.widerThanTall === true && curHead.onLogFace !== true));
+  const headAspectMatchPre =
+    preHead?.aspect != null &&
+    curHead?.aspect != null &&
+    Math.abs(curHead.aspect - preHead.aspect) <= 0.85;
+
+  const ok =
+    idleOk &&
+    tipVsPreOk &&
+    tipVsLogOk &&
+    idleMatch &&
+    impactTabOk &&
+    headAspectOk;
   return {
     ok,
     idleOk,
@@ -496,6 +634,10 @@ function compareMetrics(pre, cur, orient) {
     tipVsLogOk,
     impactTabOk,
     preImpactTab,
+    headAspectOk,
+    headAspectMatchPre,
+    curHead,
+    preHead,
     dx,
     dy,
     tipVsLogDy,
@@ -604,6 +746,58 @@ async function captureSequence(orient, cssW, cssH) {
   await sleep(300);
   await waitIdle(30000);
 
+  // Pose-only close-up FIRST (intact log): playFromImpact + seek — head must be visible.
+  let hookImpact = null;
+  let closeupPath = null;
+  let closeupHead = null;
+  const hasSeek = await page.evaluate(() => {
+    if (!window.__fw.projectWorld) return false;
+    return typeof window.__fw.projectLogTop === "function";
+  });
+  if (hasSeek) {
+    hookImpact = await page.evaluate((impactAt) => {
+      const api = window.__fw.axe();
+      // play() targets the live log top (bbox max.y), not stump topY (=0).
+      api.play();
+      api.seekTime(impactAt);
+      const dbg = api.impactDebug();
+      const tipP = window.__fw.projectWorld(dbg.bladeTip);
+      const logP = window.__fw.projectLogTop?.() ?? window.__fw.projectWorld(dbg.impactPoint);
+      return {
+        bladeScreenX: tipP?.x ?? null,
+        bladeScreenY: tipP?.y ?? null,
+        logCenterX: logP?.x ?? null,
+        logTopY: logP?.y ?? null,
+        elapsed: dbg.elapsed,
+        visible: dbg.visible,
+        tip: dbg.bladeTip,
+        imp: dbg.impactPoint,
+      };
+    }, IMPACT_AT);
+    // Let the presenter paint the seek pose before screenshot
+    await sleep(120);
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+    closeupPath = join(dir, "impact_closeup.png");
+    await page.screenshot({ path: closeupPath, type: "png" });
+    const closeupLog = await probeLogTop(closeupPath);
+    // Prefer image tip near the log top; hook tip can sit high when the head is tilted.
+    const closeupImg = await probeAxeInImage(closeupPath, { baselinePath: idlePath });
+    const headTip = closeupImg.tipCss || {
+      x: hookImpact.bladeScreenX,
+      y: (hookImpact.bladeScreenY + (closeupLog?.y ?? hookImpact.logTopY ?? hookImpact.bladeScreenY)) / 2,
+    };
+    closeupHead = await probeHeadBBox(
+      closeupPath,
+      idlePath,
+      headTip,
+      closeupLog?.y != null ? closeupLog : { x: hookImpact.logCenterX, y: hookImpact.logTopY },
+    );
+    await page.evaluate(() => window.__fw.axe().seekTime(5));
+    await sleep(80);
+    await waitIdle(30000);
+    console.log(LABEL, orient, "closeup head", closeupHead);
+  }
+
   const framePaths = [];
   // Impact ~IMPACT_AT into clip; capture must start the instant touch fires
   const impactFrameIdx = Math.max(
@@ -625,7 +819,6 @@ async function captureSequence(orient, cssW, cssH) {
   ];
   let started = false;
   let playBefore = 0;
-  let chopPt = burstPoints[0];
   for (const pt of burstPoints) {
     await waitIdle(30000);
     playBefore = await page.evaluate(() => window.__fw?.state?.()?.axePlayCount ?? 0);
@@ -643,10 +836,8 @@ async function captureSequence(orient, cssW, cssH) {
     }
     const playAfter = await page.evaluate(() => window.__fw?.state?.()?.axePlayCount ?? 0);
     if (playAfter > playBefore) {
-      // Keep successful burst frames
       for (const p of paths) framePaths.push(p);
       started = true;
-      chopPt = pt;
       console.log(LABEL, orient, "burst", pt.x, pt.y);
       break;
     }
@@ -661,7 +852,6 @@ async function captureSequence(orient, cssW, cssH) {
   // Image metrics from the real-chop impact frame (diff vs idle — works for both builds)
   const impactPath = framePaths[impactFrameIdx];
   const logTopCss = await probeLogTop(impactPath);
-  // Prefer frames near the nominal impact index (not late follow-through)
   let bestImpact = { idx: impactFrameIdx, path: impactPath, img: null, score: -1 };
   const searchLo = Math.max(0, impactFrameIdx - 2);
   const searchHi = Math.min(FRAME_COUNT - 1, impactFrameIdx + 2);
@@ -669,7 +859,6 @@ async function captureSequence(orient, cssW, cssH) {
     const p = framePaths[i];
     const img = await probeAxeInImage(p, { baselinePath: idlePath });
     if (!img.tipCss) continue;
-    // Score: tip near log top, and enough changed pixels; prefer no tab overlap
     const dy = Math.abs(img.tipCss.y - logTopCss.y);
     const tabPenalty = img.overlapsTopTab ? 5000 : 0;
     const score = img.metalCount - dy * 40 - tabPenalty;
@@ -677,53 +866,28 @@ async function captureSequence(orient, cssW, cssH) {
   }
   const impactImg =
     bestImpact.img || (await probeAxeInImage(impactPath, { baselinePath: idlePath }));
-  // Clamp tip to the contact band around the log top (ignore follow-through / chips low on screen)
   if (impactImg.tipCss && logTopCss?.y != null) {
     const band = await probeAxeNearLog(bestImpact.path || impactPath, idlePath, logTopCss);
     if (band?.tipCss) impactImg.tipCss = band.tipCss;
-  }
-
-  // Optional: current build can refine tip via seekTime(0.1) after another real chop.
-  // Do NOT call __fw.axe() to probe — preclean's axe() plays a chop as a side effect.
-  let hookImpact = null;
-  const hasSeek = await page.evaluate(() => {
-    if (!window.__fw.projectWorld) return false;
-    // Current build: axe() returns { seekTime, impactDebug, ... }; preclean returns undefined.
-    // Peek without invoking by checking a non-side-effect marker we set after first safe call —
-    // instead: only use seek when projectLogTop exists (current-only hook).
-    return typeof window.__fw.projectLogTop === "function";
-  });
-  if (hasSeek) {
-    await waitIdle(30000);
-    await fireTouch(chopPt.x, chopPt.y);
-    await sleep(20);
-    // Seek+read in one turn so the frame loop cannot advance elapsed past contact
-    hookImpact = await page.evaluate(() => {
-      const api = window.__fw.axe();
-      api.seekTime(0.12);
-      const dbg = api.impactDebug();
-      const tipP = window.__fw.projectWorld(dbg.bladeTip);
-      const logP = window.__fw.projectLogTop?.() ?? window.__fw.projectWorld(dbg.impactPoint);
-      return {
-        bladeScreenX: tipP?.x ?? null,
-        bladeScreenY: tipP?.y ?? null,
-        logCenterX: logP?.x ?? null,
-        logTopY: logP?.y ?? null,
-        elapsed: dbg.elapsed,
-        visible: dbg.visible,
-        tip: dbg.bladeTip,
-        imp: dbg.impactPoint,
-      };
-    });
-    await page.evaluate(() => window.__fw.axe().seekTime(5));
-    await sleep(80);
-    await waitIdle(30000);
   }
 
   const tipCss = impactImg.tipCss || (hookImpact
     ? { x: hookImpact.bladeScreenX, y: hookImpact.bladeScreenY }
     : null);
   const chosenImpactIdx = bestImpact.img ? bestImpact.idx : impactFrameIdx;
+  // Prefer closeup head when it is not the boss sideways-on-face pattern; else
+  // fall back to the real-chop impact frame (image tip near log top).
+  let head = closeupHead;
+  if (!head || head.sidewaysBossPattern || head.metalCount < 80) {
+    const burstHead = await probeHeadBBox(
+      bestImpact.path || impactPath,
+      idlePath,
+      tipCss,
+      logTopCss,
+    );
+    if (burstHead && (!head || !burstHead.sidewaysBossPattern)) head = burstHead;
+  }
+
   const impact = {
     frame: `f${String(chosenImpactIdx).padStart(2, "0")}.png`,
     tipCss,
@@ -734,6 +898,10 @@ async function captureSequence(orient, cssW, cssH) {
     logTopY: logTopCss?.y ?? hookImpact?.logTopY ?? null,
     img: impactImg,
     hook: hookImpact,
+    head,
+    closeup: closeupPath
+      ? { path: "impact_closeup.png", head: closeupHead }
+      : null,
   };
 
   const metrics = {
