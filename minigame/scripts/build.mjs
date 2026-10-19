@@ -869,13 +869,13 @@ function verifyTextureMad() {
 }
 
 function copyUiParchmentSubpackage() {
-  const src = join(ROOT, "ui-parchment-v2/export_v3/textures");
-  const manifestSrc = join(ROOT, "ui-parchment-v2/export_v3/manifest.json");
+  const src = join(ROOT, "ui-parchment-D/textures");
+  const manifestSrc = join(ROOT, "ui-parchment-D/manifest.json");
   const dest = join(MG, "subpackages/ui-parchment");
   rmSync(dest, { recursive: true, force: true });
   mkdirSync(dest, { recursive: true });
   if (!existsSync(src) || !existsSync(manifestSrc)) {
-    throw new Error("[build] missing ui-parchment-v2/export_v3 textures/manifest");
+    throw new Error("[build] missing ui-parchment-D textures/manifest");
   }
   for (const name of readdirSync(src)) {
     cpSync(join(src, name), join(dest, name));

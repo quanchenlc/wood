@@ -5,29 +5,36 @@ export type TexId =
   | "btn_icon_ad"
   | "btn_icon_help"
   | "btn_icon_rank"
+  | "btn_icon_style"
   | "btn_leather"
-  | "chip_boost"
-  | "chip_parchment"
+  | "drawer_vellum"
   | "guide_bubble"
   | "guide_hand"
   | "guide_ring"
   | "guide_tail"
+  | "icon_check"
   | "panel_vellum"
   | "ribbon_madder"
-  | "seal_wax"
-  | "strip_parchment";
+  | "roll_paper"
+  | "roll_shadow"
+  | "strip_parchment"
+  | "tag_madder"
+  | "tag_parchment";
 
 export interface ManifestVariant {
   file: string;
   bytes: number;
   width: number;
   height: number;
+  scale?: number;
+  nine_slice_insets?: Insets | null;
 }
 
 export interface ManifestTexture {
   file: string;
   logical_size: [number, number];
   scale?: number;
+  visual_pad_pt?: number;
   nine_slice_insets_pt?: Insets | null;
   nine_slice_insets_2x?: Insets | null;
   nine_slice_insets?: Insets | null;
@@ -46,12 +53,12 @@ export interface UiManifest {
 export interface ParchmentTex {
   id: TexId;
   img: HTMLImageElement;
-  /** 实际加载的密度 2 或 3 */
   density: 2 | 3;
   logicalW: number;
   logicalH: number;
   srcInsets: Insets | null;
   dstInsets: Insets | null;
+  visualPadPt: number;
 }
 
 export type TexMap = Partial<Record<TexId, ParchmentTex>>;
@@ -74,7 +81,6 @@ function baseUrl(): string {
     const harness = Boolean(
       (globalThis as { __HARNESS_CANVAS__?: boolean }).__HARNESS_CANVAS__,
     );
-    // 分包根；harness 需前导 /
     return harness ? "/subpackages/ui-parchment/" : "subpackages/ui-parchment/";
   }
   return "/ui/parchment/";
@@ -106,7 +112,6 @@ function loadImage(url: string): Promise<HTMLImageElement> {
 }
 
 function loadJson(url: string): Promise<UiManifest> {
-  // harness：同步 XHR（fetch 被 shim 剥离）
   try {
     const xhr = new XMLHttpRequest();
     xhr.open("GET", url, false);
@@ -155,23 +160,26 @@ function pickVariant(
 ): { density: 2 | 3; variant: ManifestVariant } | null {
   const v3 = entry.variants?.["3x"];
   const v2 = entry.variants?.["2x"];
-  if (dpr >= 3 && v3?.file) return { density: 3, variant: v3 };
+  // v3.1: dpr>=2.5 → 3x if present
+  if (dpr >= 2.5 && v3?.file) return { density: 3, variant: v3 };
   if (v2?.file) return { density: 2, variant: v2 };
   if (v3?.file) return { density: 3, variant: v3 };
   return null;
 }
 
-function srcInsetsFor(entry: ManifestTexture, density: 2 | 3): Insets | null {
-  if (density === 2 && entry.nine_slice_insets_2x) return entry.nine_slice_insets_2x;
-  if (density === 3 && entry.nine_slice_insets) return entry.nine_slice_insets;
-  if (entry.nine_slice_insets_2x) return entry.nine_slice_insets_2x;
-  if (entry.nine_slice_insets) return entry.nine_slice_insets;
-  return null;
+/** 源 insets：优先用所选 variant 自带的 insets，否则顶层 @2x / 兼容字段 */
+function srcInsetsFor(
+  entry: ManifestTexture,
+  density: 2 | 3,
+  variant: ManifestVariant,
+): Insets | null {
+  if (variant.nine_slice_insets) return variant.nine_slice_insets;
+  if (density === 2) {
+    return entry.nine_slice_insets_2x ?? entry.nine_slice_insets ?? null;
+  }
+  return entry.nine_slice_insets ?? entry.nine_slice_insets_2x ?? null;
 }
 
-/**
- * 加载 ui-parchment 分包（若需要），再按 manifest 只请求存在的 variants。
- */
 export async function ensureUiSubpackage(
   onProgress?: (p: number, text: string) => void,
 ): Promise<void> {
@@ -201,7 +209,6 @@ export async function ensureUiSubpackage(
         resolve();
       },
       fail: (err) => {
-        // harness 已有静态文件时允许失败后继续
         console.warn("[ui] loadSubpackage ui-parchment", err);
         onProgress?.(1, "界面就绪");
         resolve();
@@ -237,10 +244,12 @@ export async function loadParchmentTextures(dpr = uiDpr): Promise<TexMap> {
             id,
             img,
             density: picked.density,
+            // 始终用 logical_size（pt），避免 0.3.3 manifest 错写导致 px/scale 缩到 2/3
             logicalW: entry.logical_size[0],
             logicalH: entry.logical_size[1],
-            srcInsets: srcInsetsFor(entry, picked.density),
+            srcInsets: srcInsetsFor(entry, picked.density, picked.variant),
             dstInsets: entry.nine_slice_insets_pt ?? null,
+            visualPadPt: entry.visual_pad_pt ?? 0,
           };
         } catch (err) {
           console.warn("[ui] tex miss", picked.variant.file, err);
@@ -254,6 +263,13 @@ export async function loadParchmentTextures(dpr = uiDpr): Promise<TexMap> {
   return loading;
 }
 
+/** 测试/热换时可清缓存 */
+export function clearParchmentTextureCache() {
+  texCache = null;
+  loading = null;
+  manifestCache = null;
+}
+
 export function getParchmentTextures(): TexMap {
   return texCache || {};
 }
@@ -262,7 +278,6 @@ export function getManifest(): UiManifest | null {
   return manifestCache;
 }
 
-/** 兼容旧导出名 */
 export const NINE_SLICE = {} as const;
 export function parchmentUrl(file: string): string {
   return `${baseUrl()}${file.replace(/^\//, "")}`;

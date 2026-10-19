@@ -8,18 +8,26 @@ export {
   at2xName,
   NINE_SLICE,
   scaledInsets,
+  clearParchmentTextureCache,
 } from "./assets";
 export {
   paintParchmentUi,
   paintParchmentLoading,
   paintEconomyHud,
-  paintGuide,
   hitTestUi,
+  hitTestUiFull,
+  getTagHitRect,
+  resolveDrawerMotion,
+  stateOpen,
+  stateClose,
+  motionAt,
+  capsuleTopPt,
   type ParchmentUiState,
   type PanelMode,
   type UiHit,
   type HitRect,
   type GuideTargets,
+  type DrawerPage,
 } from "./paint";
 export {
   GUIDE_COPY,
@@ -30,4 +38,13 @@ export {
   trackGuide,
   readGuideMark,
   STORAGE_KEY_GUIDE,
+  STORAGE_KEY_STYLE,
+  readStyleId,
+  writeStyleId,
 } from "./guide";
+export {
+  OPEN_MS,
+  CLOSE_MS,
+  invertEase,
+  type DrawerMotion,
+} from "./motion";

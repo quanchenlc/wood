@@ -28,6 +28,7 @@ import * as THREE from "three";
 import { isMinigame } from "./env";
 import {
   hitTestUi,
+  hitTestUiFull,
   paintParchmentLoading,
   paintParchmentUi,
   setUiDpr,
@@ -58,6 +59,7 @@ export interface HudApi {
   hitTestArtSwitcher?(clientX: number, clientY: number): ArtSwitcherHit;
   setParchmentUi?(state: ParchmentUiState): void;
   hitTestParchment?(clientX: number, clientY: number): UiHit;
+  hitTestParchmentFull?(clientX: number, clientY: number): HitRect | null;
   /** 真机 WebGL 叠加；DOM 模式为空操作 */
   composite?(renderer: THREE.WebGLRenderer): void;
   /** 与绘图缓冲对齐（WebGL overlay）；DOM 层空操作 */
@@ -84,8 +86,6 @@ class DomCanvasHud implements HudApi {
   private total = 1;
   private status = "正在磨斧…";
   private loadingVisible = true;
-  private art: ArtSwitcherState = { visible: false, open: false, activeId: "set0", options: [] };
-  private artHit: ReturnType<typeof paintArtSwitcher> | null = null;
   private parchment: ParchmentUiState = { panel: "none", toast: null, loading: null, economy: null };
   private parchmentHits: HitRect[] = [];
   private raf = 0;
@@ -146,8 +146,8 @@ class DomCanvasHud implements HudApi {
     /* no-op */
   }
 
-  setArtSwitcher(state: ArtSwitcherState) {
-    this.art = state;
+  setArtSwitcher(_state: ArtSwitcherState) {
+    /* 0.3.4 左下切换已移除 */
   }
 
   setParchmentUi(state: ParchmentUiState) {
@@ -158,15 +158,11 @@ class DomCanvasHud implements HudApi {
     return hitTestUi(this.parchmentHits, clientX, clientY);
   }
 
-  hitTestArtSwitcher(clientX: number, clientY: number): ArtSwitcherHit {
-    if (!this.art.visible || !this.artHit) return null;
-    if (this.art.loadingText) return null;
-    if (this.parchment.panel !== "none" || this.parchment.guideStep) return null;
-    if (hitRect(this.artHit.toggle, clientX, clientY)) return "toggle";
-    for (const opt of this.artHit.options) {
-      if (hitRect(opt.rect, clientX, clientY)) return opt.id;
-    }
-    if (this.art.open) return "toggle"; // 点空白收起
+  hitTestParchmentFull(clientX: number, clientY: number): HitRect | null {
+    return hitTestUiFull(this.parchmentHits, clientX, clientY);
+  }
+
+  hitTestArtSwitcher(_clientX: number, _clientY: number): ArtSwitcherHit {
     return null;
   }
 
@@ -180,12 +176,6 @@ class DomCanvasHud implements HudApi {
       this.parchmentHits = [];
     } else {
       this.parchmentHits = paintParchmentUi(this.ctx, w, h, this.parchment);
-      const guideOn = Boolean(this.parchment.guideStep);
-      // 0.3.3：旧 hint 条移除，由引导 step1 替代
-      this.artHit =
-        this.art.visible && this.parchment.panel === "none" && !guideOn
-          ? paintArtSwitcher(this.ctx, w, h, this.art)
-          : null;
     }
   };
 
@@ -208,7 +198,6 @@ class WebglOverlayHud implements HudApi {
   private status = "正在磨斧…";
   private loadingVisible = true;
   private art: ArtSwitcherState = { visible: false, open: false, activeId: "set0", options: [] };
-  private artHit: ReturnType<typeof paintArtSwitcher> | null = null;
   private parchment: ParchmentUiState = { panel: "none", toast: null, loading: null, economy: null };
   private parchmentHits: HitRect[] = [];
   private dirty = true;
@@ -312,15 +301,8 @@ class WebglOverlayHud implements HudApi {
     if (this.loadingVisible) {
       paintLoading(this.ctx, w, h, this.loaded, this.total, this.status);
       this.parchmentHits = [];
-      this.artHit = null;
     } else {
       this.parchmentHits = paintParchmentUi(this.ctx, w, h, this.parchment);
-      const guideOn = Boolean(this.parchment.guideStep);
-      // 0.3.3：旧 hint 条移除，由引导 step1 替代
-      this.artHit =
-        this.art.visible && this.parchment.panel === "none" && !guideOn
-          ? paintArtSwitcher(this.ctx, w, h, this.art)
-          : null;
     }
     this.dirty = true;
     if (this.texture) this.texture.needsUpdate = true;
@@ -340,15 +322,11 @@ class WebglOverlayHud implements HudApi {
     return hitTestUi(this.parchmentHits, clientX, clientY);
   }
 
-  hitTestArtSwitcher(clientX: number, clientY: number): ArtSwitcherHit {
-    if (!this.art.visible || !this.artHit) return null;
-    if (this.art.loadingText) return null;
-    if (this.parchment.panel !== "none" || this.parchment.guideStep) return null;
-    if (hitRect(this.artHit.toggle, clientX, clientY)) return "toggle";
-    for (const opt of this.artHit.options) {
-      if (hitRect(opt.rect, clientX, clientY)) return opt.id;
-    }
-    if (this.art.open) return "toggle";
+  hitTestParchmentFull(clientX: number, clientY: number): HitRect | null {
+    return hitTestUiFull(this.parchmentHits, clientX, clientY);
+  }
+
+  hitTestArtSwitcher(_clientX: number, _clientY: number): ArtSwitcherHit {
     return null;
   }
 
@@ -408,100 +386,6 @@ class WebglOverlayHud implements HudApi {
     this.texture = null;
     this.mesh = null;
   }
-}
-
-function roundRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number,
-) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
-/** 左下角套装切换（避开 vConsole/胶囊）：按钮 + 可选四项列表；返回命中区供 hitTest */
-function paintArtSwitcher(
-  ctx: CanvasRenderingContext2D,
-  w: number,
-  h: number,
-  state: ArtSwitcherState,
-): { toggle: DOMRect; options: { id: string; rect: DOMRect }[] } {
-  // 左下角：避开右下角微信绿色 vConsole、右上角胶囊按钮
-  const safeLeft = 12;
-  const safeBottom = 20;
-  const btnH = 34;
-  // 五套标签（含「卡通低多边形」「羊皮纸」）需略宽
-  const btnW = 110;
-  const bx = safeLeft;
-  const by = h - safeBottom - btnH;
-  const active = state.options.find((o) => o.id === state.activeId);
-  const label = active?.label || "原版";
-
-  ctx.save();
-  ctx.globalAlpha = 0.92;
-  ctx.fillStyle = "rgba(20,14,8,0.55)";
-  ctx.strokeStyle = "rgba(232,213,176,0.35)";
-  roundRect(ctx, bx, by, btnW, btnH, 10);
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = "#e8d5b0";
-  ctx.font = "600 13px system-ui, PingFang SC, sans-serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(`${label}${state.open ? " ▴" : " ▾"}`, bx + btnW / 2, by + btnH / 2);
-
-  const options: { id: string; rect: DOMRect }[] = [];
-  if (state.open) {
-    const rowH = 36;
-    const listH = state.options.length * rowH;
-    const lx = bx;
-    const ly = by - 8 - listH;
-    const lw = btnW;
-    roundRect(ctx, lx, ly, lw, listH, 10);
-    ctx.fillStyle = "rgba(20,14,8,0.72)";
-    ctx.fill();
-    ctx.strokeStyle = "rgba(232,213,176,0.28)";
-    ctx.stroke();
-    state.options.forEach((opt, i) => {
-      const ry = ly + i * rowH;
-      if (opt.id === state.activeId) {
-        ctx.fillStyle = "rgba(232,213,176,0.18)";
-        ctx.fillRect(lx + 2, ry + 2, lw - 4, rowH - 4);
-      }
-      ctx.fillStyle = "#e8d5b0";
-      ctx.fillText(opt.label, lx + lw / 2, ry + rowH / 2);
-      options.push({
-        id: opt.id,
-        rect: { x: lx, y: ry, width: lw, height: rowH, top: ry, left: lx, bottom: ry + rowH, right: lx + lw, toJSON() {} },
-      });
-    });
-  }
-
-  if (state.loadingText) {
-    ctx.fillStyle = "rgba(10,8,5,0.45)";
-    ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = "#e8d5b0";
-    ctx.font = "600 16px Georgia, Songti SC, serif";
-    ctx.fillText(state.loadingText, w / 2, h / 2);
-  }
-  ctx.restore();
-
-  return {
-    toggle: { x: bx, y: by, width: btnW, height: btnH, top: by, left: bx, bottom: by + btnH, right: bx + btnW, toJSON() {} },
-    options,
-  };
-}
-
-function hitRect(r: { x: number; y: number; width: number; height: number }, x: number, y: number) {
-  return x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height;
 }
 
 let hud: HudApi | null = null;

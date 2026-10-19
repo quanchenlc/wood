@@ -1,5 +1,5 @@
 /**
- * 0.3.3 UI v3 — DPR3 @ 375×812
+ * 0.3.4 minimal-drawer-ui — DPR3 @ 375×812
  */
 import { createServer } from "node:http";
 import {
@@ -15,10 +15,9 @@ import { fileURLToPath } from "node:url";
 import puppeteer from "puppeteer-core";
 
 const require = createRequire(import.meta.url);
-
 const MG = join(fileURLToPath(new URL("..", import.meta.url)));
 const ARTIFACTS = process.env.ARTIFACT_DIR || "/opt/cursor/artifacts";
-const PORT = Number(process.env.HARNESS_PORT || 5193);
+const PORT = Number(process.env.HARNESS_PORT || 5194);
 const CHROME =
   process.env.CHROME_PATH ||
   ["/usr/local/bin/google-chrome", "/usr/bin/google-chrome-stable", "/usr/bin/google-chrome"].find(
@@ -38,7 +37,7 @@ const MIME = {
   ".glb": "model/gltf-binary",
   ".gltf": "model/gltf+json",
   ".bin": "application/octet-stream",
-  ".wasm": "application/wasm",
+  ".wasm": "application/octet-stream",
   ".mp3": "audio/mpeg",
   ".map": "application/json",
   ".ktx2": "application/octet-stream",
@@ -72,7 +71,7 @@ function startServer() {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const outDir = join(ARTIFACTS, "minigame-033");
+const outDir = join(ARTIFACTS, "minigame-034");
 mkdirSync(outDir, { recursive: true });
 
 const server = await startServer();
@@ -119,37 +118,70 @@ await page.evaluate(async () => {
 });
 await sleep(800);
 
+// skip guide for idle shots
 await page.evaluate(() => {
+  window.__fw.economy().skipGuide();
+  window.__fw.economy().setRemaining(12);
+  window.__fw.economy().openPanel("none");
+  window.__fw.economy().closeDrawer?.();
+});
+await sleep(600);
+await page.screenshot({ path: join(outDir, "01_idle.png"), type: "png" });
+
+// drawer keyframes via setDrawerQ (linear q ≈ open ease samples)
+for (const [name, q] of [
+  ["02_drawer_30", 0.3],
+  ["03_drawer_60", 0.6],
+  ["04_drawer_100", 1.0],
+]) {
+  await page.evaluate((qq) => window.__fw.economy().setDrawerQ(qq), q);
+  await sleep(400);
+  await page.screenshot({ path: join(outDir, `${name}.png`), type: "png" });
+}
+
+await page.evaluate(() => {
+  window.__fw.economy().closeDrawer();
+  window.__fw.economy().setRemaining(0);
+  window.__fw.economy().showExhaustedBubble();
+});
+await sleep(500);
+await page.screenshot({ path: join(outDir, "05_exhausted_bubble.png"), type: "png" });
+
+await page.evaluate(() => window.__fw.economy().openPanel("exhausted"));
+await sleep(500);
+await page.screenshot({ path: join(outDir, "06_exhausted_panel.png"), type: "png" });
+
+await page.evaluate(() => {
+  window.__fw.economy().openPanel("none");
+  window.__fw.economy().setRemaining(12);
+  window.__fw.economy().setDrawerQ(1);
+  window.__fw.economy().setDrawerPage("style");
+});
+await sleep(500);
+await page.screenshot({ path: join(outDir, "07_style_list.png"), type: "png" });
+
+await page.evaluate(() => {
+  window.__fw.economy().closeDrawer();
+  window.__fw.economy().openPanel("rank");
+});
+await sleep(500);
+await page.screenshot({ path: join(outDir, "08_rank.png"), type: "png" });
+
+await page.evaluate(() => {
+  window.__fw.economy().openPanel("none");
   window.__fw.economy().resetGuide();
   window.__fw.economy().setGuideStep(1);
 });
 await sleep(700);
-await page.screenshot({ path: join(outDir, "01_guide_step1.png"), type: "png" });
+await page.screenshot({ path: join(outDir, "09_guide_step1.png"), type: "png" });
 
 await page.evaluate(() => window.__fw.economy().setGuideStep(2));
 await sleep(500);
-await page.screenshot({ path: join(outDir, "02_guide_step2.png"), type: "png" });
+await page.screenshot({ path: join(outDir, "10_guide_step2.png"), type: "png" });
 
 await page.evaluate(() => window.__fw.economy().setGuideStep(3));
-await sleep(500);
-await page.screenshot({ path: join(outDir, "03_guide_step3.png"), type: "png" });
-
-await page.evaluate(() => {
-  window.__fw.economy().skipGuide();
-  window.__fw.economy().setRemaining(12);
-  window.__fw.economy().skipMinutes(40);
-  window.__fw.economy().openPanel("none");
-});
-await sleep(700);
-await page.screenshot({ path: join(outDir, "04_scene_hud.png"), type: "png" });
-await page.screenshot({ path: join(outDir, "05_claim_strip.png"), type: "png" });
-
-await page.evaluate(() => {
-  window.__fw.economy().setRemaining(0);
-  window.__fw.economy().openPanel("exhausted");
-});
-await sleep(500);
-await page.screenshot({ path: join(outDir, "06_exhausted.png"), type: "png" });
+await sleep(900);
+await page.screenshot({ path: join(outDir, "11_guide_step3.png"), type: "png" });
 
 const version = require("../version.js");
 const meta = await page.evaluate(() => {

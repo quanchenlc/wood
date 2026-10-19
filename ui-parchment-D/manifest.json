@@ -1,0 +1,1058 @@
+{
+ "name": "ui-parchment-D-drawer",
+ "version": "3.1-D",
+ "based_on": "ui-parchment-v2 manifest 3.1",
+ "design_space": "375x812 logical pt; specs rendered @2x = 750x1624",
+ "density_note": "scale = texels per pt. Top-level fields = the @2x file (scale 2). Draw size (pt) = px / scale = logical_size. 9-slice: source insets px = nine_slice_insets of the variant actually loaded (@2x: pt*2, @3x: pt*3); destination insets = nine_slice_insets_pt. Snap all dest rects to device pixels.",
+ "variant_rule": "dpr>=2.5 -> variants.3x if present else 2x; otherwise 2x. panel_vellum has 2x only.",
+ "nine_slice_convention": "[left, top, right, bottom]",
+ "textures": [
+  {
+   "file": "btn_icon_ad@2x.png",
+   "width": 104,
+   "height": 104,
+   "bytes": 8045,
+   "scale": 2,
+   "logical_size": [
+    52,
+    52
+   ],
+   "nine_slice_insets": null,
+   "nine_slice_insets_pt": null,
+   "role": "抽屉圆钮「看短片加速」(角标=今日剩余次数，代码绘制)",
+   "png": "PNG8 pngquant, light dither, full alpha",
+   "origin": "ui-parchment-v2 v3.1 (unchanged file)",
+   "variants": {
+    "2x": {
+     "file": "btn_icon_ad@2x.png",
+     "width": 104,
+     "height": 104,
+     "bytes": 8045,
+     "scale": 2
+    },
+    "3x": {
+     "file": "btn_icon_ad@3x.png",
+     "width": 156,
+     "height": 156,
+     "bytes": 15346,
+     "scale": 3
+    }
+   }
+  },
+  {
+   "file": "btn_icon_help@2x.png",
+   "width": 104,
+   "height": 104,
+   "bytes": 7635,
+   "scale": 2,
+   "logical_size": [
+    52,
+    52
+   ],
+   "nine_slice_insets": null,
+   "nine_slice_insets_pt": null,
+   "role": "抽屉圆钮「玩法」(重看引导)",
+   "png": "PNG8 pngquant, light dither, full alpha",
+   "origin": "ui-parchment-v2 v3.1 (unchanged file)",
+   "variants": {
+    "2x": {
+     "file": "btn_icon_help@2x.png",
+     "width": 104,
+     "height": 104,
+     "bytes": 7635,
+     "scale": 2
+    },
+    "3x": {
+     "file": "btn_icon_help@3x.png",
+     "width": 156,
+     "height": 156,
+     "bytes": 15768,
+     "scale": 3
+    }
+   }
+  },
+  {
+   "file": "btn_icon_rank@2x.png",
+   "width": 104,
+   "height": 104,
+   "bytes": 8266,
+   "scale": 2,
+   "logical_size": [
+    52,
+    52
+   ],
+   "nine_slice_insets": null,
+   "nine_slice_insets_pt": null,
+   "role": "抽屉圆钮「好友柴榜」",
+   "png": "PNG8 pngquant, light dither, full alpha",
+   "origin": "ui-parchment-v2 v3.1 (unchanged file)",
+   "variants": {
+    "2x": {
+     "file": "btn_icon_rank@2x.png",
+     "width": 104,
+     "height": 104,
+     "bytes": 8266,
+     "scale": 2
+    },
+    "3x": {
+     "file": "btn_icon_rank@3x.png",
+     "width": 156,
+     "height": 156,
+     "bytes": 15826,
+     "scale": 3
+    }
+   }
+  },
+  {
+   "file": "btn_leather@2x.png",
+   "width": 440,
+   "height": 120,
+   "bytes": 32489,
+   "scale": 2,
+   "logical_size": [
+    220,
+    60
+   ],
+   "nine_slice_insets": [
+    52,
+    36,
+    52,
+    36
+   ],
+   "nine_slice_insets_pt": [
+    26,
+    18,
+    26,
+    18
+   ],
+   "nine_slice_insets_2x": [
+    52,
+    36,
+    52,
+    36
+   ],
+   "role": "主 CTA：抽屉「免费领取 柴棚 N 根」/ 用尽面板「▶ 看短片 再砍 20 根」/ 引导「知道了，开砍！」",
+   "png": "PNG8 pngquant, light dither, full alpha",
+   "origin": "ui-parchment-v2 v3.1 (unchanged file)",
+   "variants": {
+    "2x": {
+     "file": "btn_leather@2x.png",
+     "width": 440,
+     "height": 120,
+     "bytes": 32489,
+     "scale": 2,
+     "nine_slice_insets": [
+      52,
+      36,
+      52,
+      36
+     ]
+    },
+    "3x": {
+     "file": "btn_leather@3x.png",
+     "width": 660,
+     "height": 180,
+     "bytes": 65345,
+     "scale": 3,
+     "nine_slice_insets": [
+      78,
+      54,
+      78,
+      54
+     ]
+    }
+   }
+  },
+  {
+   "file": "guide_bubble@2x.png",
+   "width": 400,
+   "height": 128,
+   "bytes": 32311,
+   "scale": 2,
+   "logical_size": [
+    200,
+    64
+   ],
+   "nine_slice_insets": [
+    36,
+    32,
+    36,
+    32
+   ],
+   "nine_slice_insets_pt": [
+    18,
+    16,
+    18,
+    16
+   ],
+   "nine_slice_insets_2x": [
+    36,
+    32,
+    36,
+    32
+   ],
+   "role": "引导气泡 9-slice（文字运行时绘制）",
+   "png": "PNG8 pngquant, light dither, full alpha",
+   "origin": "ui-parchment-v2 v3.1 (unchanged file)",
+   "variants": {
+    "2x": {
+     "file": "guide_bubble@2x.png",
+     "width": 400,
+     "height": 128,
+     "bytes": 32311,
+     "scale": 2,
+     "nine_slice_insets": [
+      36,
+      32,
+      36,
+      32
+     ]
+    },
+    "3x": {
+     "file": "guide_bubble@3x.png",
+     "width": 600,
+     "height": 192,
+     "bytes": 62664,
+     "scale": 3,
+     "nine_slice_insets": [
+      54,
+      48,
+      54,
+      48
+     ]
+    }
+   }
+  },
+  {
+   "file": "guide_hand@2x.png",
+   "width": 128,
+   "height": 128,
+   "bytes": 2082,
+   "scale": 2,
+   "logical_size": [
+    64,
+    64
+   ],
+   "nine_slice_insets": null,
+   "nine_slice_insets_pt": null,
+   "role": "引导点按手；指尖热点 (30,3)pt",
+   "png": "PNG8 pngquant, light dither, full alpha",
+   "origin": "ui-parchment-v2 v3.1 (unchanged file)",
+   "variants": {
+    "2x": {
+     "file": "guide_hand@2x.png",
+     "width": 128,
+     "height": 128,
+     "bytes": 2082,
+     "scale": 2
+    },
+    "3x": {
+     "file": "guide_hand@3x.png",
+     "width": 192,
+     "height": 192,
+     "bytes": 2926,
+     "scale": 3
+    }
+   }
+  },
+  {
+   "file": "guide_ring@2x.png",
+   "width": 192,
+   "height": 192,
+   "bytes": 4125,
+   "scale": 2,
+   "logical_size": [
+    96,
+    96
+   ],
+   "nine_slice_insets": null,
+   "nine_slice_insets_pt": null,
+   "role": "引导第 1 步木头椭圆描边（仅第 1 步）",
+   "png": "PNG8 pngquant, light dither, full alpha",
+   "origin": "ui-parchment-v2 v3.1 (unchanged file)",
+   "variants": {
+    "2x": {
+     "file": "guide_ring@2x.png",
+     "width": 192,
+     "height": 192,
+     "bytes": 4125,
+     "scale": 2
+    },
+    "3x": {
+     "file": "guide_ring@3x.png",
+     "width": 288,
+     "height": 288,
+     "bytes": 6530,
+     "scale": 3
+    }
+   }
+  },
+  {
+   "file": "guide_tail@2x.png",
+   "width": 56,
+   "height": 36,
+   "bytes": 696,
+   "scale": 2,
+   "logical_size": [
+    28,
+    18
+   ],
+   "nine_slice_insets": null,
+   "nine_slice_insets_pt": null,
+   "role": "气泡尾巴，默认朝下；旋转/翻转指向目标，压气泡边 2pt",
+   "png": "PNG8 pngquant, light dither, full alpha",
+   "origin": "ui-parchment-v2 v3.1 (unchanged file)",
+   "variants": {
+    "2x": {
+     "file": "guide_tail@2x.png",
+     "width": 56,
+     "height": 36,
+     "bytes": 696,
+     "scale": 2
+    },
+    "3x": {
+     "file": "guide_tail@3x.png",
+     "width": 84,
+     "height": 54,
+     "bytes": 842,
+     "scale": 3
+    }
+   }
+  },
+  {
+   "file": "panel_vellum@2x.png",
+   "width": 600,
+   "height": 450,
+   "bytes": 94671,
+   "scale": 2,
+   "logical_size": [
+    300,
+    225
+   ],
+   "nine_slice_insets": [
+    80,
+    80,
+    80,
+    80
+   ],
+   "nine_slice_insets_pt": [
+    40,
+    40,
+    40,
+    40
+   ],
+   "nine_slice_insets_2x": [
+    80,
+    80,
+    80,
+    80
+   ],
+   "role": "用尽面板 / 好友柴榜面板 9-slice（仅 @2x：纸面本身柔和，控包体；dpr3 也用 @2x）",
+   "png": "PNG8 pngquant, light dither, full alpha",
+   "origin": "ui-parchment-v2 v3.1 (unchanged file)",
+   "variants": {
+    "2x": {
+     "file": "panel_vellum@2x.png",
+     "width": 600,
+     "height": 450,
+     "bytes": 94671,
+     "scale": 2,
+     "nine_slice_insets": [
+      80,
+      80,
+      80,
+      80
+     ]
+    }
+   }
+  },
+  {
+   "file": "ribbon_madder@2x.png",
+   "width": 520,
+   "height": 104,
+   "bytes": 27777,
+   "scale": 2,
+   "logical_size": [
+    260,
+    52
+   ],
+   "nine_slice_insets": [
+    96,
+    24,
+    96,
+    24
+   ],
+   "nine_slice_insets_pt": [
+    48,
+    12,
+    48,
+    12
+   ],
+   "nine_slice_insets_2x": [
+    96,
+    24,
+    96,
+    24
+   ],
+   "role": "标题飘带，骑在面板上沿（中线=面板顶边）",
+   "png": "PNG8 pngquant, light dither, full alpha",
+   "origin": "ui-parchment-v2 v3.1 (unchanged file)",
+   "variants": {
+    "2x": {
+     "file": "ribbon_madder@2x.png",
+     "width": 520,
+     "height": 104,
+     "bytes": 27777,
+     "scale": 2,
+     "nine_slice_insets": [
+      96,
+      24,
+      96,
+      24
+     ]
+    },
+    "3x": {
+     "file": "ribbon_madder@3x.png",
+     "width": 780,
+     "height": 156,
+     "bytes": 50427,
+     "scale": 3,
+     "nine_slice_insets": [
+      144,
+      36,
+      144,
+      36
+     ]
+    }
+   }
+  },
+  {
+   "file": "strip_parchment@2x.png",
+   "width": 480,
+   "height": 96,
+   "bytes": 28718,
+   "scale": 2,
+   "logical_size": [
+    240,
+    48
+   ],
+   "nine_slice_insets": [
+    32,
+    24,
+    32,
+    24
+   ],
+   "nine_slice_insets_pt": [
+    16,
+    12,
+    16,
+    12
+   ],
+   "nine_slice_insets_2x": [
+    32,
+    24,
+    32,
+    24
+   ],
+   "role": "次级按钮/列表行高亮：用尽面板「免费领取」、风格行、风格列表当前行、柴榜「我」行、引导「跳过 〉」",
+   "png": "PNG8 pngquant, light dither, full alpha",
+   "origin": "ui-parchment-v2 v3.1 (unchanged file)",
+   "variants": {
+    "2x": {
+     "file": "strip_parchment@2x.png",
+     "width": 480,
+     "height": 96,
+     "bytes": 28718,
+     "scale": 2,
+     "nine_slice_insets": [
+      32,
+      24,
+      32,
+      24
+     ]
+    },
+    "3x": {
+     "file": "strip_parchment@3x.png",
+     "width": 720,
+     "height": 144,
+     "bytes": 53772,
+     "scale": 3,
+     "nine_slice_insets": [
+      48,
+      36,
+      48,
+      36
+     ]
+    }
+   }
+  },
+  {
+   "file": "tag_parchment@2x.png",
+   "width": 208,
+   "height": 80,
+   "bytes": 11956,
+   "scale": 2,
+   "logical_size": [
+    104,
+    40
+   ],
+   "nine_slice_insets": [
+    28,
+    24,
+    28,
+    24
+   ],
+   "nine_slice_insets_pt": [
+    14,
+    12,
+    14,
+    12
+   ],
+   "nine_slice_insets_2x": [
+    28,
+    24,
+    28,
+    24
+   ],
+   "role": "顶部正中小签「余 N ⌄」9-slice。含 4pt 透明边+烘焙投影：可见纸面=外框内缩 4pt；文字/红点由代码绘制",
+   "visual_pad_pt": 4,
+   "png": "PNG8 pngquant q80-98 floyd 0.15 (drawer 65-88), full alpha",
+   "origin": "D_final new",
+   "variants": {
+    "2x": {
+     "file": "tag_parchment@2x.png",
+     "width": 208,
+     "height": 80,
+     "bytes": 11956,
+     "scale": 2,
+     "nine_slice_insets": [
+      28,
+      24,
+      28,
+      24
+     ]
+    },
+    "3x": {
+     "file": "tag_parchment@3x.png",
+     "width": 312,
+     "height": 120,
+     "bytes": 23082,
+     "scale": 3,
+     "nine_slice_insets": [
+      42,
+      36,
+      42,
+      36
+     ]
+    }
+   }
+  },
+  {
+   "file": "tag_madder@2x.png",
+   "width": 208,
+   "height": 80,
+   "bytes": 10211,
+   "scale": 2,
+   "logical_size": [
+    104,
+    40
+   ],
+   "nine_slice_insets": [
+    28,
+    24,
+    28,
+    24
+   ],
+   "nine_slice_insets_pt": [
+    14,
+    12,
+    14,
+    12
+   ],
+   "nine_slice_insets_2x": [
+    28,
+    24,
+    28,
+    24
+   ],
+   "role": "小签用尽态「树根用尽」（茜红纸，奶油色字）；同 tag_parchment 规则",
+   "visual_pad_pt": 4,
+   "png": "PNG8 pngquant q80-98 floyd 0.15 (drawer 65-88), full alpha",
+   "origin": "D_final new",
+   "variants": {
+    "2x": {
+     "file": "tag_madder@2x.png",
+     "width": 208,
+     "height": 80,
+     "bytes": 10211,
+     "scale": 2,
+     "nine_slice_insets": [
+      28,
+      24,
+      28,
+      24
+     ]
+    },
+    "3x": {
+     "file": "tag_madder@3x.png",
+     "width": 312,
+     "height": 120,
+     "bytes": 18439,
+     "scale": 3,
+     "nine_slice_insets": [
+      42,
+      36,
+      42,
+      36
+     ]
+    }
+   }
+  },
+  {
+   "file": "btn_icon_style@2x.png",
+   "width": 104,
+   "height": 104,
+   "bytes": 8321,
+   "scale": 2,
+   "logical_size": [
+    52,
+    52
+   ],
+   "nine_slice_insets": null,
+   "nine_slice_insets_pt": null,
+   "role": "抽屉圆钮「风格」（调色板+画笔，无字）",
+   "png": "PNG8 pngquant q80-98 floyd 0.15 (drawer 65-88), full alpha",
+   "origin": "D_final new",
+   "variants": {
+    "2x": {
+     "file": "btn_icon_style@2x.png",
+     "width": 104,
+     "height": 104,
+     "bytes": 8321,
+     "scale": 2
+    },
+    "3x": {
+     "file": "btn_icon_style@3x.png",
+     "width": 156,
+     "height": 156,
+     "bytes": 15782,
+     "scale": 3
+    }
+   }
+  },
+  {
+   "file": "icon_check@2x.png",
+   "width": 40,
+   "height": 40,
+   "bytes": 686,
+   "scale": 2,
+   "logical_size": [
+    20,
+    20
+   ],
+   "nine_slice_insets": null,
+   "nine_slice_insets_pt": null,
+   "role": "风格列表当前项勾（茜红墨）",
+   "png": "PNG8 pngquant q80-98 floyd 0.15 (drawer 65-88), full alpha",
+   "origin": "D_final new",
+   "variants": {
+    "2x": {
+     "file": "icon_check@2x.png",
+     "width": 40,
+     "height": 40,
+     "bytes": 686,
+     "scale": 2
+    },
+    "3x": {
+     "file": "icon_check@3x.png",
+     "width": 60,
+     "height": 60,
+     "bytes": 684,
+     "scale": 3
+    }
+   }
+  },
+  {
+   "file": "drawer_vellum@2x.png",
+   "width": 400,
+   "height": 280,
+   "bytes": 47305,
+   "scale": 2,
+   "logical_size": [
+    200,
+    140
+   ],
+   "nine_slice_insets": [
+    56,
+    48,
+    56,
+    88
+   ],
+   "nine_slice_insets_pt": [
+    28,
+    24,
+    28,
+    44
+   ],
+   "nine_slice_insets_2x": [
+    56,
+    48,
+    56,
+    88
+   ],
+   "role": "下拉抽屉纸面 9-slice。只有底边撕口；上/左/右边画到屏外（x=-28..403, y=-24..）。开合时按高度裁切，见 interaction.md §动效",
+   "torn_edge": "bottom only; bottom inset 44pt contains torn band + burn rim",
+   "draw_rect_pt": "x=-28, y=-24, w=431, h=drawerBottom+24",
+   "png": "PNG8 pngquant q80-98 floyd 0.15 (drawer 65-88), full alpha",
+   "origin": "D_final new",
+   "variants": {
+    "2x": {
+     "file": "drawer_vellum@2x.png",
+     "width": 400,
+     "height": 280,
+     "bytes": 47305,
+     "scale": 2,
+     "nine_slice_insets": [
+      56,
+      48,
+      56,
+      88
+     ]
+    },
+    "3x": {
+     "file": "drawer_vellum@3x.png",
+     "width": 600,
+     "height": 420,
+     "bytes": 83773,
+     "scale": 3,
+     "nine_slice_insets": [
+      84,
+      72,
+      84,
+      132
+     ]
+    }
+   }
+  },
+  {
+   "file": "roll_paper@2x.png",
+   "width": 320,
+   "height": 48,
+   "bytes": 11014,
+   "scale": 2,
+   "logical_size": [
+    160,
+    24
+   ],
+   "nine_slice_insets": [
+    32,
+    0,
+    32,
+    0
+   ],
+   "nine_slice_insets_pt": [
+    16,
+    0,
+    16,
+    0
+   ],
+   "nine_slice_insets_2x": [
+    32,
+    0,
+    32,
+    0
+   ],
+   "role": "卷轴滚筒（侧视横条，3-slice：左右 16pt 端头不拉伸，中段横向拉伸）。直径 d 时整体纵向缩放到 d，端头目标宽 = 16*d/24 pt",
+   "slice_mode": "3-slice horizontal; dest L/R insets scale with diameter: 16*d/24 pt",
+   "png": "PNG8 pngquant q80-98 floyd 0.15 (drawer 65-88), full alpha",
+   "origin": "D_final new",
+   "variants": {
+    "2x": {
+     "file": "roll_paper@2x.png",
+     "width": 320,
+     "height": 48,
+     "bytes": 11014,
+     "scale": 2,
+     "nine_slice_insets": [
+      32,
+      0,
+      32,
+      0
+     ]
+    },
+    "3x": {
+     "file": "roll_paper@3x.png",
+     "width": 480,
+     "height": 72,
+     "bytes": 20401,
+     "scale": 3,
+     "nine_slice_insets": [
+      48,
+      0,
+      48,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "file": "roll_shadow@2x.png",
+   "width": 4,
+   "height": 32,
+   "bytes": 185,
+   "scale": 2,
+   "logical_size": [
+    2,
+    16
+   ],
+   "nine_slice_insets": null,
+   "nine_slice_insets_pt": null,
+   "role": "滚筒下方投影渐变条（上深下浅），横向拉伸到抽屉宽，纵向 = 0.6*d",
+   "slice_mode": "stretch",
+   "png": "PNG8 pngquant q80-98 floyd 0.15 (drawer 65-88), full alpha",
+   "origin": "D_final new",
+   "variants": {
+    "2x": {
+     "file": "roll_shadow@2x.png",
+     "width": 4,
+     "height": 32,
+     "bytes": 185,
+     "scale": 2
+    },
+    "3x": {
+     "file": "roll_shadow@3x.png",
+     "width": 6,
+     "height": 48,
+     "bytes": 131,
+     "scale": 3
+    }
+   }
+  }
+ ],
+ "optional": [
+  {
+   "file": "../optional/chip_parchment@2x.png",
+   "width": 300,
+   "height": 72,
+   "bytes": 14949,
+   "scale": 2,
+   "logical_size": [
+    150,
+    36
+   ],
+   "nine_slice_insets": [
+    28,
+    20,
+    28,
+    20
+   ],
+   "nine_slice_insets_pt": [
+    14,
+    10,
+    14,
+    10
+   ],
+   "nine_slice_insets_2x": [
+    28,
+    20,
+    28,
+    20
+   ],
+   "role": "economy HUD chip 今日已砍/剩余树根/生长倒计时 — D 不用（顶部小签改用 tag_parchment）",
+   "shipped": false,
+   "variants": {
+    "2x": {
+     "file": "../optional/chip_parchment@2x.png",
+     "width": 300,
+     "height": 72,
+     "bytes": 14949,
+     "scale": 2,
+     "nine_slice_insets": [
+      28,
+      20,
+      28,
+      20
+     ]
+    },
+    "3x": {
+     "file": "../optional/chip_parchment@3x.png",
+     "width": 450,
+     "height": 108,
+     "bytes": 30700,
+     "scale": 3,
+     "nine_slice_insets": [
+      42,
+      30,
+      42,
+      30
+     ]
+    }
+   }
+  },
+  {
+   "file": "../optional/chip_boost@2x.png",
+   "width": 300,
+   "height": 72,
+   "bytes": 12374,
+   "scale": 2,
+   "logical_size": [
+    150,
+    36
+   ],
+   "nine_slice_insets": [
+    28,
+    20,
+    28,
+    20
+   ],
+   "nine_slice_insets_pt": [
+    14,
+    10,
+    14,
+    10
+   ],
+   "nine_slice_insets_2x": [
+    28,
+    20,
+    28,
+    20
+   ],
+   "role": "economy HUD chip accent 加速中 — D 不用（加速中状态写在抽屉统计里）",
+   "shipped": false,
+   "variants": {
+    "2x": {
+     "file": "../optional/chip_boost@2x.png",
+     "width": 300,
+     "height": 72,
+     "bytes": 12374,
+     "scale": 2,
+     "nine_slice_insets": [
+      28,
+      20,
+      28,
+      20
+     ]
+    },
+    "3x": {
+     "file": "../optional/chip_boost@3x.png",
+     "width": 450,
+     "height": 108,
+     "bytes": 26535,
+     "scale": 3,
+     "nine_slice_insets": [
+      42,
+      30,
+      42,
+      30
+     ]
+    }
+   }
+  },
+  {
+   "file": "../optional/seal_wax@2x.png",
+   "width": 128,
+   "height": 128,
+   "bytes": 13774,
+   "scale": 2,
+   "logical_size": [
+    64,
+    64
+   ],
+   "nine_slice_insets": null,
+   "nine_slice_insets_pt": null,
+   "role": "wax seal accent; uniform scale — D 不用；若审核要求印面无字需换空白火漆",
+   "shipped": false,
+   "variants": {
+    "2x": {
+     "file": "../optional/seal_wax@2x.png",
+     "width": 128,
+     "height": 128,
+     "bytes": 13774,
+     "scale": 2
+    },
+    "3x": {
+     "file": "../optional/seal_wax@3x.png",
+     "width": 192,
+     "height": 192,
+     "bytes": 28809,
+     "scale": 3
+    }
+   }
+  },
+  {
+   "file": "../optional/btn_icon_menu@2x.png",
+   "width": 104,
+   "height": 104,
+   "bytes": 8201,
+   "scale": 2,
+   "logical_size": [
+    52,
+    52
+   ],
+   "nine_slice_insets": null,
+   "nine_slice_insets_pt": null,
+   "role": "D 不用（第 4 个圆钮改为 btn_icon_style）",
+   "shipped": false,
+   "variants": {
+    "2x": {
+     "file": "../optional/btn_icon_menu@2x.png",
+     "width": 104,
+     "height": 104,
+     "bytes": 8201,
+     "scale": 2
+    },
+    "3x": {
+     "file": "../optional/btn_icon_menu@3x.png",
+     "width": 156,
+     "height": 156,
+     "bytes": 15562,
+     "scale": 3
+    }
+   }
+  },
+  {
+   "file": "../optional/btn_icon_menu_s@2x.png",
+   "width": 80,
+   "height": 80,
+   "bytes": 5261,
+   "scale": 2,
+   "logical_size": [
+    40,
+    40
+   ],
+   "nine_slice_insets": null,
+   "nine_slice_insets_pt": null,
+   "role": "D 不用（B/C 方案用）",
+   "shipped": false,
+   "variants": {
+    "2x": {
+     "file": "../optional/btn_icon_menu_s@2x.png",
+     "width": 80,
+     "height": 80,
+     "bytes": 5261,
+     "scale": 2
+    },
+    "3x": {
+     "file": "../optional/btn_icon_menu_s@3x.png",
+     "width": 120,
+     "height": 120,
+     "bytes": 9377,
+     "scale": 3
+    }
+   }
+  }
+ ],
+ "code_drawn": [
+  "红点 (r=4.5pt, #8b2e2e + 1.2pt 奶油描边)",
+  "角标数字 (茜红胶囊)",
+  "小签箭头 ⌄/⌃",
+  "风格色样圆点",
+  "柴榜头像占位圆",
+  "引导圆角矩形高亮描边 (2pt 奶油)",
+  "暗遮罩"
+ ],
+ "total_2x_bytes": 336493,
+ "total_3x_set_bytes": 546409,
+ "total_textures_dir_bytes": 788231,
+ "naming": "name@2x.png default, name@3x.png for dpr3 where present"
+}

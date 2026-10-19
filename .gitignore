@@ -10,5 +10,13 @@ art-sets/**/preview_*.png
 ui-parchment-v2/mockups/0*.png
 ui-parchment-v2/export_v3/mockups/
 ui-parchment-export-v3/
+ui-parchment-D/spec/
+ui-parchment-D/guide/
+ui-parchment-D/motion/
+ui-parchment-D/review-033/
+ui-parchment-D/src/__pycache__/
+ui-parchment-D/src/_work/
 *.tar.gz
 *.tar_00b3.gz
+*.tar_4401.gz
+*.tar_b6af.gz

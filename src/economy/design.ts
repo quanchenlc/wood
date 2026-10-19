@@ -62,7 +62,7 @@ export const COPY_C = {
   hudBoost: "加速中",
   exhaustedTitle: "树根用尽",
   exhaustedBody1: "今天的树根已经砍完了",
-  exhaustedBody2: "明日卯时，林中自会再生",
+  exhaustedBody2: "明天 0 点恢复",
   startChop: "开始砍柴",
   openRank: "好友柴榜",
   loading: "正在磨斧…",

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { TOTAL_ASSETS } from "./config/assets";
-import { CAMERA, IS_MINIGAME, LIGHTING } from "./config/constants";
+import { CAMERA, LIGHTING } from "./config/constants";
 import { AxeAnimation } from "./anim/AxeAnimation";
 import { PieceAnimator } from "./anim/PieceAnimator";
 import { AudioManager } from "./audio/AudioManager";
@@ -41,13 +41,28 @@ import { isArtSetId } from "./art/registry";
 import { COPY_C, DESIGN_C, getEconomy } from "./economy";
 import { ScenePresenter } from "./core/scenePresent";
 import {
+  CLOSE_MS,
+  OPEN_MS,
+  capsuleTopPt,
+  invertEase,
   isGuideDone,
   loadParchmentTextures,
   markGuide,
+  motionAt,
   resetGuideForTests,
+  stateClose,
+  stateOpen,
   trackGuide,
+  writeStyleId,
 } from "./ui/parchment";
-import type { GuideTargets, PanelMode, ParchmentUiState } from "./ui/parchment";
+import type {
+  DrawerPage,
+  GuideTargets,
+  PanelMode,
+  ParchmentUiState,
+} from "./ui/parchment";
+import { ART_SET_CATALOG } from "./art/registry";
+import { formatCountdown } from "./economy/time";
 
 const renderer = createRenderer();
 const scene = createScene();
@@ -79,7 +94,6 @@ let game: GameController | null = null;
 let debugPile: FirewoodPile | null = null;
 let debugMaterials: WoodMaterials | null = null;
 let currentStump: Stump | null = null;
-let artPickerOpen = false;
 let artSwitching = false;
 let groundMap: THREE.Texture | null = null;
 let backgroundMap: THREE.Texture | null = null;
@@ -98,12 +112,36 @@ let guideAdvanceAt = 0;
 let guideTargets: GuideTargets = {};
 let lastGuideTracked = 0;
 
+/** 抽屉动画：q 线性 0..1，opening 表示朝打开方向 */
+let drawerQ: number | null = null;
+let drawerOpening = true;
+let drawerAnimating = false;
+let drawerAnimStart = 0;
+let drawerAnimFromQ = 0;
+let drawerAnimDur = OPEN_MS;
+let drawerPage: DrawerPage = "main";
+let drawerDragP: number | null = null;
+let claimFlash: string | null = null;
+let claimFlashUntil = 0;
+let showRedDot = false;
+let lastSeenRedHash = "";
+let exhaustedBubble: { text: string; until: number } | null = null;
+let exhaustedAutoShownDay = "";
+let styleSwitching = false;
+
+const STYLE_COLORS: Record<string, string> = {
+  set0: "#b4966e",
+  set1: "#608052",
+  set2: "#d68c46",
+  set3: "#c47878",
+  set4: "#ceb688",
+};
+
 function initGuideStep() {
   if (isGuideDone()) {
     guideStep = null;
     return;
   }
-  // 开局无树根额度 → 从 2/3 开始
   guideStep = economy.canActiveChop() ? 1 : 2;
 }
 
@@ -119,6 +157,84 @@ function finishGuide(mark: "done" | "skipped" = "done") {
   markGuide(mark);
   if (mark === "done") trackGuide("guide_complete");
   else trackGuide("guide_skip", { step: step ?? 0 });
+  closeDrawer(true);
+  syncParchmentHud();
+}
+
+function redDotHash(snap = economy.snapshot()): string {
+  const adLeft =
+    DESIGN_C.ads.AD_OFFLINE_SKIP.dailyLimit - snap.state.ad_daily_offline_skip;
+  const boost = snap.boosting ? 1 : 0;
+  return `${snap.state.pending_claim}|${adLeft}|${boost}`;
+}
+
+function refreshRedDot(openingDrawer = false) {
+  const snap = economy.snapshot();
+  const hash = redDotHash(snap);
+  if (openingDrawer) {
+    lastSeenRedHash = hash;
+    showRedDot = false;
+    return;
+  }
+  if (guideStep || uiPanel !== "none" || snap.state.daily_remaining <= 0) {
+    showRedDot = false;
+    return;
+  }
+  if (hash !== lastSeenRedHash) {
+    const adLeft =
+      DESIGN_C.ads.AD_OFFLINE_SKIP.dailyLimit - snap.state.ad_daily_offline_skip;
+    showRedDot =
+      snap.state.pending_claim > 0 || (adLeft > 0 && !snap.boosting);
+  }
+}
+
+function openDrawer(src: "tap" | "drag" | "guide" = "tap", fromP?: number) {
+  if (uiPanel !== "none") return;
+  const snap = economy.snapshot();
+  if (snap.state.daily_remaining <= 0 && !guideStep) {
+    openExhaustedPanel();
+    return;
+  }
+  refreshRedDot(true);
+  trackGuide("drawer_open", { src });
+  const p0 = fromP ?? (drawerQ != null ? (drawerOpening ? stateOpen(drawerQ).p : stateClose(1 - (drawerQ ?? 0)).p) : 0);
+  const q0 = invertEase(Math.max(0, Math.min(1, p0)), true);
+  drawerOpening = true;
+  drawerAnimating = true;
+  drawerAnimStart = performance.now();
+  drawerAnimFromQ = q0;
+  drawerAnimDur = OPEN_MS * (1 - q0);
+  drawerQ = q0;
+  drawerDragP = null;
+  drawerPage = "main";
+  syncParchmentHud();
+}
+
+function closeDrawer(instant = false) {
+  if (drawerQ == null && !drawerAnimating) return;
+  if (instant) {
+    drawerQ = null;
+    drawerAnimating = false;
+    drawerDragP = null;
+    drawerPage = "main";
+    syncParchmentHud();
+    return;
+  }
+  const pNow =
+    drawerDragP ??
+    (drawerQ != null
+      ? drawerOpening
+        ? stateOpen(drawerQ).p
+        : stateClose(1 - drawerQ).p
+      : 1);
+  const qClose = invertEase(Math.max(0, Math.min(1, pNow)), false);
+  drawerOpening = false;
+  drawerAnimating = true;
+  drawerAnimStart = performance.now();
+  drawerAnimFromQ = qClose;
+  drawerAnimDur = CLOSE_MS * (1 - qClose);
+  drawerQ = 1 - qClose;
+  drawerDragP = null;
   syncParchmentHud();
 }
 
@@ -126,13 +242,29 @@ function syncParchmentHud() {
   const hud = ensureHud();
   if (!hud?.setParchmentUi) return;
   if (uiToast && performance.now() > toastUntil) uiToast = null;
+  if (claimFlash && performance.now() > claimFlashUntil) claimFlash = null;
+  if (exhaustedBubble && performance.now() > exhaustedBubble.until) {
+    exhaustedBubble = null;
+  }
   if (guideStep && guideStep !== lastGuideTracked) {
     trackGuide("guide_step_view", { step: guideStep });
     lastGuideTracked = guideStep;
   }
+  refreshRedDot(false);
   const snap = economy.snapshot();
   const adLeft =
     DESIGN_C.ads.AD_OFFLINE_SKIP.dailyLimit - snap.state.ad_daily_offline_skip;
+  const styleId = artSets.activeId;
+  const styleLabel =
+    ART_SET_CATALOG.find((e) => e.id === styleId)?.label || "羊皮纸";
+
+  let motion = null as ReturnType<typeof stateOpen> | null;
+  if (drawerDragP != null) {
+    motion = motionAt(drawerDragP, 0, 0.3 * Math.min(1, drawerDragP));
+  } else if (drawerQ != null) {
+    motion = drawerOpening ? stateOpen(drawerQ) : stateClose(1 - drawerQ);
+  }
+
   const state: ParchmentUiState = {
     panel: uiPanel,
     toast: uiToast,
@@ -142,6 +274,22 @@ function syncParchmentHud() {
     guideStep,
     guideTargets,
     adRemaining: Math.max(0, adLeft),
+    drawerQ,
+    drawerOpening,
+    drawerPage,
+    drawerMotion: motion,
+    showRedDot,
+    styleId,
+    styleLabel,
+    styleOptions: ART_SET_CATALOG.map((e) => ({
+      id: e.id,
+      label: e.label,
+      color: STYLE_COLORS[e.id] || "#ceb688",
+    })),
+    styleSwitching,
+    exhaustedBubble,
+    capsuleTop: capsuleTopPt(),
+    claimFlash,
   };
   hud.setParchmentUi(state);
 }
@@ -149,7 +297,18 @@ function syncParchmentHud() {
 function openExhaustedPanel() {
   if (guideStep) return;
   uiPanel = "exhausted";
+  closeDrawer(true);
   syncParchmentHud();
+}
+
+function maybeAutoExhausted() {
+  if (guideStep) return;
+  const snap = economy.snapshot();
+  if (snap.state.daily_remaining > 0) return;
+  const day = snap.state.today_date;
+  if (exhaustedAutoShownDay === day) return;
+  exhaustedAutoShownDay = day;
+  setTimeout(() => openExhaustedPanel(), 600);
 }
 
 function projectLogTarget(): GuideTargets["log"] | undefined {
@@ -200,7 +359,7 @@ async function handleParchmentHit() {
   const hit = hud.hitTestParchment(pt.x, pt.y);
   if (!hit) return false;
 
-  // 引导第 1 步：不吞游戏点击（除 skip）
+  // 引导第 1 步：不吞游戏点击（除 skip / tag）
   if (guideStep === 1 && hit !== "guide_skip") {
     return false;
   }
@@ -209,7 +368,11 @@ async function handleParchmentHit() {
   if (uiBusy) return true;
 
   if (hit === "guide_next" || hit === "guide_tap") {
-    if (guideStep && guideStep < 3) {
+    if (guideStep === 2) {
+      guideStep = 3;
+      openDrawer("guide");
+      syncParchmentHud();
+    } else if (guideStep && guideStep < 3) {
       guideStep += 1;
       syncParchmentHud();
     } else {
@@ -221,8 +384,49 @@ async function handleParchmentHit() {
     finishGuide("skipped");
     return true;
   }
+  if (hit === "tag") {
+    if (guideStep === 2) {
+      guideStep = 3;
+      openDrawer("guide");
+      return true;
+    }
+    if (drawerQ != null && (drawerOpening ? drawerQ > 0.5 : drawerQ < 0.5)) {
+      closeDrawer();
+    } else {
+      openDrawer("tap");
+    }
+    return true;
+  }
+  if (hit === "drawer_mask") {
+    closeDrawer();
+    return true;
+  }
+  if (hit === "style_open") {
+    drawerPage = "style";
+    syncParchmentHud();
+    return true;
+  }
+  if (hit === "style_back") {
+    drawerPage = "main";
+    syncParchmentHud();
+    return true;
+  }
+  if (hit === "style_pick") {
+    const full = hud.hitTestParchmentFull?.(pt.x, pt.y);
+    const id = full?.meta;
+    if (id && isArtSetId(id)) {
+      styleSwitching = true;
+      writeStyleId(id);
+      syncParchmentHud();
+      void switchArtSet(id).finally(() => {
+        styleSwitching = false;
+        syncParchmentHud();
+      });
+    }
+    return true;
+  }
   if (hit === "help_open") {
-    // 玩法重看：不清 storage，完成/跳过时再写 done|skipped
+    closeDrawer(true);
     guideStep = economy.canActiveChop() ? 1 : 2;
     lastGuideTracked = 0;
     guideAdvanceAt = 0;
@@ -231,46 +435,48 @@ async function handleParchmentHit() {
     return true;
   }
   if (hit === "rank_open") {
-    uiPanel = "rank";
-    syncParchmentHud();
-    return true;
-  }
-  if (hit === "claim_strip") {
-    uiPanel = "claim";
-    syncParchmentHud();
+    closeDrawer();
+    setTimeout(() => {
+      uiPanel = "rank";
+      syncParchmentHud();
+    }, CLOSE_MS);
     return true;
   }
   if (hit === "panel") return true;
-  if (hit === "rank_close" || hit === "dismiss") {
+  if (hit === "rank_close" || hit === "dismiss" || hit === "exhausted_ok") {
     if (guideStep) return true;
     uiPanel = "none";
     syncParchmentHud();
     return true;
   }
-  if (hit === "claim") {
+  if (hit === "claim_free") {
     const n = economy.claim();
-    showToast(n > 0 ? `已领取 ${n} 根` : COPY_C.resting);
-    if (economy.snapshot().quotaExhausted && economy.snapshot().state.pending_claim > 0) {
-      uiPanel = "exhausted";
-    } else if (economy.snapshot().state.pending_claim <= 0) {
-      uiPanel = "none";
+    claimFlash = n > 0 ? `已入柴棚 +${n}` : COPY_C.resting;
+    claimFlashUntil = performance.now() + 1200;
+    if (economy.snapshot().state.pending_claim <= 0 && uiPanel === "exhausted") {
+      /* keep panel if still exhausted */
     }
     syncParchmentHud();
     return true;
   }
-  if (hit === "ad_skip" || hit === "ad_quota") {
+  if (hit === "bubble_ad" || hit === "ad_skip" || hit === "ad_quota") {
     uiBusy = true;
-    const placement = hit === "ad_skip" ? "AD_OFFLINE_SKIP" : "AD_QUOTA_PLUS";
+    const placement =
+      hit === "ad_skip" ? "AD_OFFLINE_SKIP" : "AD_QUOTA_PLUS";
     const res = await economy.watchAd(placement);
     uiBusy = false;
     if (!res.ok) {
-      showToast(res.reason === "fail" || res.reason === "closed" ? COPY_C.adFail : "今日次数已用完");
+      showToast(
+        res.reason === "fail" || res.reason === "closed"
+          ? COPY_C.adFail
+          : "今日次数已用完",
+      );
     } else if (placement === "AD_QUOTA_PLUS") {
       showToast(COPY_C.quotaPlus);
       uiPanel = "none";
+      exhaustedBubble = null;
     } else {
       showToast(`${COPY_C.speedUp} +${res.gained ?? 0}`);
-      uiPanel = "none";
     }
     syncParchmentHud();
     return true;
@@ -278,14 +484,15 @@ async function handleParchmentHit() {
   return true;
 }
 
-function syncArtSwitcherHud(loadingText?: string | null) {
+function syncArtSwitcherHud(_loadingText?: string | null) {
+  // 0.3.4：左下艺术切换已移除，入口在抽屉「风格」行
   const hud = ensureHud();
   hud?.setArtSwitcher?.({
-    visible: IS_MINIGAME || Boolean(hud),
-    open: artPickerOpen,
+    visible: false,
+    open: false,
     activeId: artSets.activeId,
-    options: artSets.labels(),
-    loadingText: loadingText ?? null,
+    options: [],
+    loadingText: null,
   });
 }
 
@@ -413,7 +620,6 @@ async function applyResolvedArt(set: ArtSetResolved, opts?: { skipAxe?: boolean 
 
 async function switchArtSet(id: ArtSetId) {
   if (artSwitching || id === artSets.activeId) {
-    artPickerOpen = false;
     syncArtSwitcherHud(null);
     return;
   }
@@ -421,40 +627,22 @@ async function switchArtSet(id: ArtSetId) {
   if (axe.busy) return;
 
   artSwitching = true;
-  artPickerOpen = false;
-  const label = artSets.labels().find((l) => l.id === id)?.label || id;
-  syncArtSwitcherHud(`加载${label}…`);
+  styleSwitching = true;
+  syncParchmentHud();
   try {
-    const set = await artSets.ensureLoaded(id, (p, text) => {
-      syncArtSwitcherHud(`${text} ${Math.round(p * 100)}%`);
+    const set = await artSets.ensureLoaded(id, (_p, _text) => {
+      /* 进度显示在小签「切换中…」 */
     });
     await applyResolvedArt(set);
+    writeStyleId(id);
   } catch (err) {
     console.warn("[art] switch failed", err);
-    syncArtSwitcherHud(null);
   } finally {
     artSwitching = false;
+    styleSwitching = false;
+    syncArtSwitcherHud(null);
+    syncParchmentHud();
   }
-}
-
-function handleArtSwitcherClick() {
-  const hud = ensureHud();
-  if (!hud?.hitTestArtSwitcher) return false;
-  const pt = controller.peekClickClient();
-  if (!pt) return false;
-  const hit = hud.hitTestArtSwitcher(pt.x, pt.y);
-  if (!hit) return false;
-  controller.cancelPendingClick();
-  if (hit === "toggle") {
-    artPickerOpen = !artPickerOpen;
-    syncArtSwitcherHud(artSwitching ? "加载中…" : null);
-    return true;
-  }
-  if (isArtSetId(hit)) {
-    void switchArtSet(hit);
-    return true;
-  }
-  return false;
 }
 
 async function boot() {
@@ -512,13 +700,25 @@ async function boot() {
       canActiveChop: () =>
         (guideStep === 1 || !guideStep) &&
         uiPanel === "none" &&
+        drawerQ == null &&
+        !drawerAnimating &&
         economy.canActiveChop(),
       shouldBlockSpawn: () => !economy.canActiveChop(),
       onRootStacked: () => {
         economy.tryActiveStack();
+        lastSeenRedHash = ""; // 新状态可再亮红点
         syncParchmentHud();
       },
-      onQuotaBlocked: () => openExhaustedPanel(),
+      onQuotaBlocked: () => {
+        if (guideStep) return;
+        const snap = economy.snapshot();
+        const text = snap.quotaExhausted
+          ? "今日蓄养中 · 明天 0 点恢复"
+          : `今日蓄养中 · ${formatCountdown(snap.nextRootMs)} 后长出`;
+        exhaustedBubble = { text, until: performance.now() + 6000 };
+        maybeAutoExhausted();
+        syncParchmentHud();
+      },
       onChopSettled: () => {
         if (guideStep === 1 && guideAdvanceAt <= 0) {
           guideAdvanceAt = performance.now() + 600;
@@ -570,7 +770,7 @@ function frame() {
 
   controller.update(dt);
   void handleParchmentHit();
-  if (uiPanel === "none" && (!guideStep || guideStep === 1)) handleArtSwitcherClick();
+  // 0.3.4：无左下艺术切换
   physics.update(dt);
   axe.update(dt);
   game?.update(dt);
@@ -579,6 +779,28 @@ function frame() {
   grass.update(dt);
   gobo.update(dt);
 
+  // 抽屉动画推进
+  if (drawerAnimating && drawerQ != null) {
+    const elapsed = now - drawerAnimStart;
+    const t = Math.min(1, elapsed / Math.max(1, drawerAnimDur));
+    if (drawerOpening) {
+      drawerQ = drawerAnimFromQ + (1 - drawerAnimFromQ) * t;
+      if (t >= 1) {
+        drawerQ = 1;
+        drawerAnimating = false;
+      }
+    } else {
+      const qClose = drawerAnimFromQ + (1 - drawerAnimFromQ) * t;
+      drawerQ = 1 - qClose;
+      if (t >= 1) {
+        drawerQ = null;
+        drawerAnimating = false;
+        drawerPage = "main";
+      }
+    }
+    syncParchmentHud();
+  }
+
   if (guideStep === 1) {
     guideTargets = { ...guideTargets, log: projectLogTarget() };
     if (guideAdvanceAt > 0 && performance.now() >= guideAdvanceAt) {
@@ -586,16 +808,26 @@ function frame() {
       guideStep = 2;
       syncParchmentHud();
     }
-  } else if (guideStep === 2 || guideStep === 3) {
-    // roots/icons 由 paintEconomyHud 每帧给出，sync 时带上
+  } else if (
+    guideStep === 3 &&
+    drawerQ == null &&
+    !drawerAnimating &&
+    lastGuideTracked === 3
+  ) {
+    // step3 首次进入时自动展开抽屉（track 后只开一次由 drawerQ 保持）
+    openDrawer("guide");
   }
 
-  // 经济 HUD / 引导手势刷新
-  if (guideStep === 1 || Math.floor(now / 500) !== Math.floor((now - dt * 1000) / 500)) {
-    syncParchmentHud();
-  } else if (uiToast && performance.now() > toastUntil) {
-    syncParchmentHud();
-  }
+  const needHud =
+    drawerAnimating ||
+    drawerDragP != null ||
+    guideStep === 1 ||
+    guideStep === 3 ||
+    Boolean(exhaustedBubble) ||
+    Boolean(claimFlash) ||
+    Math.floor(now / 500) !== Math.floor((now - dt * 1000) / 500) ||
+    (uiToast && performance.now() > toastUntil);
+  if (needHud) syncParchmentHud();
 
   presenter.present(() => {
     post.composer.render();
@@ -655,6 +887,7 @@ if (enableDebugHooks) {
         watchAd: (p: "AD_OFFLINE_SKIP" | "AD_QUOTA_PLUS") => economy.watchAd(p),
         openPanel: (p: PanelMode) => {
           guideStep = null;
+          closeDrawer(true);
           uiPanel = p;
           syncParchmentHud();
         },
@@ -664,17 +897,47 @@ if (enableDebugHooks) {
           guideStep = economy.canActiveChop() ? 1 : 2;
           lastGuideTracked = 0;
           uiPanel = "none";
+          closeDrawer(true);
           syncParchmentHud();
         },
         setGuideStep: (n: number) => {
           guideStep = Math.max(1, Math.min(3, Math.floor(n)));
           lastGuideTracked = 0;
           uiPanel = "none";
+          if (guideStep === 3) openDrawer("guide");
+          else closeDrawer(true);
           syncParchmentHud();
         },
         guideStep: () => guideStep,
         chops: () => game?.chopsOnCurrentRoot ?? 0,
         roots: () => game?.rootsFelledCount ?? 0,
+        openDrawer: () => openDrawer("tap"),
+        closeDrawer: () => closeDrawer(),
+        setDrawerQ: (q: number) => {
+          drawerAnimating = false;
+          drawerOpening = true;
+          drawerQ = Math.max(0, Math.min(1, q));
+          drawerDragP = null;
+          syncParchmentHud();
+        },
+        setDrawerPage: (p: DrawerPage) => {
+          drawerPage = p;
+          if (drawerQ == null) {
+            drawerQ = 1;
+            drawerOpening = true;
+          }
+          syncParchmentHud();
+        },
+        showExhaustedBubble: () => {
+          const snap = economy.snapshot();
+          exhaustedBubble = {
+            text: snap.quotaExhausted
+              ? "今日蓄养中 · 明天 0 点恢复"
+              : `今日蓄养中 · ${formatCountdown(snap.nextRootMs)} 后长出`,
+            until: performance.now() + 60000,
+          };
+          syncParchmentHud();
+        },
       }),
       art: () => ({
         active: artSets.activeId,
