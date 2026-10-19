@@ -93,6 +93,7 @@ function isMainPackageFile(absPath) {
 
 async function bundle() {
   mkdirSync(dirname(OUT_BUNDLE), { recursive: true });
+  const ver = require(join(MG, "version.js"));
   await esbuild.build({
     absWorkingDir: ROOT,
     entryPoints: [join(MG, "src/entry.ts")],
@@ -111,6 +112,8 @@ async function bundle() {
       "import.meta.env.PROD": "true",
       "import.meta.env.MODE": JSON.stringify("minigame"),
       "import.meta.url": JSON.stringify("https://firewood.local/js/game.bundle.js"),
+      __FW_APP_VERSION__: JSON.stringify(String(ver.VERSION || "0.0.0")),
+      __FW_APP_BUILD_NOTE__: JSON.stringify(String(ver.BUILD_NOTE || "")),
     },
     loader: {
       ".glsl": "text",

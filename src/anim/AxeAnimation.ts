@@ -7,7 +7,13 @@ import type { ProgressFn } from "../core/loading";
 /**
  * 斧头挥砍动画 —— 0.4.0 起完全用自研关键帧，不再加载 ax_anim_*.glb。
  * 节奏：预备抬起 → 下劈撞击 → 短暂停顿 → 淡出（总长约 0.28s，贴近原手感）。
+ *
+ * 模型约定（build_axe_placeholder）：柄沿 +Y，刃口线平行 Y，颊面法线 ±Z，刃朝 −X。
+ * 原 ax_anim 的 anim 节点把颊面转到相机 right（约 +X）；IP-clean 去掉 clip 后
+ * animNull 恒为单位阵，颊面仍朝 ±Z（对着镜头），相对劈砍法线差了 90°。
+ * 挂模时补 MODEL_YAW，使颊面 = ±local X；pivot.lookAt 后 local X = camera right。
  */
+const MODEL_YAW = Math.PI / 2;
 const SWING_MS = {
   windup: 0.06,
   strike: 0.12,
@@ -16,6 +22,11 @@ const SWING_MS = {
 };
 const SWING_TOTAL =
   SWING_MS.windup + SWING_MS.strike + SWING_MS.hold + SWING_MS.fade;
+/** 抬起峰值 / 撞击角：撞击保持近竖直（刃口线 ≈ 世界 +Y），勿再收到 −π/2 */
+const WINDUP_ROT_X = 0.55;
+const IMPACT_ROT_X = -0.12;
+const WINDUP_POS_Y = 0.14;
+const IMPACT_POS_Y = -0.06;
 
 export class AxeAnimation {
   private readonly scene: THREE.Scene;
@@ -29,6 +40,8 @@ export class AxeAnimation {
   private readyState = false;
   private playing = false;
   private playSerial = 0;
+  /** 最近一次劈砍的切片法线（世界空间，水平） */
+  private lastSliceNormal = new THREE.Vector3(1, 0, 0);
 
   readonly ready: Promise<void>;
 
@@ -140,6 +153,8 @@ export class AxeAnimation {
     this.disposeAxeModel();
     this.axeModel = root;
     this.axeModel.position.set(0, 0, 0);
+    // 补回原 anim 轨对模型的 90° 偏航：颊面 → local ±X（= camera right）
+    this.axeModel.rotation.set(0, MODEL_YAW, 0);
     this.prepareAxeMaterials(this.axeModel);
     this.animNull?.add(this.axeModel);
   }
@@ -167,11 +182,14 @@ export class AxeAnimation {
     return this.playSerial;
   }
 
-  playFromImpact(point: THREE.Vector3, _sliceNormal: THREE.Vector3) {
+  playFromImpact(point: THREE.Vector3, sliceNormal: THREE.Vector3) {
     if (!this.readyState || !this.animNull || !this.animScene) return;
     this.playSerial++;
     this.playing = true;
     this.progress = 0;
+    this.lastSliceNormal.copy(sliceNormal).setY(0);
+    if (this.lastSliceNormal.lengthSq() < 1e-8) this.lastSliceNormal.set(1, 0, 0);
+    else this.lastSliceNormal.normalize();
     this.pivot.position.copy(point);
     this.orientToCamera();
     this.axeModel?.scale.setScalar(1);
@@ -180,6 +198,48 @@ export class AxeAnimation {
     this.animNull.scale.setScalar(1);
     this.pivot.visible = true;
     this.animScene.visible = true;
+    this.applySwingPose(0);
+  }
+
+  /**
+   * 冻结到指定姿态（harness 截图 / 断言用）。
+   * rest=起手竖直，top=抬起峰值，impact=刃口近竖直切入。
+   */
+  seekPose(pose: "rest" | "top" | "impact") {
+    if (!this.readyState || !this.animNull || !this.animScene) return;
+    this.playing = true;
+    this.pivot.visible = true;
+    this.animScene.visible = true;
+    this.axeModel?.scale.setScalar(1);
+    this.orientToCamera();
+    if (pose === "rest") this.applySwingPose(0);
+    else if (pose === "top") this.applySwingPose(SWING_MS.windup);
+    else this.applySwingPose(SWING_MS.windup + SWING_MS.strike + SWING_MS.hold * 0.5);
+  }
+
+  /** 世界空间：颊面法线（应 ≈ 切片法线 / camera right）、刃口线（应 ≈ 竖直） */
+  getBladeMetrics(): {
+    faceNormal: THREE.Vector3;
+    edgeDir: THREE.Vector3;
+    handleDir: THREE.Vector3;
+    sliceNormal: THREE.Vector3;
+  } {
+    // Geometry space (pre–MODEL_YAW): cheek ±Z, edge/handle +Y
+    const faceNormal = new THREE.Vector3(0, 0, 1);
+    const edgeDir = new THREE.Vector3(0, 1, 0);
+    const handleDir = new THREE.Vector3(0, 1, 0);
+    if (this.axeModel) {
+      this.axeModel.updateWorldMatrix(true, true);
+      faceNormal.transformDirection(this.axeModel.matrixWorld).normalize();
+      edgeDir.transformDirection(this.axeModel.matrixWorld).normalize();
+      handleDir.copy(edgeDir);
+    }
+    return {
+      faceNormal,
+      edgeDir,
+      handleDir,
+      sliceNormal: this.lastSliceNormal.clone(),
+    };
   }
 
   update(dt: number) {
@@ -188,30 +248,34 @@ export class AxeAnimation {
     this.progress += dt / SWING_TOTAL;
     const t = Math.min(1, this.progress);
     const elapsed = t * SWING_TOTAL;
+    this.applySwingPose(elapsed);
+    if (t >= 1) this.finish();
+  }
 
+  private applySwingPose(elapsed: number) {
+    if (!this.animNull) return;
     let rotX = 0;
     let posY = 0;
     let scale = 1;
 
     if (elapsed <= SWING_MS.windup) {
-      const u = elapsed / SWING_MS.windup;
+      const u = elapsed / Math.max(1e-6, SWING_MS.windup);
       const e = u * u;
-      rotX = e * 0.35;
-      posY = e * 0.12;
+      rotX = e * WINDUP_ROT_X;
+      posY = e * WINDUP_POS_Y;
     } else if (elapsed <= SWING_MS.windup + SWING_MS.strike) {
       const u = (elapsed - SWING_MS.windup) / SWING_MS.strike;
-      // ease-in strike
       const e = u * u * (3 - 2 * u);
-      rotX = 0.35 - e * (0.35 + Math.PI / 2.6);
-      posY = 0.12 - e * 0.35;
+      rotX = WINDUP_ROT_X + e * (IMPACT_ROT_X - WINDUP_ROT_X);
+      posY = WINDUP_POS_Y + e * (IMPACT_POS_Y - WINDUP_POS_Y);
     } else if (elapsed <= SWING_MS.windup + SWING_MS.strike + SWING_MS.hold) {
-      rotX = -Math.PI / 2.6;
-      posY = -0.23;
+      rotX = IMPACT_ROT_X;
+      posY = IMPACT_POS_Y;
     } else {
       const u =
         (elapsed - SWING_MS.windup - SWING_MS.strike - SWING_MS.hold) / SWING_MS.fade;
-      rotX = -Math.PI / 2.6;
-      posY = -0.23;
+      rotX = IMPACT_ROT_X;
+      posY = IMPACT_POS_Y;
       scale = Math.max(0, 1 - u);
     }
 
@@ -219,8 +283,6 @@ export class AxeAnimation {
     this.animNull.position.y = posY;
     this.animNull.scale.setScalar(1);
     this.axeModel?.scale.setScalar(scale);
-
-    if (t >= 1) this.finish();
   }
 
   private orientToCamera() {

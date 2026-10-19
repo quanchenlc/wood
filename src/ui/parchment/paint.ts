@@ -1,6 +1,7 @@
 import { COPY_C } from "../../economy/design";
 import { formatCountdown } from "../../economy/time";
 import type { EconomySnapshot } from "../../economy/types";
+import { appVersionLabel } from "../../config/version";
 import { getParchmentTextures, getUiDpr, type ParchmentTex, type TexMap } from "./assets";
 import { GUIDE_COPY } from "./guide";
 import {
@@ -1210,7 +1211,7 @@ export function paintParchmentLoading(
   ctx.fillText(`${status || COPY_C.loading} ${pct}%`, w / 2, barY + 28);
   ctx.globalAlpha = 0.35;
   ctx.font = fontSans(11);
-  ctx.fillText("v0.4.4 · stump-style", w / 2, h - 24);
+  ctx.fillText(appVersionLabel(), w / 2, h - 24);
   ctx.globalAlpha = 1;
 }
 

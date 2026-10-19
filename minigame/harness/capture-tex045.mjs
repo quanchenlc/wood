@@ -181,6 +181,17 @@ async function captureVariant(page, id) {
   await sleep(800);
   await saveShot(page, `tex045_stump${tag}_portrait_style.png`);
 
+  // Return art set to set0 after style-page shots (kept for subsequent gameplay)
+  await page.evaluate(async () => {
+    await window.__fw.art().switchTo("set0");
+    for (let i = 0; i < 60; i++) {
+      if (!window.__fw.art().isSwitching()) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    window.__fw.economy().closeDrawer?.();
+  });
+  await sleep(500);
+
   // restore landscape-ish portrait viewport for next gameplay
   await page.setViewport({ width: 720, height: 1280, deviceScaleFactor: 1 });
   await page.evaluate(() => {

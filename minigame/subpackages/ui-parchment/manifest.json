@@ -332,33 +332,33 @@
   },
   {
    "file": "icon_check@2x.png",
-   "width": 40,
-   "height": 40,
-   "bytes": 686,
+   "width": 34,
+   "height": 28,
+   "bytes": 732,
    "scale": 2,
    "logical_size": [
-    20,
-    20
+    17,
+    14
    ],
    "nine_slice_insets": null,
    "nine_slice_insets_pt": null,
    "nine_slice_insets_2x": null,
-   "role": "风格列表勾选",
+   "role": "风格列表勾选（v3c 裁到勾本身，17×14pt 框内不变形）",
    "png": "PNG8 pngquant, light dither, full alpha",
-   "origin": "D_final",
+   "origin": "D_final→v3c",
    "variants": {
     "2x": {
      "file": "icon_check@2x.png",
-     "width": 40,
-     "height": 40,
-     "bytes": 686,
+     "width": 34,
+     "height": 28,
+     "bytes": 732,
      "scale": 2
     },
     "3x": {
      "file": "icon_check@3x.png",
-     "width": 60,
-     "height": 60,
-     "bytes": 684,
+     "width": 51,
+     "height": 42,
+     "bytes": 1237,
      "scale": 3
     }
    }

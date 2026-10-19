@@ -1157,8 +1157,30 @@ if (enableDebugHooks) {
     __fw: {
       look: (deg: number) => controller.setAzimuth((deg * Math.PI) / 180),
       nudge: (direction: number) => controller.nudgeAzimuth(direction),
-      axe: () =>
-        axe.playFromImpact(new THREE.Vector3(0, 0.2, 0), controller.getRight()),
+      axe: () => ({
+        play: () =>
+          axe.playFromImpact(new THREE.Vector3(0, 0.2, 0), controller.getRight()),
+        seekPose: (pose: "rest" | "top" | "impact") => {
+          const n = controller.getRight().clone().setY(0);
+          if (n.lengthSq() < 1e-8) n.set(1, 0, 0);
+          else n.normalize();
+          axe.playFromImpact(new THREE.Vector3(0, 0.55, 0), n);
+          axe.seekPose(pose);
+        },
+        bladeMetrics: () => {
+          const m = axe.getBladeMetrics();
+          return {
+            faceNormal: m.faceNormal.toArray() as [number, number, number],
+            edgeDir: m.edgeDir.toArray() as [number, number, number],
+            handleDir: m.handleDir.toArray() as [number, number, number],
+            sliceNormal: m.sliceNormal.toArray() as [number, number, number],
+            faceDotSlice: m.faceNormal.dot(m.sliceNormal),
+            edgeDotUp: Math.abs(m.edgeDir.y),
+          };
+        },
+        busy: () => axe.busy,
+        playCount: () => axe.playCount,
+      }),
       pile: () => ({
         height: debugPile?.height ?? 0,
         isAnimating: debugPile?.isAnimating ?? false,
