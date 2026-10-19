@@ -1,14 +1,14 @@
 {
   "appid": "wx3371f99b1b0e73d1",
-  "mainPackageBytes": 1179824,
+  "mainPackageBytes": 1179830,
   "mainPackage": "1.13 MB",
   "mainUnder4MB": true,
-  "assetsSubpackageBytes": 2085590,
-  "assetsSubpackage": "1.99 MB",
+  "assetsSubpackageBytes": 2388005,
+  "assetsSubpackage": "2.28 MB",
   "subpackages": {
     "assets": {
-      "bytes": 2085590,
-      "size": "1.99 MB"
+      "bytes": 2388005,
+      "size": "2.28 MB"
     },
     "ui-parchment": {
       "bytes": 768401,
@@ -31,8 +31,8 @@
       "size": "2.03 MB"
     }
   },
-  "subpackagesTotalBytes": 10554175,
-  "subpackagesTotal": "10.07 MB",
+  "subpackagesTotalBytes": 10856590,
+  "subpackagesTotal": "10.35 MB",
   "bundle": "1.06 MB",
   "largestMain": [
     {
