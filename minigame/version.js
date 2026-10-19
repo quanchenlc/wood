@@ -3,5 +3,5 @@ module.exports = {
   VERSION: "0.4.0",
   BUILD_NOTE: "ip-clean",
   /** 短提交标识，发版前由提交写入 */
-  BUILD_REV: "pending",
+  BUILD_REV: "a89afe9",
 };
