@@ -715,9 +715,11 @@ function paintStyleRow(
   dpr: number,
 ) {
   const cy = y + rowH / 2;
-  if (active) drawTexNine(ctx, tex.strip_parchment, x, y + 1, rowW, rowH - 2, dpr);
+  // 选中条：高 38，y = 行顶+2；未选中不画条
+  if (active) drawTexNine(ctx, tex.strip_parchment, x, y + 2, rowW, 38, dpr);
+  // 色点 24pt @ 列左+16（圆心 = 列左+28）
   ctx.beginPath();
-  ctx.arc(x + 28, cy, 11, 0, Math.PI * 2);
+  ctx.arc(x + 28, cy, 12, 0, Math.PI * 2);
   ctx.fillStyle = opt.color;
   ctx.fill();
   ctx.strokeStyle = INK;
@@ -728,13 +730,16 @@ function paintStyleRow(
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
   ctx.fillText(opt.label, x + 52, cy);
+  // 勾 17×14，右端 = 行右 − 14，垂直居中
   if (active && tex.icon_check) {
+    const checkW = 17;
+    const checkH = 14;
     ctx.drawImage(
       tex.icon_check.img,
-      snapPt(x + rowW - 36, dpr),
-      snapPt(cy - 10, dpr),
-      20,
-      20,
+      snapPt(x + rowW - 14 - checkW, dpr),
+      snapPt(cy - checkH / 2, dpr),
+      checkW,
+      checkH,
     );
   }
 }
@@ -771,44 +776,41 @@ function paintStylePage(
   ctx.clip();
 
   if (layout.landscape) {
-    // 双列 300×42：风格 72/122/172；第 3 行右空位放「木桩」+ A/B 紧凑双钮（无第 4 行）
+    // 0.4.4 复核：列 60–360 / 398–698；行1 68–110、行2 116–158、行3 186–228
     const rowW = 300;
     const rowH = 42;
-    const colGapY = 50;
-    const col1X = left;
-    const col2X = 698 - rowW; // 398
-    const listTop = 72;
-    const stumpRowY = listTop + 2 * colGapY; // 172 — same line as 羊皮纸
+    const col1X = 60;
+    const col2X = 398;
+    const rowTops = [68, 116, 186];
     opts.forEach((opt, i) => {
       const col = i % 2;
       const rowI = Math.floor(i / 2);
-      const y = listTop + rowI * colGapY;
+      const y = rowTops[rowI] ?? rowTops[rowTops.length - 1]!;
       const x = col === 0 ? col1X : col2X;
       paintStyleRow(ctx, tex, opt, opt.id === state.styleId, x, y, rowW, rowH, dpr);
       pushHit(hits, "style_pick", x, y, rowW, rowH, opt.id);
     });
-    // Empty right slot of row 3: label ≥8pt above options, two ~140×42 side-by-side
-    const stumpLabelY = stumpRowY - 8 - 6; // 8pt gap above row
-    ctx.fillStyle = INK_SOFT;
+    // 「木桩」标签：x 402，字 168–180（中心 174），12pt #5E4A2E
+    const stumpRowY = 186;
+    ctx.fillStyle = INK_CLAIM_EMPTY; // #5E4A2E
     ctx.font = fontSans(12, "600");
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    ctx.fillText("木桩", col2X, stumpLabelY);
-    const stumpBtnW = 140;
-    const stumpGap = 20;
+    ctx.fillText("木桩", 402, 174);
+    // A 398–544 / B 552–698（146×42，间距 8）；未选中无条
+    const stumpBtnW = 146;
+    const stumpGap = 8;
     STUMP_STYLE_OPTS.forEach((opt, i) => {
       const x = col2X + i * (stumpBtnW + stumpGap);
       paintStyleRow(ctx, tex, opt, opt.id === stumpId, x, stumpRowY, stumpBtnW, rowH, dpr);
       pushHit(hits, "style_pick", x, stumpRowY, stumpBtnW, rowH, opt.id);
     });
-    // Footnote: ≥10pt below last strip, ≥12pt above tear
-    const lastStripBottom = stumpRowY + rowH;
-    const landFootnoteY = Math.min(tearY - 12, Math.max(lastStripBottom + 12, footnoteY));
+    // 脚注字 247–257（中心 252）
     ctx.fillStyle = INK_SOFT;
     ctx.font = fontSans(11);
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("切换即时生效，下次启动保留", (left + right) / 2, landFootnoteY);
+    ctx.fillText("切换即时生效，下次启动保留", (left + right) / 2, 252);
     ctx.restore();
     return;
   }
@@ -845,9 +847,9 @@ function paintStylePage(
     }
     cy += rowStep;
   });
-  // 木桩小节
+  // 木桩小节（标签 x = 列左+4，12pt #5E4A2E）
   if (cy + headH >= listTop && cy <= listTop + scrollViewH) {
-    ctx.fillStyle = INK_SOFT;
+    ctx.fillStyle = INK_CLAIM_EMPTY;
     ctx.font = fontSans(12, "600");
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";

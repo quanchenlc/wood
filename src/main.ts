@@ -261,7 +261,8 @@ function setDrawerPage(page: DrawerPage) {
   drawerPage = page;
   if (page === "rank") ensureRankRows();
   else rankScrollY = 0;
-  if (page !== "style") styleScrollY = 0;
+  if (page === "style") styleScrollY = styleScrollToRevealSelection();
+  else styleScrollY = 0;
   const to = targetDrawerH1(h, landscape, page);
   if (!landscape && Math.abs(from - to) > 0.5) {
     heightMorphFrom = from;
@@ -927,11 +928,49 @@ function styleListMaxScroll(): number {
   const { w, h } = screenSize();
   if (isLandscape(w, h)) return 0;
   const listTop = 132;
-  // tearY = bodyH - 16；首页 bodyH=384 → tear 368；脚注 tear−14；视口底脚注−12
+  // tearY = bodyH - 16；首页 bodyH=384 → tear 368；脚注 tear−14；视口底脚注−12 → 342
   const listBottom = 368 - 14 - 12;
   const scrollViewH = Math.max(40, listBottom - listTop);
   const contentH = ART_SET_CATALOG.length * 46 + 28 + 2 * 46;
   return Math.max(0, contentH - scrollViewH);
+}
+
+/**
+ * 打开风格页时 ensureVisible(selected, margin 16)。
+ * 羊皮纸（content bottom 224）→ scrollTop = 224 − (210 − 16) = 30。
+ * 选中木桩 A/B 行时用同一公式（contentY = styles×46 + 28 + i×46）。
+ */
+function styleScrollToRevealSelection(focus: "style" | "stump" = "style"): number {
+  const { w, h } = screenSize();
+  if (isLandscape(w, h)) return 0;
+  const listBottom = 368 - 14 - 12; // 342
+  const scrollViewH = Math.max(40, listBottom - 132); // 210
+  const rowStep = 46;
+  const rowH = 40;
+  const headH = 28;
+  const margin = 16;
+  let selTop: number;
+  let selBottom: number;
+  if (focus === "stump") {
+    const stumpIdx = stumpVariant === "B" ? 1 : 0;
+    selTop = ART_SET_CATALOG.length * rowStep + headH + stumpIdx * rowStep;
+    selBottom = selTop + rowH;
+  } else {
+    const styleIdx = Math.max(
+      0,
+      ART_SET_CATALOG.findIndex((e) => e.id === artSets.activeId),
+    );
+    selTop = styleIdx * rowStep;
+    selBottom = selTop + rowH;
+  }
+  let scroll = 0;
+  if (selBottom > scrollViewH - margin) {
+    scroll = selBottom - (scrollViewH - margin);
+  }
+  if (selTop < scroll + margin) {
+    scroll = Math.max(0, selTop - margin);
+  }
+  return Math.max(0, Math.min(styleListMaxScroll(), scroll));
 }
 
 function onListPointerDown(e: PointerEvent) {
