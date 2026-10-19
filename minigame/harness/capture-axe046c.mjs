@@ -213,6 +213,12 @@ async function composeContactSheets() {
   } catch {
     /* ignore */
   }
+  let sizes = null;
+  try {
+    sizes = JSON.parse(readFileSync(join(THIS_MG, "size-report.json"), "utf8"));
+  } catch {
+    /* ignore */
+  }
   const meta = {
     version: {
       VERSION: version.VERSION,
@@ -225,6 +231,18 @@ async function composeContactSheets() {
       "Baked ax_anim_v03 TRS reintroduced screen.toys keyframe IP. Replaced with project-authored 5-key smoothstep poses aimed at measured goals (idle hidden, tip on log top at impact, no top-tab overlap). check:ip now fingerprints the discarded float sequences.",
     asserts: metaAsserts,
     shots: ["axe046c_contact_portrait.png", "axe046c_contact_landscape.png"],
+    audio: {
+      shipped: "pack4 层次 → public/assets/sounds/",
+      switcher: false,
+    },
+    sizes: sizes
+      ? {
+          mainPackage: sizes.mainPackage,
+          mainUnder4MB: sizes.mainUnder4MB,
+          subpackagesTotal: sizes.subpackagesTotal,
+          subpackages: sizes.subpackages,
+        }
+      : null,
   };
   writeFileSync(join(STORE, "meta.json"), `${JSON.stringify(meta, null, 2)}\n`);
   writeFileSync(join(ARTIFACTS, "axe046c_meta.json"), `${JSON.stringify(meta, null, 2)}\n`);
