@@ -11,7 +11,7 @@
       "size": "2.60 MB"
     },
     "ui-parchment": {
-      "bytes": 764311,
+      "bytes": 767743,
       "size": "0.73 MB"
     },
     "art-set1": {
@@ -31,7 +31,7 @@
       "size": "2.03 MB"
     }
   },
-  "subpackagesTotalBytes": 11187845,
+  "subpackagesTotalBytes": 11191277,
   "subpackagesTotal": "10.67 MB",
   "bundle": "1.06 MB",
   "largestMain": [
