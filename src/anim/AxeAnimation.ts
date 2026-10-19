@@ -8,9 +8,7 @@ import {
   AXE_ANIM_FADE,
   AXE_ANIM_IMPACT_AT,
   AXE_HANDLE_TOP_LOCAL,
-  AXE_KEYS,
   AXE_MODEL_SCALE,
-  AXE_MODEL_YAW,
   AXE_POLL_LOCAL,
   AXE_TIP_LOCAL,
 } from "./axeAnimClip";
@@ -21,22 +19,14 @@ function applyAxeModelScale(obj: THREE.Object3D | null, fade = 1) {
 }
 
 /**
- * 斧头挥砍 —— 项目自撰关键姿态 + smoothstep 插值。
+ * 斧头挥砍 —— 自研 clip GLB + AnimationMixer + 每帧 orientToCamera。
  *
- * 与早期 wood / screen.toys orient 同构（不含 ax_anim 浮点曲线）：
- * - 每帧 pivot.lookAt(camera-forward)；挂模 MODEL_YAW=π/2 → 颊面沿相机右
- *   （刃面落在劈面内，尖端朝下扎进顶心）
- * - animNull 只用 rotX；落点由 axeContactPoint 钉在木块顶面（勿用小块中心）
- * - 统一等比缩放
+ * 与 early wood / screen.toys 控制流同构（不含 ax_anim 浮点曲线）：
+ * - 加载 `axe_swing_clip.glb` 提供 `anim` 节点与 clip
+ * - 自研木柄斧挂到 `anim`；每帧 pivot.lookAt(camera-right)
+ * - 无 clip 时才走 procedural fallback
+ * - 落点由 axeContactPoint 钉在木块顶面（bbox max.y）
  */
-const _qa = new THREE.Quaternion();
-const _qb = new THREE.Quaternion();
-
-function smoothstep(u: number): number {
-  const x = Math.max(0, Math.min(1, u));
-  return x * x * (3 - 2 * x);
-}
-
 export class AxeAnimation {
   private readonly scene: THREE.Scene;
   private readonly renderer: THREE.WebGLRenderer;
@@ -45,12 +35,17 @@ export class AxeAnimation {
   private animNull: THREE.Object3D | null = null;
   private animScene: THREE.Object3D | null = null;
   private axeModel: THREE.Object3D | null = null;
-  private elapsed = 0;
+  private mixer: THREE.AnimationMixer | null = null;
+  private action: THREE.AnimationAction | null = null;
+  private hasClip = false;
   private readyState = false;
   private playing = false;
   private playSerial = 0;
+  /** Harness seek: hold paused pose; do not finish on clamp. */
+  private seekHold = false;
   private lastSliceNormal = new THREE.Vector3(1, 0, 0);
   private lastImpactPoint = new THREE.Vector3();
+  private elapsed = 0;
 
   readonly ready: Promise<void>;
 
@@ -71,15 +66,26 @@ export class AxeAnimation {
   private async load(renderer: THREE.WebGLRenderer, onProgress?: ProgressFn) {
     const loader = createGltfLoader(renderer);
     try {
-      const modelGltf = await loader.loadAsync(MODELS.axe).finally(() => onProgress?.());
-      onProgress?.();
+      const [animationGltf, modelGltf] = await Promise.all([
+        loader.loadAsync(MODELS.axeAnimation).finally(() => onProgress?.()),
+        loader.loadAsync(MODELS.axe).finally(() => onProgress?.()),
+      ]);
 
-      this.animScene = new THREE.Object3D();
-      this.animScene.name = "axe_anim_root";
-      this.animNull = new THREE.Object3D();
-      this.animNull.name = "anim";
-      this.animScene.add(this.animNull);
+      this.animScene = animationGltf.scene;
       this.animScene.visible = false;
+      this.animScene.traverse((object) => {
+        if (object.name === "anim") this.animNull = object;
+        if ((object as THREE.Mesh).isMesh) object.visible = false;
+      });
+      this.animNull ??= this.animScene;
+
+      if (animationGltf.animations.length > 0) {
+        this.hasClip = true;
+        this.mixer = new THREE.AnimationMixer(this.animScene);
+        this.action = this.mixer.clipAction(animationGltf.animations[0]!);
+        this.action.setLoop(THREE.LoopOnce, 1);
+        this.action.clampWhenFinished = true;
+      }
 
       this.pivot.add(this.animScene);
       this.attachAxeModel(modelGltf.scene);
@@ -112,14 +118,14 @@ export class AxeAnimation {
         clampMap(mat.metalnessMap, false);
         clampMap(mat.roughnessMap, false);
         clampMap(mat.aoMap, false);
-        // Neutral steel albedo; slight metalness for lit specular (no envMap — sky
-        // ghost). Keep tint white so cheek reads grey metal, not sky-blue plastic.
         if (mat.color) mat.color.setRGB(1.0, 1.0, 1.0);
         mat.metalness = 0.28;
         mat.metalnessMap = null;
         mat.roughness = Math.max(mat.roughness ?? 0.45, 0.42);
         mat.envMapIntensity = 0;
-        if (mat.emissive) mat.emissive.setRGB(0.025, 0.025, 0.028);
+        // Slightly brighter steel so thin edge-down wedge still reads as metal
+        // in portrait (few pixels vs cheek-on-face plate).
+        if (mat.emissive) mat.emissive.setRGB(0.04, 0.04, 0.045);
         mat.transparent = false;
         mat.opacity = 1;
         mat.depthWrite = true;
@@ -164,10 +170,10 @@ export class AxeAnimation {
   private attachAxeModel(root: THREE.Object3D) {
     this.disposeAxeModel();
     this.axeModel = root;
-    // MODEL_YAW puts cheek on ±X (camera-right / split normal after lookAt).
-    // Swing is rotX-only on animNull. Uniform scale only.
+    // Clip encodes local head orientation relative to pivot — identity attach.
     this.axeModel.position.set(0, 0, 0);
-    this.axeModel.rotation.set(0, AXE_MODEL_YAW, 0);
+    this.axeModel.rotation.set(0, 0, 0);
+    this.axeModel.quaternion.identity();
     applyAxeModelScale(this.axeModel, 1);
     this.prepareAxeMaterials(this.axeModel);
     this.animNull?.add(this.axeModel);
@@ -197,6 +203,7 @@ export class AxeAnimation {
   }
 
   get duration(): number {
+    if (this.hasClip && this.action) return this.action.getClip().duration;
     return AXE_ANIM_DURATION;
   }
 
@@ -208,6 +215,7 @@ export class AxeAnimation {
     if (!this.readyState || !this.animNull || !this.animScene) return;
     this.playSerial++;
     this.playing = true;
+    this.seekHold = false;
     this.elapsed = 0;
     this.lastImpactPoint.copy(point);
     this.lastSliceNormal.copy(sliceNormal).setY(0);
@@ -216,20 +224,41 @@ export class AxeAnimation {
     this.pivot.position.copy(point);
     this.orientToCamera();
     applyAxeModelScale(this.axeModel, 1);
+    this.animNull.rotation.set(0, 0, 0);
+    this.animNull.position.set(0, 0, 0);
+    this.animNull.scale.setScalar(1);
+    if (this.hasClip && this.action && this.mixer) {
+      this.action.reset();
+      this.action.play();
+      this.mixer.update(0);
+    }
     this.pivot.visible = true;
     this.animScene.visible = true;
-    this.applyClipAt(0);
   }
 
   /** harness：采样 clip 时刻（秒） */
   seekTime(seconds: number) {
     if (!this.readyState || !this.animNull || !this.animScene) return;
     this.playing = true;
-    this.elapsed = Math.max(0, Math.min(AXE_ANIM_DURATION, seconds));
+    this.seekHold = true;
+    this.elapsed = Math.max(0, Math.min(this.duration, seconds));
     this.pivot.visible = true;
     this.animScene.visible = true;
     this.orientToCamera();
-    this.applyClipAt(this.elapsed);
+    if (this.hasClip && this.action && this.mixer) {
+      this.action.reset();
+      this.action.play();
+      this.action.time = this.elapsed;
+      this.action.paused = true;
+      this.mixer.update(0);
+      const remaining = this.duration - this.elapsed;
+      applyAxeModelScale(
+        this.axeModel,
+        remaining <= AXE_ANIM_FADE ? Math.max(0, remaining / AXE_ANIM_FADE) : 1,
+      );
+      return;
+    }
+    this.applyProceduralAt(this.elapsed);
   }
 
   getImpactDebug(): {
@@ -238,20 +267,14 @@ export class AxeAnimation {
     pivot: THREE.Vector3;
     elapsed: number;
     visible: boolean;
-    /** Unit vector poll→tip (blade / edge direction) in world space. */
     edgeDir: THREE.Vector3;
-    /** Unit vector along handle (+Y) in world space. */
     handleDir: THREE.Vector3;
-    /** Cheek normal (+Z authoring) in world space — blade-plane normal. */
     cheekNormal: THREE.Vector3;
-    /** |cheek · cameraRight| — should be ~1 when blade lies in the split plane. */
     cheekAlongRight: number;
-    /** |cheek · cameraForward| — high means boss cheek-on-face (toward camera). */
     cheekTowardCamera: number;
+    /** |handle · cameraForward| — orig foreshortened handle, not vertical stick. */
+    handleTowardCamera: number;
   } {
-    // Tip in AuxScene / authoring space (AXE_TIP_LOCAL). Do NOT apply through
-    // Mesh-bin local — Mesh T/S remaps authored points; treating authoring
-    // coords as bin-local zeroed the mid-handle and buried the metal head.
     const bladeTip = new THREE.Vector3(
       AXE_TIP_LOCAL[0],
       AXE_TIP_LOCAL[1],
@@ -274,7 +297,6 @@ export class AxeAnimation {
       bladeTip.applyMatrix4(m);
       poll.applyMatrix4(m);
       handleTop.applyMatrix4(m);
-      // Normal: transform direction (ignore translation)
       cheekLocal.transformDirection(m).normalize();
     }
     const edgeDir = bladeTip.clone().sub(poll).normalize();
@@ -292,41 +314,61 @@ export class AxeAnimation {
       cheekNormal: cheekLocal,
       cheekAlongRight: Math.abs(cheekLocal.dot(camRight)),
       cheekTowardCamera: Math.abs(cheekLocal.dot(camFwd)),
+      handleTowardCamera: Math.abs(handleDir.dot(camFwd)),
     };
   }
 
   update(dt: number) {
     if (!this.playing || !this.readyState || !this.animNull) return;
     this.orientToCamera();
+
+    if (this.hasClip && this.mixer && this.action) {
+      if (this.seekHold) {
+        this.orientToCamera();
+        return;
+      }
+      this.mixer.update(dt);
+      this.elapsed = this.action.time;
+      const remaining = this.action.getClip().duration - this.action.time;
+      applyAxeModelScale(
+        this.axeModel,
+        remaining <= AXE_ANIM_FADE ? Math.max(0, remaining / AXE_ANIM_FADE) : 1,
+      );
+      if (this.action.paused || remaining <= 0) this.finish();
+      return;
+    }
+
     this.elapsed += dt;
-    this.applyClipAt(this.elapsed);
+    this.applyProceduralAt(this.elapsed);
     if (this.elapsed >= AXE_ANIM_DURATION) this.finish();
   }
 
-  private applyClipAt(t: number) {
+  /** Procedural fallback when clip GLB failed to load. */
+  private applyProceduralAt(t: number) {
     if (!this.animNull) return;
     const tt = Math.max(0, Math.min(AXE_ANIM_DURATION, t));
-    const keys = AXE_KEYS;
-    let i = 0;
-    while (i < keys.length - 1 && tt > keys[i + 1]!.t) i++;
-    const a = keys[i]!;
-    const b = keys[Math.min(i + 1, keys.length - 1)]!;
-    const span = Math.max(1e-6, b.t - a.t);
-    const u = smoothstep((tt - a.t) / span);
-
-    this.animNull.position.set(
-      a.p[0] + (b.p[0] - a.p[0]) * u,
-      a.p[1] + (b.p[1] - a.p[1]) * u,
-      a.p[2] + (b.p[2] - a.p[2]) * u,
-    );
-    _qa.set(a.q[0], a.q[1], a.q[2], a.q[3]);
-    _qb.set(b.q[0], b.q[1], b.q[2], b.q[3]);
-    this.animNull.quaternion.copy(_qa.slerp(_qb, u));
+    const u = tt / AXE_ANIM_DURATION;
+    // Simple raised → tip-zeroed impact → settle (edge-down / cheek +X family).
+    const qImpact = new THREE.Quaternion(0.51, 0.53, 0.41, 0.54).normalize();
+    const qWind = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.72).multiply(qImpact);
+    const qExit = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -0.42).multiply(qImpact);
+    let q: THREE.Quaternion;
+    if (tt <= AXE_ANIM_IMPACT_AT) {
+      const e = tt / AXE_ANIM_IMPACT_AT;
+      q = qWind.clone().slerp(qImpact, e * e * (3 - 2 * e));
+    } else {
+      const e = (tt - AXE_ANIM_IMPACT_AT) / (AXE_ANIM_DURATION - AXE_ANIM_IMPACT_AT);
+      q = qImpact.clone().slerp(qExit, e);
+    }
+    this.animNull.quaternion.copy(q);
+    const tip = new THREE.Vector3(AXE_TIP_LOCAL[0], AXE_TIP_LOCAL[1], AXE_TIP_LOCAL[2]).applyQuaternion(q);
+    this.animNull.position.set(-tip.x, -tip.y + (u < 0.15 ? 0.42 * (1 - u / 0.15) : 0), -tip.z);
     this.animNull.scale.setScalar(1);
-
     const remaining = AXE_ANIM_DURATION - tt;
-    const fade = remaining <= AXE_ANIM_FADE ? Math.max(0, remaining / AXE_ANIM_FADE) : 1;
-    applyAxeModelScale(this.axeModel, fade);
+    applyAxeModelScale(
+      this.axeModel,
+      remaining <= AXE_ANIM_FADE ? Math.max(0, remaining / AXE_ANIM_FADE) : 1,
+    );
   }
 
   private orientToCamera() {
@@ -338,6 +380,7 @@ export class AxeAnimation {
 
   private finish() {
     this.playing = false;
+    this.seekHold = false;
     this.pivot.visible = false;
     if (this.animScene) this.animScene.visible = false;
     if (this.animNull) {
@@ -351,6 +394,7 @@ export class AxeAnimation {
 
   dispose() {
     this.scene.remove(this.pivot);
+    this.mixer?.stopAllAction();
     this.axeModel?.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (!mesh.isMesh) return;

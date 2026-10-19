@@ -46,6 +46,10 @@ export const MODELS = {
     // 自研木柄斧占位（build_axe_placeholder.mjs）
     return href("/assets/axe.gltf");
   },
+  get axeAnimation() {
+    // 自研挥砍 clip（build_axe_swing_clip.mjs）— mixer + orientToCamera
+    return href("/assets/axe_swing_clip.glb");
+  },
 } as const;
 
 /** 木桩 A/B 资源根（相对 /assets/） */
@@ -78,7 +82,7 @@ export const SOUNDS = {
 
 export type SoundGroup = keyof typeof SOUNDS;
 
-/** 加载进度条的分母:6 张贴图 + 3 个模型 + 全部音频 */
+/** 加载进度条的分母:6 张贴图 + 模型（含 axe clip）+ 全部音频 */
 export const TOTAL_ASSETS =
   Object.keys(TEXTURES).length +
   Object.keys(MODELS).length +

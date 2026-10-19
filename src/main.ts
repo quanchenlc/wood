@@ -1193,6 +1193,7 @@ if (enableDebugHooks) {
             cheekNormal: d.cheekNormal.toArray() as [number, number, number],
             cheekAlongRight: d.cheekAlongRight,
             cheekTowardCamera: d.cheekTowardCamera,
+            handleTowardCamera: d.handleTowardCamera,
           };
         },
         withAxeModel: (fn: (root: THREE.Object3D) => void) => axe.withAxeModel(fn),

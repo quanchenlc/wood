@@ -175,7 +175,7 @@ async function composeContactSheets() {
       `<svg width="${canvasW}" height="${headerH}" xmlns="http://www.w3.org/2000/svg">
         <rect width="100%" height="100%" fill="#1a1410"/>
         <text x="${canvasW * 0.25}" y="26" fill="#e8dcc8" font-size="16" text-anchor="middle" font-family="sans-serif">pre-clean</text>
-        <text x="${canvasW * 0.75}" y="26" fill="#e8dcc8" font-size="16" text-anchor="middle" font-family="sans-serif">current (authored keys)</text>
+        <text x="${canvasW * 0.75}" y="26" fill="#e8dcc8" font-size="16" text-anchor="middle" font-family="sans-serif">current (clip+mixer)</text>
       </svg>`,
     );
     composites.push({ input: headerSvg, top: 0, left: 0 });
@@ -220,7 +220,7 @@ async function composeContactSheets() {
       const labelSvg = Buffer.from(
         `<svg width="${closeW}" height="${labelH2}" xmlns="http://www.w3.org/2000/svg">
           <rect width="100%" height="100%" fill="#1a1410"/>
-          <text x="12" y="24" fill="#e8dcc8" font-size="15" font-family="sans-serif">${orient} impact close-up — edge down / cheek to camera${
+          <text x="12" y="24" fill="#e8dcc8" font-size="15" font-family="sans-serif">${orient} impact — edge down / blade in split / tip on top${
             head ? ` (aspect ${Number(head.aspect).toFixed(2)}, onFace=${head.onLogFace})` : ""
           }</text>
         </svg>`,
@@ -317,9 +317,9 @@ async function composeContactSheets() {
       BUILD_REV: version.BUILD_REV,
     },
     tip: version.BUILD_REV,
-    note: "0.4.8 axe046c — axeContactPoint top seating + MODEL_YAW/rotX; pack4 audio",
+    note: "0.4.9 axe046c — clip+mixer+orientToCamera (self-authored axe_swing_clip) + axeContactPoint; pack4 audio",
     root_cause:
-      "Live 体验版 cheek-on-face: computeSplitPoint returns mesh CENTER for small pieces, so the axe seated mid-bark while harness seeked the intact log TOP and PASSed. Fix: axeContactPoint lifts VFX to bbox max.y; MODEL_YAW=π/2 + rotX-only (early-wood technique) puts blade in the split plane with edge down. Harness uses default azimuth and asserts tipOnTop + bladeInSplitPlane + !cheekOnFace.",
+      "0.4.8 MODEL_YAW/Euler keys passed harness but failed live vs orig_impact_01. Restore early-wood architecture: load self-authored axe_swing_clip.glb, AnimationMixer, orientToCamera every frame; axe mesh identity-parented to anim. Keep axeContactPoint (bbox max.y). Assert tipOnTop + edgeDown + bladeInSplitPlane + handleTowardCam + !cheekOnFace.",
     asserts: metaAsserts,
     shots: [
       "axe046c_contact_portrait.png",
@@ -342,6 +342,63 @@ async function composeContactSheets() {
         }
       : null,
   };
+  // Side-by-side vs boss wrong + orig_impact_01 (when present on disk).
+  const bossRefs = [
+    "/workspace/shots-047b/boss_axe_047_wrong.png",
+    "/workspace/shots-048/vs_boss.png",
+    join(ARTIFACTS, "axe046c_boss_wrong_ref.png"),
+  ];
+  const origRefs = [
+    "/workspace/shots-047b/orig_ref/orig_impact_01.png",
+    "/workspace/shots-047b/orig_impact_01.png",
+  ];
+  const ourPortrait = join(STORE, "current", "portrait", "impact_closeup.png");
+  const bossPath = bossRefs.find((p) => existsSync(p));
+  const origPath = origRefs.find((p) => existsSync(p));
+  async function sideBySide(leftPath, rightPath, leftLabel, rightLabel, outName) {
+    const H = 720;
+    const leftMeta = await sharp(leftPath).metadata();
+    const rightMeta = await sharp(rightPath).metadata();
+    const lw = Math.round(((leftMeta.width || 1) * H) / (leftMeta.height || 1));
+    const rw = Math.round(((rightMeta.width || 1) * H) / (rightMeta.height || 1));
+    const gap = 10;
+    const labelH = 36;
+    const W = lw + gap + rw + 24;
+    const leftBuf = await sharp(leftPath).resize(lw, H).png().toBuffer();
+    const rightBuf = await sharp(rightPath).resize(rw, H).png().toBuffer();
+    const header = Buffer.from(
+      `<svg width="${W}" height="${labelH}" xmlns="http://www.w3.org/2000/svg">
+        <rect width="100%" height="100%" fill="#1a1410"/>
+        <text x="${12 + lw / 2}" y="24" fill="#e8dcc8" font-size="15" text-anchor="middle" font-family="sans-serif">${leftLabel}</text>
+        <text x="${12 + lw + gap + rw / 2}" y="24" fill="#e8dcc8" font-size="15" text-anchor="middle" font-family="sans-serif">${rightLabel}</text>
+      </svg>`,
+    );
+    const out = join(ARTIFACTS, outName);
+    await sharp({
+      create: { width: W, height: H + labelH + 12, channels: 3, background: "#0e0a08" },
+    })
+      .composite([
+        { input: header, top: 0, left: 0 },
+        { input: leftBuf, top: labelH + 6, left: 12 },
+        { input: rightBuf, top: labelH + 6, left: 12 + lw + gap },
+      ])
+      .png()
+      .toFile(out);
+    copyFileSync(out, join(STORE, outName));
+    console.log("sbs", outName);
+    return outName;
+  }
+  if (bossPath && existsSync(ourPortrait)) {
+    meta.shots.push(
+      await sideBySide(bossPath, ourPortrait, "boss FAIL (cheek mid-face)", "0.4.9 clip+mixer tip-on-top", "axe046c_vs_boss.png"),
+    );
+  }
+  if (origPath && existsSync(ourPortrait)) {
+    meta.shots.push(
+      await sideBySide(origPath, ourPortrait, "orig_impact_01 (screen.toys)", "0.4.9 ours", "axe046c_vs_orig.png"),
+    );
+  }
+
   writeFileSync(join(STORE, "meta.json"), `${JSON.stringify(meta, null, 2)}\n`);
   writeFileSync(join(ARTIFACTS, "axe046c_meta.json"), `${JSON.stringify(meta, null, 2)}\n`);
   console.log("compose done", meta.asserts);
@@ -765,7 +822,7 @@ function compareMetrics(pre, cur, orient) {
 
   // Orientation + seating (must match LIVE gameplay, not only seek-on-intact-log).
   // Boss cheek-on-face: tip at mesh CENTER (mid-bark). Fix: axeContactPoint → top.
-  // Blade in split plane: cheek ≈ ±cameraRight; edge down; handle up; tip on top.
+  // Blade in split plane: cheek ≈ ±cameraRight; edge down; handle toward cam; tip on top.
   const edgeDir = hook?.edgeDir ?? null;
   const handleDir = hook?.handleDir ?? null;
   const cheekNormal = hook?.cheekNormal ?? null;
@@ -774,7 +831,12 @@ function compareMetrics(pre, cur, orient) {
   const bladePlaneVertical =
     cheekNormal != null && Math.abs(cheekNormal[1] ?? 1) <= 0.4;
   const edgeDown = edgeDir != null && (edgeDir[1] ?? 0) <= -0.5;
-  const handleUp = handleDir != null && (handleDir[1] ?? 0) >= 0.4;
+  // orig_impact_01: handle foreshortened toward camera (not a vertical stick).
+  const handleTowardCam =
+    (hook?.handleTowardCamera != null && hook.handleTowardCamera >= 0.55) ||
+    (handleDir != null &&
+      Math.hypot(handleDir[0] ?? 0, handleDir[2] ?? 0) >= 0.55 &&
+      (handleDir[1] ?? 0) > -0.25);
   const bladeInSplitPlane = cheekAlongRight != null && cheekAlongRight >= 0.7;
   let tipInLogFootprint = false;
   let tipFootprintR = null;
@@ -807,7 +869,7 @@ function compareMetrics(pre, cur, orient) {
   const orientOk =
     bladePlaneVertical &&
     edgeDown &&
-    handleUp &&
+    handleTowardCam &&
     tipInLogFootprint &&
     tipOnTop &&
     bladeContainsHandle &&
@@ -845,12 +907,16 @@ function compareMetrics(pre, cur, orient) {
   const metalCount = curHead?.metalCount ?? 0;
   const tipSteel = cur.impact?.tipSteel || cur.impact?.closeup?.tipSteel || null;
   const tipCool = tipSteel?.coolSteelCount ?? 0;
+  // Thin edge-down wedge (orig silhouette) yields far fewer metal pixels than
+  // cheek-on-face, especially in portrait end-on. Trust world orientOk + tip
+  // cool-steel probe over the wide-plate metalCount heuristic.
   const metalVisible =
-    curHead != null &&
-    (curHead.widthCss ?? 0) >= 24 &&
-    (curHead.heightCss ?? 0) >= 16 &&
     tipSteel?.tipHasCoolSteel === true &&
-    (metalCount >= 300 || (metalCount >= 160 && tipCool >= 700));
+    ((curHead != null &&
+      (curHead.widthCss ?? 0) >= 24 &&
+      (curHead.heightCss ?? 0) >= 16 &&
+      (metalCount >= 300 || (metalCount >= 160 && tipCool >= 700))) ||
+      (orientOk && tipCool >= 120));
   const bareStick = !metalVisible;
   const headAspectMatchPre =
     preHead?.aspect != null &&
@@ -886,7 +952,7 @@ function compareMetrics(pre, cur, orient) {
     orientOk,
     bladePlaneVertical,
     edgeDown,
-    handleUp,
+    handleTowardCam,
     tipInLogFootprint,
     tipOnTop,
     tipVsTopDy,
@@ -1046,6 +1112,7 @@ async function captureSequence(orient, cssW, cssH) {
         cheekNormal: dbg.cheekNormal ?? null,
         cheekAlongRight: dbg.cheekAlongRight ?? null,
         cheekTowardCamera: dbg.cheekTowardCamera ?? null,
+        handleTowardCamera: dbg.handleTowardCamera ?? null,
       };
     }, IMPACT_AT);
     // Let the presenter paint the seek pose before screenshot

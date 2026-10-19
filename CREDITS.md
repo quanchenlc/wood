@@ -1,4 +1,4 @@
-# Credits & licences — Firewood 0.4.8 axe-top-seat+yaw-rotX + pack4-audio
+# Credits & licences — Firewood 0.4.9 axe-swing-clip+orientToCamera + pack4-audio
 
 All previously unlicensed screen.toys/firewood assets were removed in 0.4.0.
 Replacement sources below were verified on the download date **2026-10-19**.
@@ -41,8 +41,9 @@ Switch in drawer → 风格 → 「木桩 A / B」 (`fw_stump_variant`).
 | Asset | Source | Licence |
 |---|---|---|
 | `axe.gltf` / `axe.bin` / `axe_baseColor.jpg` / `axe_orm.png` | Project `minigame/scripts/build_axe_placeholder.mjs` (wood-handle placeholder) | Original |
+| `axe_swing_clip.glb` | Project `minigame/scripts/build_axe_swing_clip.mjs` (self-authored swing TRS) | Original |
 
-Swing animation is **code-keyed** in `src/anim/AxeAnimation.ts` (no third-party clip).
+Swing uses **mixer + clip + orientToCamera** (`AxeAnimation.ts` loads `axe_swing_clip.glb`). No screen.toys / ax_anim curves.
 
 ## Audio (pack4 层次)
 
