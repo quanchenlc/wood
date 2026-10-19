@@ -141,9 +141,12 @@ let heightMorphTo = 0;
 let heightMorphStart = 0;
 let heightMorphActive = false;
 let rankScrollY = 0;
+let styleScrollY = 0;
 let rankRowsCache: RankRow[] = [];
-let rankScrollDragging = false;
-let rankScrollLastY = 0;
+let listScrollDragging: "rank" | "style" | null = null;
+let listScrollLastY = 0;
+let listScrollMoved = false;
+let listScrollPickMeta: string | null = null;
 let claimFlash: string | null = null;
 let claimFlashUntil = 0;
 let showRedDot = false;
@@ -258,6 +261,7 @@ function setDrawerPage(page: DrawerPage) {
   drawerPage = page;
   if (page === "rank") ensureRankRows();
   else rankScrollY = 0;
+  if (page !== "style") styleScrollY = 0;
   const to = targetDrawerH1(h, landscape, page);
   if (!landscape && Math.abs(from - to) > 0.5) {
     heightMorphFrom = from;
@@ -291,6 +295,7 @@ function openDrawer(src: "tap" | "drag" | "guide" = "tap", fromP?: number) {
   drawerDragP = null;
   drawerPage = "main";
   rankScrollY = 0;
+  styleScrollY = 0;
   heightMorphActive = false;
   drawerH1 = currentTargetH1("main");
   syncParchmentHud();
@@ -304,6 +309,7 @@ function closeDrawer(instant = false) {
     drawerDragP = null;
     drawerPage = "main";
     rankScrollY = 0;
+    styleScrollY = 0;
     heightMorphActive = false;
     drawerH1 = currentTargetH1("main");
     syncParchmentHud();
@@ -376,6 +382,7 @@ function syncParchmentHud() {
     drawerMotion: motion,
     drawerH1: resolveDrawerH1(),
     rankScrollY,
+    styleScrollY,
     rankRows: rows,
     showRedDot,
     styleId,
@@ -520,7 +527,7 @@ async function handleParchmentHit() {
     setDrawerPage("main");
     return true;
   }
-  if (hit === "rank_list") {
+  if (hit === "rank_list" || hit === "style_list") {
     // 点击落在列表上：不关抽屉；滚动由 pointer 手势处理
     return true;
   }
@@ -912,54 +919,101 @@ window.addEventListener("resize", () => {
 document.addEventListener("contextmenu", (e) => e.preventDefault());
 document.addEventListener("selectstart", (e) => e.preventDefault());
 
-/** 柴榜列表拖拽滚动：占指针，不关抽屉、不转视角 */
+/** 柴榜列表最大滚动（与 paintRankPage 几何对齐） */
 function rankListMaxScroll(): number {
   const rows = ensureRankRows();
   const { w, h } = screenSize();
   const landscape = isLandscape(w, h);
-  const rowH = landscape ? 48 : 54;
-  const h1 = resolveDrawerH1();
-  const headerY = landscape ? 52 : 96;
-  const listTop = headerY + 22;
-  const listBottom = landscape ? Math.min(h1 - 36, h - 28) : h1 - 44;
-  const listH = Math.max(120, listBottom - listTop);
-  const scrollViewH = Math.max(80, listH - 56);
+  const rowH = landscape ? 40 : 54;
+  const listTop = landscape ? 66 : 132;
+  const listBottom = landscape ? 212 : 500;
+  const scrollViewH = Math.max(80, listBottom - listTop);
   const cols = landscape ? 2 : 1;
   const contentH = Math.ceil(rows.length / cols) * rowH;
   return Math.max(0, contentH - scrollViewH);
 }
 
-function onRankPointerDown(e: PointerEvent) {
-  if (drawerPage !== "rank" || drawerQ == null) return;
+/** 竖屏风格列表最大滚动（≥6 项；视口 132–368，行距 46） */
+function styleListMaxScroll(): number {
+  const { w, h } = screenSize();
+  if (isLandscape(w, h)) return 0;
+  const n = ART_SET_CATALOG.length + 2; // sets + stump A/B
+  if (n < 6) return 0;
+  const listTop = 132;
+  const listBottom = 368;
+  const scrollViewH = Math.max(40, listBottom - listTop);
+  const contentH = n * 46;
+  return Math.max(0, contentH - scrollViewH);
+}
+
+function onListPointerDown(e: PointerEvent) {
+  if (drawerQ == null) return;
   const hud = ensureHud();
   if (!hud?.hitTestParchment) return;
   const hit = hud.hitTestParchment(e.clientX, e.clientY);
-  if (hit !== "rank_list") return;
-  rankScrollDragging = true;
-  rankScrollLastY = e.clientY;
+  const full = hud.hitTestParchmentFull?.(e.clientX, e.clientY) ?? null;
+  if (hit === "rank_list" && drawerPage === "rank") {
+    listScrollDragging = "rank";
+    listScrollPickMeta = null;
+  } else if (
+    drawerPage === "style" &&
+    (hit === "style_list" || hit === "style_pick") &&
+    styleListMaxScroll() > 0
+  ) {
+    // style_pick 叠在 style_list 上：按下同时允许滚；未移动则 pointerup 时再选中
+    listScrollDragging = "style";
+    listScrollPickMeta = hit === "style_pick" ? full?.meta ?? null : null;
+  } else {
+    return;
+  }
+  listScrollMoved = false;
+  listScrollLastY = e.clientY;
   controller.capturePointerForUi();
   e.preventDefault();
 }
 
-function onRankPointerMove(e: PointerEvent) {
-  if (!rankScrollDragging) return;
-  const dy = e.clientY - rankScrollLastY;
-  rankScrollLastY = e.clientY;
-  rankScrollY = Math.max(0, Math.min(rankListMaxScroll(), rankScrollY - dy));
+function onListPointerMove(e: PointerEvent) {
+  if (!listScrollDragging) return;
+  const dy = e.clientY - listScrollLastY;
+  listScrollLastY = e.clientY;
+  if (Math.abs(dy) > 2) listScrollMoved = true;
+  if (listScrollDragging === "rank") {
+    rankScrollY = Math.max(0, Math.min(rankListMaxScroll(), rankScrollY - dy));
+  } else {
+    styleScrollY = Math.max(0, Math.min(styleListMaxScroll(), styleScrollY - dy));
+  }
   syncParchmentHud();
   e.preventDefault();
 }
 
-function onRankPointerUp() {
-  if (!rankScrollDragging) return;
-  rankScrollDragging = false;
+function onListPointerUp() {
+  if (!listScrollDragging) return;
+  const wasStyle = listScrollDragging === "style";
+  const pick = listScrollPickMeta;
+  const moved = listScrollMoved;
+  listScrollDragging = null;
+  listScrollPickMeta = null;
+  listScrollMoved = false;
   controller.releaseUiCapture();
+  // 竖屏风格：轻点未滚 → 选中行
+  if (wasStyle && !moved && pick) {
+    if (pick === "stumpA" || pick === "stumpB") {
+      styleSwitching = true;
+      syncParchmentHud();
+      void applyStumpVariant(pick === "stumpA" ? "A" : "B", { force: true }).finally(() => {
+        styleSwitching = false;
+        syncParchmentHud();
+      });
+    } else if (isArtSetId(pick)) {
+      void switchArtSet(pick);
+    }
+  }
 }
 
-window.addEventListener("pointerdown", onRankPointerDown, { capture: true });
-window.addEventListener("pointermove", onRankPointerMove, { capture: true });
-window.addEventListener("pointerup", onRankPointerUp, { capture: true });
-window.addEventListener("pointercancel", onRankPointerUp, { capture: true });
+window.addEventListener("pointerdown", onListPointerDown, { capture: true });
+window.addEventListener("pointermove", onListPointerMove, { capture: true });
+window.addEventListener("pointerup", onListPointerUp, { capture: true });
+window.addEventListener("pointercancel", onListPointerUp, { capture: true });
 
 window.addEventListener("beforeunload", () => {
   game?.dispose();
@@ -1011,6 +1065,7 @@ function frame() {
         drawerAnimating = false;
         drawerPage = "main";
         rankScrollY = 0;
+        styleScrollY = 0;
         heightMorphActive = false;
         drawerH1 = currentTargetH1("main");
       }
@@ -1044,7 +1099,7 @@ function frame() {
   const needHud =
     drawerAnimating ||
     heightMorphActive ||
-    rankScrollDragging ||
+    listScrollDragging ||
     drawerDragP != null ||
     guideStep === 1 ||
     guideStep === 3 ||
@@ -1159,6 +1214,11 @@ if (enableDebugHooks) {
           syncParchmentHud();
         },
         getRankScroll: () => rankScrollY,
+        setStyleScroll: (y: number) => {
+          styleScrollY = Math.max(0, y);
+          syncParchmentHud();
+        },
+        getStyleScroll: () => styleScrollY,
         getRankRows: () => ensureRankRows(),
         getDrawerH1: () => resolveDrawerH1(),
         showExhaustedBubble: () => {

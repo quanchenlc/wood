@@ -49,6 +49,8 @@ export interface ParchmentUiState {
   drawerH1?: number | null;
   /** 柴榜列表滚动偏移（pt，向下为正） */
   rankScrollY?: number;
+  /** 竖屏风格列表滚动偏移（pt，向下为正） */
+  styleScrollY?: number;
   rankRows?: RankRow[];
   showRedDot?: boolean;
   styleId?: string;
@@ -73,6 +75,7 @@ export type UiHit =
   | "help_open"
   | "style_open"
   | "style_back"
+  | "style_list"
   | "style_pick"
   | "dismiss"
   | "panel"
@@ -551,26 +554,36 @@ function paintRankRow(
   ctx.fillText(`${row.pieces} 根`, x + w - 4, ay);
 }
 
-/** 列表视口上下 16pt 纸色渐隐（P1-2） */
-function paintRankEdgeFades(
+/** 列表视口 16pt 纸色渐隐；P2-2：顶/底仅在可继续滚时绘制 */
+function paintListEdgeFades(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
   w: number,
   h: number,
-  fade = RANK_FADE_PT,
+  opts?: { fade?: number; showTop?: boolean; showBottom?: boolean },
 ) {
+  const fade = opts?.fade ?? RANK_FADE_PT;
   const paper = "rgba(215,192,151,";
-  const top = ctx.createLinearGradient(0, y, 0, y + fade);
-  top.addColorStop(0, `${paper}1)`);
-  top.addColorStop(1, `${paper}0)`);
-  ctx.fillStyle = top;
-  ctx.fillRect(x, y, w, fade);
-  const bot = ctx.createLinearGradient(0, y + h - fade, 0, y + h);
-  bot.addColorStop(0, `${paper}0)`);
-  bot.addColorStop(1, `${paper}1)`);
-  ctx.fillStyle = bot;
-  ctx.fillRect(x, y + h - fade, w, fade);
+  if (opts?.showTop !== false) {
+    const top = ctx.createLinearGradient(0, y, 0, y + fade);
+    top.addColorStop(0, `${paper}1)`);
+    top.addColorStop(1, `${paper}0)`);
+    ctx.fillStyle = top;
+    ctx.fillRect(x, y, w, fade);
+  }
+  if (opts?.showBottom !== false) {
+    const bot = ctx.createLinearGradient(0, y + h - fade, 0, y + h);
+    bot.addColorStop(0, `${paper}0)`);
+    bot.addColorStop(1, `${paper}1)`);
+    ctx.fillStyle = bot;
+    ctx.fillRect(x, y + h - fade, w, fade);
+  }
+}
+
+/** 纸身底（bodyH）上 8pt：内容不得画进撕口/场景 */
+function contentClipBottom(layout: DrawerLayout): number {
+  return layout.bodyH - 8;
 }
 
 function paintRankPage(
@@ -585,20 +598,15 @@ function paintRankPage(
   const right = layout.contentRight;
   const listW = right - left;
 
-  // P2-4：标题顶 = 胶囊底 + 12（竖屏规范 ≈92）
-  const headerY = layout.landscape
-    ? Math.max(36, layout.capsuleTop + 8)
-    : layout.capsuleBottom + 12;
-
+  // D_fix_v3：竖屏顶栏中心 106 / 线 124；横屏顶栏中心 40 / 线 58
+  const headerY = layout.landscape ? 40 : 106;
   paintDrawerBackHeader(ctx, layout, "好友柴榜", "rank_back", hits, headerY);
 
-  // 竖屏规范：视口 132–500，页脚 508–560；横屏：视口到撕口上，页脚钉在内容底
-  const listTop = layout.landscape ? headerY + 22 : 132;
+  // 竖屏：视口 132–500，页脚 508–560；横屏规范：视口 66–212，行高 40，页脚 218–270
+  const listTop = layout.landscape ? 66 : 132;
   const footerH = RANK_FOOTER_H;
-  const footerY = layout.landscape
-    ? Math.min(layout.h1 - footerH - 8, 260)
-    : 508;
-  const listBottom = layout.landscape ? footerY - 4 : 500;
+  const footerY = layout.landscape ? 218 : 508;
+  const listBottom = layout.landscape ? 212 : 500;
   const scrollViewH = Math.max(80, listBottom - listTop);
 
   try {
@@ -623,7 +631,7 @@ function paintRankPage(
       ? state.rankRows
       : buildMockRankRows(pieces, selfName);
   const selfRow = rows.find((r) => r.self) || rows[0] || null;
-  const rowH = layout.landscape ? 48 : RANK_ROW_H;
+  const rowH = layout.landscape ? 40 : RANK_ROW_H;
   const contentH = layout.landscape
     ? Math.ceil(rows.length / 2) * rowH
     : rows.length * rowH;
@@ -668,9 +676,12 @@ function paintRankPage(
   }
   ctx.restore();
 
-  paintRankEdgeFades(ctx, left, listTop, listW, scrollViewH, RANK_FADE_PT);
+  paintListEdgeFades(ctx, left, listTop, listW, scrollViewH, {
+    showTop: scrollY > 0,
+    showBottom: scrollY < maxScroll - 0.5,
+  });
 
-  // P1-3/P1-4：固定 52pt「我」页脚，始终绘制（不闪烁）
+  // P1-3/P1-4：固定 52pt「我」页脚，始终绘制（不闪烁）；横屏 218–270 不压撕口
   if (selfRow) {
     const pinY = footerY;
     const pinH = footerH;
@@ -687,8 +698,43 @@ function paintRankPage(
       pinned: true,
     });
   }
-  void maxScroll;
   void RANK_PIN_H;
+}
+
+function paintStyleRow(
+  ctx: CanvasRenderingContext2D,
+  tex: TexMap,
+  opt: { id: string; label: string; color: string },
+  active: boolean,
+  x: number,
+  y: number,
+  rowW: number,
+  rowH: number,
+  dpr: number,
+) {
+  const cy = y + rowH / 2;
+  if (active) drawTexNine(ctx, tex.strip_parchment, x, y + 1, rowW, rowH - 2, dpr);
+  ctx.beginPath();
+  ctx.arc(x + 28, cy, 11, 0, Math.PI * 2);
+  ctx.fillStyle = opt.color;
+  ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.fillStyle = INK;
+  ctx.font = fontSans(15);
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillText(opt.label, x + 52, cy);
+  if (active && tex.icon_check) {
+    ctx.drawImage(
+      tex.icon_check.img,
+      snapPt(x + rowW - 36, dpr),
+      snapPt(cy - 10, dpr),
+      20,
+      20,
+    );
+  }
 }
 
 function paintStylePage(
@@ -702,47 +748,99 @@ function paintStylePage(
   const left = layout.contentLeft;
   const right = layout.contentRight;
   const w = layout.screenW;
-  const headerY = layout.landscape ? 58 : 108;
+  const clipBottom = contentClipBottom(layout);
+  // D_fix_v3：竖屏顶栏中心 106 / 线 124；横屏顶栏中心 40 / 线 58
+  const headerY = layout.landscape ? 40 : 106;
   paintDrawerBackHeader(ctx, layout, "选择风格", "style_back", hits, headerY);
   const opts = state.styleOptions || [];
-  // P1-8：横屏选中行 ≤ 300pt，避免 strip 中段拉丝
-  const rowW = Math.min(layout.landscape ? 300 : w - 48, right - left);
-  const rowX = layout.landscape ? left : 24;
-  opts.forEach((opt, i) => {
-    const y = headerY + 28 + i * (layout.landscape ? 44 : 48);
-    const active = opt.id === state.styleId;
-    if (active) drawTexNine(ctx, tex.strip_parchment, rowX, y + 2, rowW, 42, dpr);
-    ctx.beginPath();
-    ctx.arc(rowX + 28, y + 24, 11, 0, Math.PI * 2);
-    ctx.fillStyle = opt.color;
-    ctx.fill();
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    ctx.fillStyle = INK;
-    ctx.font = fontSans(15);
-    ctx.textAlign = "left";
+
+  // 内容裁切到纸身底 − 8pt（竖屏首页 = 376），防止行漏出撕口画到 3D 场景
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, w, clipBottom);
+  ctx.clip();
+
+  if (layout.landscape) {
+    // P1-2：双列 300×42，行 y 72 / 122 / 172；列 1 左 60、列 2 右 698
+    const rowW = 300;
+    const rowH = 42;
+    const colGapY = 50; // 72, 122, 172
+    const col1X = left; // 60 on X-class
+    const col2X = 698 - rowW;
+    const listTop = 72;
+    opts.forEach((opt, i) => {
+      const col = i % 2;
+      const rowI = Math.floor(i / 2);
+      const y = listTop + rowI * colGapY;
+      if (y + rowH > clipBottom) return;
+      const x = col === 0 ? col1X : col2X;
+      const active = opt.id === state.styleId;
+      paintStyleRow(ctx, tex, opt, active, x, y, rowW, rowH, dpr);
+      pushHit(hits, "style_pick", x, y, rowW, rowH, opt.id);
+    });
+    // 脚注：末行底以下，仍在裁切内
+    const lastRow = Math.ceil(opts.length / 2) - 1;
+    const footnoteY = Math.min(clipBottom - 10, listTop + Math.max(0, lastRow) * colGapY + rowH + 14);
+    ctx.fillStyle = INK_SOFT;
+    ctx.font = fontSans(11);
+    ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(opt.label, rowX + 52, y + 24);
-    if (active && tex.icon_check) {
-      ctx.drawImage(
-        tex.icon_check.img,
-        snapPt(rowX + rowW - 36, dpr),
-        snapPt(y + 12, dpr),
-        20,
-        20,
-      );
-    }
-    pushHit(hits, "style_pick", rowX, y, rowW, 48, opt.id);
+    ctx.fillText("切换即时生效，下次启动保留", (left + right) / 2, footnoteY);
+    ctx.restore();
+    return;
+  }
+
+  // 竖屏：行 y = 132 + 46i，行高 40；≥6 项可滚，视口 132–368 + 16pt 渐隐
+  const rowStep = 46;
+  const rowH = 40;
+  const listTop = 132;
+  const listBottom = Math.min(368, clipBottom);
+  const scrollViewH = Math.max(40, listBottom - listTop);
+  const rowW = Math.min(w - 48, right - left);
+  const rowX = 24;
+  const contentH = opts.length * rowStep;
+  const needScroll = opts.length >= 6;
+  const maxScroll = needScroll ? Math.max(0, contentH - scrollViewH) : 0;
+  const scrollY = Math.max(0, Math.min(maxScroll, state.styleScrollY ?? 0));
+
+  if (needScroll) {
+    pushHit(hits, "style_list", rowX, listTop, rowW, scrollViewH);
+  }
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(rowX - 4, listTop, rowW + 8, scrollViewH);
+  ctx.clip();
+
+  opts.forEach((opt, i) => {
+    const y = listTop + i * rowStep - scrollY;
+    if (y + rowH < listTop || y > listTop + scrollViewH) return;
+    const active = opt.id === state.styleId;
+    paintStyleRow(ctx, tex, opt, active, rowX, y, rowW, rowH, dpr);
+    pushHit(hits, "style_pick", rowX, y, rowW, rowH, opt.id);
   });
-  ctx.fillStyle = INK_SOFT;
-  ctx.font = fontSans(11);
-  ctx.textAlign = "center";
-  ctx.fillText(
-    "切换即时生效，下次启动保留",
-    (left + right) / 2,
-    headerY + 28 + opts.length * 48 + 12,
+  ctx.restore();
+
+  if (needScroll && maxScroll > 0) {
+    paintListEdgeFades(ctx, rowX, listTop, rowW, scrollViewH, {
+      showTop: scrollY > 0,
+      showBottom: scrollY < maxScroll - 0.5,
+    });
+  }
+
+  // 脚注：列表底以下，仍在 376 裁切内
+  const footnoteY = Math.min(
+    clipBottom - 8,
+    listTop + Math.min(opts.length, needScroll ? 5 : opts.length) * rowStep + 8,
   );
+  if (!needScroll || scrollY < 1) {
+    ctx.fillStyle = INK_SOFT;
+    ctx.font = fontSans(11);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("切换即时生效，下次启动保留", w / 2, footnoteY);
+  }
+  ctx.restore();
 }
 
 function paintDrawerMain(
@@ -816,7 +914,8 @@ function paintDrawerMain(
     ctx.lineTo(right, y);
     ctx.stroke();
     y += 12;
-    const bw = Math.min(420, right - left);
+    // P2-4：横屏皮革 CTA ≤ 360pt（避免中段横向拉丝）
+    const bw = Math.min(360, right - left);
     const bx = left + (right - left - bw) / 2;
     if (s.pending_claim > 0 || state.claimFlash) {
       paintLeatherBtn(ctx, tex, bx, y, bw, 44, claimLabel, dpr);
