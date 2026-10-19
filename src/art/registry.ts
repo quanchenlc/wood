@@ -48,7 +48,7 @@ export const SET0_DEFAULT_MANIFEST: ArtSetManifest = {
     axe: "axe.gltf",
     stump: "stump.gltf",
     stumpLod: "stump_lod.gltf",
-    stumpData: "stump_v02_data.glb",
+    stumpData: "stump_data.glb",
     barkColor: "outsidebark.jpg",
     barkNormal: "outsidebark_n.jpg",
     endColor: "top.jpg",

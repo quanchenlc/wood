@@ -2,10 +2,10 @@
 
 这是一个用 Three.js 实现的浏览器端劈柴小游戏：玩家拖动视角、点击木块，斧头落下后实时切开程序化原木；达到柴火尺寸的碎块会经过 3D 物理掉落，再由 2D 物理计算稳定堆叠姿态，最后围绕树桩码成柴堆。
 
-项目参考了 [screen.toys/firewood](https://screen.toys/firewood/) 的交互和技术思路，并根据参考站公开可观察的行为重新实现，主要用于 WebGL、实时网格切割和物理模拟学习。
+交互与技术思路来自公开可观察的劈柴玩法；实现与 **0.4.0 起的全部运行时素材** 均为本项目原创、合成，或来自 **CC0** 资源（见 [CREDITS.md](CREDITS.md)）。仓库内不再附带 screen.toys 拷贝素材。
 
 > [!IMPORTANT]
-> `public/` 和 `site/` 中的参考模型、贴图、音效有各自的版权归属。学习以外的发布应替换为有明确授权的素材。代码同样可能受版权保护，“替换素材”并不自动代表可以商业使用第三方代码或设计；实际发布前应自行确认授权和许可。
+> 发布前请阅读 `CREDITS.md`，并运行 `node scripts/check-ip-hashes.mjs` 确认没有重新引入已拉黑的旧资源哈希。
 
 ## 主要特性
 
@@ -571,16 +571,14 @@ public/basis/    → 构建后 dist/basis/
 
 资源 URL 使用 `import.meta.env.BASE_URL`。`vite.config.ts` 设置 `base: "./"`，所以构建后的请求使用相对部署目录，而不是写死到域名根路径。
 
-开发环境中还有一个仅在 `vite serve` 生效的兜底中间件：当请求 `/assets/` 或 `/basis/` 时，可以从 `site/screen.toys/firewood/` 读取参考资源。生产构建不会读取 `site/`，发布时必须确保 `public/` 中的资源完整。
-
-运行前应确认二进制资源确实存在。源码目录或下载清单本身不能代替资源文件；缺少 `public/assets/` 或 `public/basis/basis_transcoder.wasm` 时，开发和生产体验都会降级或出现 404。开发兜底也只有在 `site/screen.toys/firewood/` 下存在完整同名文件时才有效。
+运行前应确认 `public/assets/` 完整（含 `stump-a/`、`stump-b/`、合成音效与 CC0 贴图）。缺少资源时开发和生产都会降级或 404。
 
 替换素材有两种方式：
 
-1. 在 `public/assets/` 和 `public/basis/` 中替换同名文件。
+1. 在 `public/assets/` 中替换同名文件（并更新 `CREDITS.md`）。
 2. 修改 `src/config/assets.ts` 中的集中路径。
 
-树桩模型使用 KTX2 压缩纹理，必须通过项目提供的 `createGltfLoader()` 加载，并保证 `BASIS_PATH` 以 `/` 结尾。
+树桩为外置 `stump.gltf`（色图 JPEG ≤1024、法线 PNG ≤512）。木桩 A/B 可在抽屉「风格」页切换。
 
 ### 加载失败的降级策略
 
@@ -588,7 +586,7 @@ public/basis/    → 构建后 dist/basis/
 | --- | --- |
 | 树桩模型 | 使用程序化圆台代替 |
 | 斧头模型 | 不显示斧头，但切割逻辑继续运行 |
-| 斧头动画 Clip | 使用约 0.25 秒的程序化挥砍 |
+| 斧头挥砍 | 自研关键帧（约 0.28 秒） |
 | 单个音效 | 跳过该音效，其他逻辑继续 |
 | Planck Polygon | 退化为矩形 Box |
 | 切割结果少于两块 | 放弃本次结果，保留原木 |
@@ -701,6 +699,7 @@ SHOT_SCRIPT="look:90 stackTest:4" node scripts/shot.mjs /tmp/firewood-stack.png
 ## 相关文档
 
 - `NOTES.md`：开发过程中的技术决策和实现备注
+- `CREDITS.md`：0.4.0 起全部运行时素材的来源与许可
 - `REFERENCE_VERIFICATION.md`：劈砍逻辑对照与回归验证
 - `FOUR_FIXES_VERIFICATION.md`：相机、90° 转向、码垛和斧头重播验证
-- `site/screen.toys/firewood/assets/index-C6RyM-i2.js`：仅作为学习分析时的参考打包产物# wood
+

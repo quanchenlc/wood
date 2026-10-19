@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "build:minigame": "node minigame/scripts/build.mjs",
+    "check:ip": "node scripts/check-ip-hashes.mjs",
     "harness:minigame": "node minigame/harness/serve.mjs",
     "capture:minigame": "node minigame/harness/capture.mjs"
   },

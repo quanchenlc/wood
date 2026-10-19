@@ -1,14 +1,14 @@
 {
   "appid": "wx3371f99b1b0e73d1",
-  "mainPackageBytes": 1182857,
-  "mainPackage": "1.13 MB",
+  "mainPackageBytes": 1169925,
+  "mainPackage": "1.12 MB",
   "mainUnder4MB": true,
-  "assetsSubpackageBytes": 5500988,
-  "assetsSubpackage": "5.25 MB",
+  "assetsSubpackageBytes": 4778502,
+  "assetsSubpackage": "4.56 MB",
   "subpackages": {
     "assets": {
-      "bytes": 5500988,
-      "size": "5.25 MB"
+      "bytes": 4778502,
+      "size": "4.56 MB"
     },
     "ui-parchment": {
       "bytes": 814596,
@@ -31,13 +31,13 @@
       "size": "2.03 MB"
     }
   },
-  "subpackagesTotalBytes": 14015768,
-  "subpackagesTotal": "13.37 MB",
-  "bundle": "1.07 MB",
+  "subpackagesTotalBytes": 13293282,
+  "subpackagesTotal": "12.68 MB",
+  "bundle": "1.05 MB",
   "largestMain": [
     {
       "file": "js/game.bundle.js",
-      "size": "1.07 MB"
+      "size": "1.05 MB"
     },
     {
       "file": "adapter/audio.js",

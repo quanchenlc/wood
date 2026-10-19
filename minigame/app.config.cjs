@@ -20,7 +20,8 @@ module.exports = {
     "assets/stump.gltf",
     "assets/stump.bin",
     "assets/stump_baseColor.jpg",
-    "assets/stump_normal.png",
+    "assets/stump_normal.jpg",
+    "assets/stump_top.jpg",
   ],
 
   /** 分包名，对应 game.json subpackages */

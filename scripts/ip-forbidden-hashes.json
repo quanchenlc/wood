@@ -1,0 +1,346 @@
+{
+  "generated_at": "2026-10-19T02:08:15.708050+00:00",
+  "note": "SHA-256 of screen.toys-derived assets recorded before 0.4.0 ip-clean deletion. CI must fail if any shipped file matches these hashes.",
+  "files": [
+    {
+      "path": "public/assets/ax_anim_v03_glb.glb",
+      "name": "ax_anim_v03_glb.glb",
+      "sha256": "b63c6faa75b8146ad50e77fbe985e1bead57922a4a5de0c7ec1b8735cb35f351",
+      "bytes": 4524
+    },
+    {
+      "path": "public/assets/ax_v01_reduced_compressed.glb",
+      "name": "ax_v01_reduced_compressed.glb",
+      "sha256": "2beb99ce7be045935db8b6c010c559a896b4016c18822e635f8b4fd7d0c7b22a",
+      "bytes": 473840
+    },
+    {
+      "path": "public/assets/insidegrain.jpg",
+      "name": "insidegrain.jpg",
+      "sha256": "7ad387a580317e3ab26eabc753ee7e5bfe4d920f010684f105842a5943abcc51",
+      "bytes": 345114
+    },
+    {
+      "path": "public/assets/insidegrain_n.jpg",
+      "name": "insidegrain_n.jpg",
+      "sha256": "910ae6c3506568f1dfeb696d7f6953d96d7c6e6a07d2b2ad7bb4c80644581fcd",
+      "bytes": 384049
+    },
+    {
+      "path": "public/assets/outsidebark.jpg",
+      "name": "outsidebark.jpg",
+      "sha256": "a1fa240f65b3c8ac52a49f7c3ef8ee11ffb126518a3e286ae60d59a142961acb",
+      "bytes": 706120
+    },
+    {
+      "path": "public/assets/outsidebark_n.jpg",
+      "name": "outsidebark_n.jpg",
+      "sha256": "540964e3e763948c76f612d5e70fd712a428e90ba0e9ec68fa3328c237e00a18",
+      "bytes": 402805
+    },
+    {
+      "path": "public/assets/sounds/bg.mp3",
+      "name": "bg.mp3",
+      "sha256": "202776ef6ae242a5c02b10ed9147558fc045d9161c3033d27d841ebcbd1ab702",
+      "bytes": 463136
+    },
+    {
+      "path": "public/assets/sounds/drop.mp3",
+      "name": "drop.mp3",
+      "sha256": "c8f4fdb496e978785eac22f1f3c9ab614a8d79bfdc3e3f57cd737504144121db",
+      "bytes": 4448
+    },
+    {
+      "path": "public/assets/sounds/split1.mp3",
+      "name": "split1.mp3",
+      "sha256": "01f6f7e021c3b26707069d38d3f7c45465d389288c838ad70eb1cbb01d6a6ce1",
+      "bytes": 3872
+    },
+    {
+      "path": "public/assets/sounds/split2.mp3",
+      "name": "split2.mp3",
+      "sha256": "742563e733bf7803734775309b28739269ee67e97ca1fab5fa869a32477c0eb6",
+      "bytes": 4832
+    },
+    {
+      "path": "public/assets/sounds/split3.mp3",
+      "name": "split3.mp3",
+      "sha256": "9498854fc3d96d18bce216f975cda3f5d16f6a55792b4010b4aa43621625d3a9",
+      "bytes": 4448
+    },
+    {
+      "path": "public/assets/sounds/split4.mp3",
+      "name": "split4.mp3",
+      "sha256": "d78dca9c00ef00605c6b697953f2ae09669f8a8232fd8237bdbc0e8343514f34",
+      "bytes": 3872
+    },
+    {
+      "path": "public/assets/sounds/split5.mp3",
+      "name": "split5.mp3",
+      "sha256": "90f6d20b4ac03e2eb5dd6759f72c0b5c672b706decfee78ee862e13c9c34d941",
+      "bytes": 5024
+    },
+    {
+      "path": "public/assets/sounds/split6.mp3",
+      "name": "split6.mp3",
+      "sha256": "a3af4c3855d6403e2c8e9d2adaf6679ac2d0f0750c55de158355b20b8a5d92db",
+      "bytes": 3680
+    },
+    {
+      "path": "public/assets/sounds/splitb1.mp3",
+      "name": "splitb1.mp3",
+      "sha256": "43c201fcd424147cc88721f8cbc7feb3b88eb27da729060002228e395e648149",
+      "bytes": 6368
+    },
+    {
+      "path": "public/assets/sounds/splitb10.mp3",
+      "name": "splitb10.mp3",
+      "sha256": "e70997bf6d04dbc6753b4e70b85f54023eba8aa457090e764ac7be2dec5662d3",
+      "bytes": 10784
+    },
+    {
+      "path": "public/assets/sounds/splitb2.mp3",
+      "name": "splitb2.mp3",
+      "sha256": "0d390c00af96dc7e9d921d77222cb0fa8bb2c868561996a4487dfd6215bf9b82",
+      "bytes": 6944
+    },
+    {
+      "path": "public/assets/sounds/splitb3.mp3",
+      "name": "splitb3.mp3",
+      "sha256": "30c92ad410d4946c0b810723ed49c2876bd25fe3c6616b67eba7f529be924bac",
+      "bytes": 10976
+    },
+    {
+      "path": "public/assets/sounds/splitb4.mp3",
+      "name": "splitb4.mp3",
+      "sha256": "f585bbbfcecd0786e7dc0873d59f83aff4d8e19a80bdd07993dfdb244a0cca83",
+      "bytes": 7712
+    },
+    {
+      "path": "public/assets/sounds/splitb5.mp3",
+      "name": "splitb5.mp3",
+      "sha256": "c719e06ef2ded2a0e3c2a4403aab36ca3ec6b34f240fa97c7faa9d141e40dd67",
+      "bytes": 11168
+    },
+    {
+      "path": "public/assets/sounds/splitb6.mp3",
+      "name": "splitb6.mp3",
+      "sha256": "d9d7f234a936d923339369d691b3b51b02028f74e50875f5233e58309d8aa07f",
+      "bytes": 7136
+    },
+    {
+      "path": "public/assets/sounds/splitb7.mp3",
+      "name": "splitb7.mp3",
+      "sha256": "fd30aa30bc36f52802d7864c328dde461752d942961a62e3d8a123de7e5df25d",
+      "bytes": 10400
+    },
+    {
+      "path": "public/assets/sounds/splitb8.mp3",
+      "name": "splitb8.mp3",
+      "sha256": "0951e8a1b8171f8daf98b8a3263178b9668ea303dd3bd7c64a71d493af49c6c1",
+      "bytes": 10592
+    },
+    {
+      "path": "public/assets/sounds/splitb9.mp3",
+      "name": "splitb9.mp3",
+      "sha256": "d68b228e5da1799735d5027e670bffc554af4cd8601c26080678f284f2c4a8d0",
+      "bytes": 12896
+    },
+    {
+      "path": "public/assets/sounds/stack1.mp3",
+      "name": "stack1.mp3",
+      "sha256": "bbd2eca14beed2e537c26de2578b4377d24df77864b694772597524557be1508",
+      "bytes": 5600
+    },
+    {
+      "path": "public/assets/sounds/stack10.mp3",
+      "name": "stack10.mp3",
+      "sha256": "85bbeed5798ae402367f8a03d6ee837c10c7e6a249bcab3128e46c48688c3c05",
+      "bytes": 5600
+    },
+    {
+      "path": "public/assets/sounds/stack11.mp3",
+      "name": "stack11.mp3",
+      "sha256": "6ecaaaf85fb141aa1c7ce173d9c6630b528e098e307cfa9a14310338aca1941f",
+      "bytes": 4832
+    },
+    {
+      "path": "public/assets/sounds/stack12.mp3",
+      "name": "stack12.mp3",
+      "sha256": "277b7f68a9d7b91447ec7957b58e33e28260295bf0b4a751ac32d50661677265",
+      "bytes": 4064
+    },
+    {
+      "path": "public/assets/sounds/stack13.mp3",
+      "name": "stack13.mp3",
+      "sha256": "33ae7663fcb04c7181dfaa1079448b948993c6a74bf529de2f7f86f120731f67",
+      "bytes": 4256
+    },
+    {
+      "path": "public/assets/sounds/stack14.mp3",
+      "name": "stack14.mp3",
+      "sha256": "22a9dc2294a38a313063b50488e300b4c3aa1477ee293a0abd5f3820a862b90b",
+      "bytes": 4448
+    },
+    {
+      "path": "public/assets/sounds/stack2.mp3",
+      "name": "stack2.mp3",
+      "sha256": "76fa923fb53f4d6bd2a994e4b268da2cbc455baee7c74072168428202c050d99",
+      "bytes": 4064
+    },
+    {
+      "path": "public/assets/sounds/stack3.mp3",
+      "name": "stack3.mp3",
+      "sha256": "a3dd2207a49963f103af0d2ddda28f470b0ea5401371c079d92b9868f50972a4",
+      "bytes": 3872
+    },
+    {
+      "path": "public/assets/sounds/stack4.mp3",
+      "name": "stack4.mp3",
+      "sha256": "82895dddbd465dab44d295f905f450cda81ceeacfd05f1cdd8a14c6e7ae95e53",
+      "bytes": 4064
+    },
+    {
+      "path": "public/assets/sounds/stack5.mp3",
+      "name": "stack5.mp3",
+      "sha256": "d1ce16ffb2626f70164f5ecc0df6b06d35a4f815d1b7c0c7ff52370b989773e6",
+      "bytes": 5792
+    },
+    {
+      "path": "public/assets/sounds/stack6.mp3",
+      "name": "stack6.mp3",
+      "sha256": "6a1147bc5334885a3e8033f599fb2ef92670223549932f7412cf2425f98c30d7",
+      "bytes": 4640
+    },
+    {
+      "path": "public/assets/sounds/stack7.mp3",
+      "name": "stack7.mp3",
+      "sha256": "b18837cb3350341b110164cd63e6682929a8dc200774eda18defece5e22fd5bf",
+      "bytes": 4256
+    },
+    {
+      "path": "public/assets/sounds/stack8.mp3",
+      "name": "stack8.mp3",
+      "sha256": "7262992e3c3a471fef694b5500de5cae4e00da4e98942daf271adce648c488a4",
+      "bytes": 4064
+    },
+    {
+      "path": "public/assets/sounds/stack9.mp3",
+      "name": "stack9.mp3",
+      "sha256": "5c779cfe5e13bebb98cf8f2448c3b99697cfa4fa7ef998e4ace089714001529e",
+      "bytes": 4448
+    },
+    {
+      "path": "public/assets/stump_v02_data.glb",
+      "name": "stump_v02_data.glb",
+      "sha256": "d59ff6e960963e207f3e78859e1fc20489449c73f23c896274f30f5befb16790",
+      "bytes": 11276
+    },
+    {
+      "path": "public/assets/stump_v02_mesh_warm_ktx2_2048.glb",
+      "name": "stump_v02_mesh_warm_ktx2_2048.glb",
+      "sha256": "e49519df5eb6da40783ba8dcf82c1f4c626160af5fb4cefb6674e3c5b9d3e519",
+      "bytes": 3463576
+    },
+    {
+      "path": "public/assets/top.jpg",
+      "name": "top.jpg",
+      "sha256": "7b1eb39b7a006c1c6f9eedeb4055ed7ebde35997e770b1e5bdb9db7c86fe32dd",
+      "bytes": 403051
+    },
+    {
+      "path": "public/assets/top_n.jpg",
+      "name": "top_n.jpg",
+      "sha256": "369a4db6b981804d9edc62c098b30dda21bf709a2d2a8705104220b9021f0480",
+      "bytes": 122977
+    }
+  ],
+  "forbidden_sha256": [
+    "01f6f7e021c3b26707069d38d3f7c45465d389288c838ad70eb1cbb01d6a6ce1",
+    "0951e8a1b8171f8daf98b8a3263178b9668ea303dd3bd7c64a71d493af49c6c1",
+    "0d390c00af96dc7e9d921d77222cb0fa8bb2c868561996a4487dfd6215bf9b82",
+    "202776ef6ae242a5c02b10ed9147558fc045d9161c3033d27d841ebcbd1ab702",
+    "22a9dc2294a38a313063b50488e300b4c3aa1477ee293a0abd5f3820a862b90b",
+    "277b7f68a9d7b91447ec7957b58e33e28260295bf0b4a751ac32d50661677265",
+    "2beb99ce7be045935db8b6c010c559a896b4016c18822e635f8b4fd7d0c7b22a",
+    "30c92ad410d4946c0b810723ed49c2876bd25fe3c6616b67eba7f529be924bac",
+    "33ae7663fcb04c7181dfaa1079448b948993c6a74bf529de2f7f86f120731f67",
+    "369a4db6b981804d9edc62c098b30dda21bf709a2d2a8705104220b9021f0480",
+    "43c201fcd424147cc88721f8cbc7feb3b88eb27da729060002228e395e648149",
+    "540964e3e763948c76f612d5e70fd712a428e90ba0e9ec68fa3328c237e00a18",
+    "5c779cfe5e13bebb98cf8f2448c3b99697cfa4fa7ef998e4ace089714001529e",
+    "6a1147bc5334885a3e8033f599fb2ef92670223549932f7412cf2425f98c30d7",
+    "6ecaaaf85fb141aa1c7ce173d9c6630b528e098e307cfa9a14310338aca1941f",
+    "7262992e3c3a471fef694b5500de5cae4e00da4e98942daf271adce648c488a4",
+    "742563e733bf7803734775309b28739269ee67e97ca1fab5fa869a32477c0eb6",
+    "76fa923fb53f4d6bd2a994e4b268da2cbc455baee7c74072168428202c050d99",
+    "7ad387a580317e3ab26eabc753ee7e5bfe4d920f010684f105842a5943abcc51",
+    "7b1eb39b7a006c1c6f9eedeb4055ed7ebde35997e770b1e5bdb9db7c86fe32dd",
+    "82895dddbd465dab44d295f905f450cda81ceeacfd05f1cdd8a14c6e7ae95e53",
+    "85bbeed5798ae402367f8a03d6ee837c10c7e6a249bcab3128e46c48688c3c05",
+    "90f6d20b4ac03e2eb5dd6759f72c0b5c672b706decfee78ee862e13c9c34d941",
+    "910ae6c3506568f1dfeb696d7f6953d96d7c6e6a07d2b2ad7bb4c80644581fcd",
+    "9498854fc3d96d18bce216f975cda3f5d16f6a55792b4010b4aa43621625d3a9",
+    "a1fa240f65b3c8ac52a49f7c3ef8ee11ffb126518a3e286ae60d59a142961acb",
+    "a3af4c3855d6403e2c8e9d2adaf6679ac2d0f0750c55de158355b20b8a5d92db",
+    "a3dd2207a49963f103af0d2ddda28f470b0ea5401371c079d92b9868f50972a4",
+    "b18837cb3350341b110164cd63e6682929a8dc200774eda18defece5e22fd5bf",
+    "b63c6faa75b8146ad50e77fbe985e1bead57922a4a5de0c7ec1b8735cb35f351",
+    "bbd2eca14beed2e537c26de2578b4377d24df77864b694772597524557be1508",
+    "c719e06ef2ded2a0e3c2a4403aab36ca3ec6b34f240fa97c7faa9d141e40dd67",
+    "c8f4fdb496e978785eac22f1f3c9ab614a8d79bfdc3e3f57cd737504144121db",
+    "d1ce16ffb2626f70164f5ecc0df6b06d35a4f815d1b7c0c7ff52370b989773e6",
+    "d59ff6e960963e207f3e78859e1fc20489449c73f23c896274f30f5befb16790",
+    "d68b228e5da1799735d5027e670bffc554af4cd8601c26080678f284f2c4a8d0",
+    "d78dca9c00ef00605c6b697953f2ae09669f8a8232fd8237bdbc0e8343514f34",
+    "d9d7f234a936d923339369d691b3b51b02028f74e50875f5233e58309d8aa07f",
+    "e49519df5eb6da40783ba8dcf82c1f4c626160af5fb4cefb6674e3c5b9d3e519",
+    "e70997bf6d04dbc6753b4e70b85f54023eba8aa457090e764ac7be2dec5662d3",
+    "f585bbbfcecd0786e7dc0873d59f83aff4d8e19a80bdd07993dfdb244a0cca83",
+    "fd30aa30bc36f52802d7864c328dde461752d942961a62e3d8a123de7e5df25d"
+  ],
+  "canonical_by_name": {
+    "ax_anim_v03_glb.glb": "b63c6faa75b8146ad50e77fbe985e1bead57922a4a5de0c7ec1b8735cb35f351",
+    "ax_v01_reduced_compressed.glb": "2beb99ce7be045935db8b6c010c559a896b4016c18822e635f8b4fd7d0c7b22a",
+    "insidegrain.jpg": "7ad387a580317e3ab26eabc753ee7e5bfe4d920f010684f105842a5943abcc51",
+    "insidegrain_n.jpg": "910ae6c3506568f1dfeb696d7f6953d96d7c6e6a07d2b2ad7bb4c80644581fcd",
+    "outsidebark.jpg": "a1fa240f65b3c8ac52a49f7c3ef8ee11ffb126518a3e286ae60d59a142961acb",
+    "outsidebark_n.jpg": "540964e3e763948c76f612d5e70fd712a428e90ba0e9ec68fa3328c237e00a18",
+    "bg.mp3": "202776ef6ae242a5c02b10ed9147558fc045d9161c3033d27d841ebcbd1ab702",
+    "drop.mp3": "c8f4fdb496e978785eac22f1f3c9ab614a8d79bfdc3e3f57cd737504144121db",
+    "split1.mp3": "01f6f7e021c3b26707069d38d3f7c45465d389288c838ad70eb1cbb01d6a6ce1",
+    "split2.mp3": "742563e733bf7803734775309b28739269ee67e97ca1fab5fa869a32477c0eb6",
+    "split3.mp3": "9498854fc3d96d18bce216f975cda3f5d16f6a55792b4010b4aa43621625d3a9",
+    "split4.mp3": "d78dca9c00ef00605c6b697953f2ae09669f8a8232fd8237bdbc0e8343514f34",
+    "split5.mp3": "90f6d20b4ac03e2eb5dd6759f72c0b5c672b706decfee78ee862e13c9c34d941",
+    "split6.mp3": "a3af4c3855d6403e2c8e9d2adaf6679ac2d0f0750c55de158355b20b8a5d92db",
+    "splitb1.mp3": "43c201fcd424147cc88721f8cbc7feb3b88eb27da729060002228e395e648149",
+    "splitb10.mp3": "e70997bf6d04dbc6753b4e70b85f54023eba8aa457090e764ac7be2dec5662d3",
+    "splitb2.mp3": "0d390c00af96dc7e9d921d77222cb0fa8bb2c868561996a4487dfd6215bf9b82",
+    "splitb3.mp3": "30c92ad410d4946c0b810723ed49c2876bd25fe3c6616b67eba7f529be924bac",
+    "splitb4.mp3": "f585bbbfcecd0786e7dc0873d59f83aff4d8e19a80bdd07993dfdb244a0cca83",
+    "splitb5.mp3": "c719e06ef2ded2a0e3c2a4403aab36ca3ec6b34f240fa97c7faa9d141e40dd67",
+    "splitb6.mp3": "d9d7f234a936d923339369d691b3b51b02028f74e50875f5233e58309d8aa07f",
+    "splitb7.mp3": "fd30aa30bc36f52802d7864c328dde461752d942961a62e3d8a123de7e5df25d",
+    "splitb8.mp3": "0951e8a1b8171f8daf98b8a3263178b9668ea303dd3bd7c64a71d493af49c6c1",
+    "splitb9.mp3": "d68b228e5da1799735d5027e670bffc554af4cd8601c26080678f284f2c4a8d0",
+    "stack1.mp3": "bbd2eca14beed2e537c26de2578b4377d24df77864b694772597524557be1508",
+    "stack10.mp3": "85bbeed5798ae402367f8a03d6ee837c10c7e6a249bcab3128e46c48688c3c05",
+    "stack11.mp3": "6ecaaaf85fb141aa1c7ce173d9c6630b528e098e307cfa9a14310338aca1941f",
+    "stack12.mp3": "277b7f68a9d7b91447ec7957b58e33e28260295bf0b4a751ac32d50661677265",
+    "stack13.mp3": "33ae7663fcb04c7181dfaa1079448b948993c6a74bf529de2f7f86f120731f67",
+    "stack14.mp3": "22a9dc2294a38a313063b50488e300b4c3aa1477ee293a0abd5f3820a862b90b",
+    "stack2.mp3": "76fa923fb53f4d6bd2a994e4b268da2cbc455baee7c74072168428202c050d99",
+    "stack3.mp3": "a3dd2207a49963f103af0d2ddda28f470b0ea5401371c079d92b9868f50972a4",
+    "stack4.mp3": "82895dddbd465dab44d295f905f450cda81ceeacfd05f1cdd8a14c6e7ae95e53",
+    "stack5.mp3": "d1ce16ffb2626f70164f5ecc0df6b06d35a4f815d1b7c0c7ff52370b989773e6",
+    "stack6.mp3": "6a1147bc5334885a3e8033f599fb2ef92670223549932f7412cf2425f98c30d7",
+    "stack7.mp3": "b18837cb3350341b110164cd63e6682929a8dc200774eda18defece5e22fd5bf",
+    "stack8.mp3": "7262992e3c3a471fef694b5500de5cae4e00da4e98942daf271adce648c488a4",
+    "stack9.mp3": "5c779cfe5e13bebb98cf8f2448c3b99697cfa4fa7ef998e4ace089714001529e",
+    "stump_v02_data.glb": "d59ff6e960963e207f3e78859e1fc20489449c73f23c896274f30f5befb16790",
+    "stump_v02_mesh_warm_ktx2_2048.glb": "e49519df5eb6da40783ba8dcf82c1f4c626160af5fb4cefb6674e3c5b9d3e519",
+    "top.jpg": "7b1eb39b7a006c1c6f9eedeb4055ed7ebde35997e770b1e5bdb9db7c86fe32dd",
+    "top_n.jpg": "369a4db6b981804d9edc62c098b30dda21bf709a2d2a8705104220b9021f0480"
+  }
+}

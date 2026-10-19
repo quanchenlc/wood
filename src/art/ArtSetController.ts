@@ -69,7 +69,7 @@ function buildUrls(setId: ArtSetId, manifest: ArtSetManifest, fb: ArtSetManifest
     axe: req("axe", "axe.gltf"),
     stump: req("stump", "stump.gltf"),
     stumpLod: resolveFile(setId, manifest, "stumpLod", fb),
-    stumpData: req("stumpData", "stump_v02_data.glb"),
+    stumpData: req("stumpData", "stump_data.glb"),
     barkColor: req("barkColor", "outsidebark.jpg"),
     barkNormal: req("barkNormal", "outsidebark_n.jpg"),
     endColor: req("endColor", "top.jpg"),

@@ -1,0 +1,242 @@
+{
+  "asset": {
+    "generator": "glTF-Transform v4.5.1",
+    "version": "2.0"
+  },
+  "accessors": [
+    {
+      "type": "SCALAR",
+      "componentType": 5123,
+      "count": 20316,
+      "bufferView": 0,
+      "byteOffset": 0
+    },
+    {
+      "type": "SCALAR",
+      "componentType": 5123,
+      "count": 63,
+      "bufferView": 0,
+      "byteOffset": 40632
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 4385,
+      "max": [
+        0.6411310434341431,
+        0.3781428933143616,
+        0.8298710584640503
+      ],
+      "min": [
+        -0.7843959331512451,
+        -0.19085249304771423,
+        -0.7602779269218445
+      ],
+      "bufferView": 1,
+      "byteOffset": 0
+    },
+    {
+      "type": "VEC2",
+      "componentType": 5126,
+      "count": 4385,
+      "bufferView": 1,
+      "byteOffset": 12
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 4385,
+      "bufferView": 1,
+      "byteOffset": 20
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 23,
+      "max": [
+        0.25200000405311584,
+        0.0020000000949949026,
+        0.25200000405311584
+      ],
+      "min": [
+        -0.25200000405311584,
+        0.0020000000949949026,
+        -0.25200000405311584
+      ],
+      "bufferView": 2,
+      "byteOffset": 0
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 23,
+      "bufferView": 2,
+      "byteOffset": 12
+    },
+    {
+      "type": "VEC2",
+      "componentType": 5126,
+      "count": 23,
+      "bufferView": 2,
+      "byteOffset": 24
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 40760,
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 40760,
+      "byteLength": 140320,
+      "byteStride": 32,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 181080,
+      "byteLength": 736,
+      "byteStride": 32,
+      "target": 34962
+    }
+  ],
+  "samplers": [
+    {
+      "magFilter": 9729,
+      "minFilter": 9987,
+      "wrapS": 10497,
+      "wrapT": 10497
+    },
+    {
+      "wrapS": 10497,
+      "wrapT": 10497
+    }
+  ],
+  "textures": [
+    {
+      "source": 1,
+      "sampler": 0
+    },
+    {
+      "source": 0,
+      "sampler": 0
+    },
+    {
+      "source": 2,
+      "sampler": 1
+    }
+  ],
+  "images": [
+    {
+      "name": "tree_stump_01_nor_gl",
+      "mimeType": "image/jpeg",
+      "uri": "stump_normal.jpg"
+    },
+    {
+      "name": "tree_stump_01_diff",
+      "mimeType": "image/jpeg",
+      "uri": "stump_baseColor.jpg"
+    },
+    {
+      "name": "stump_top",
+      "mimeType": "image/jpeg",
+      "uri": "stump_top.jpg"
+    }
+  ],
+  "buffers": [
+    {
+      "uri": "stump_lod.bin",
+      "byteLength": 181816
+    }
+  ],
+  "materials": [
+    {
+      "name": "tree_stump_01",
+      "doubleSided": true,
+      "pbrMetallicRoughness": {
+        "metallicFactor": 0,
+        "baseColorTexture": {
+          "index": 0
+        }
+      },
+      "normalTexture": {
+        "index": 1
+      }
+    },
+    {
+      "name": "endgrain",
+      "pbrMetallicRoughness": {
+        "roughnessFactor": 0.88,
+        "metallicFactor": 0,
+        "baseColorTexture": {
+          "index": 2
+        }
+      }
+    }
+  ],
+  "meshes": [
+    {
+      "name": "tt_01_rep.001",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 2,
+            "TEXCOORD_0": 3,
+            "NORMAL": 4
+          },
+          "mode": 4,
+          "material": 0,
+          "indices": 0
+        }
+      ]
+    },
+    {
+      "name": "endgrain_cap",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 5,
+            "NORMAL": 6,
+            "TEXCOORD_0": 7
+          },
+          "mode": 4,
+          "material": 1,
+          "indices": 1
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "tree_stump_01",
+      "translation": [
+        0,
+        -0.2984459955438572,
+        0
+      ],
+      "scale": [
+        0.28569733736352115,
+        0.786027236911909,
+        0.28569733736352115
+      ],
+      "mesh": 0
+    },
+    {
+      "name": "endgrain_cap",
+      "mesh": 1
+    }
+  ],
+  "scenes": [
+    {
+      "name": "Scene",
+      "nodes": [
+        0,
+        1
+      ]
+    }
+  ],
+  "scene": 0
+}

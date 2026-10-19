@@ -10,7 +10,8 @@ module.exports = {
     "assets/stump.gltf",
     "assets/stump.bin",
     "assets/stump_baseColor.jpg",
-    "assets/stump_normal.png"
+    "assets/stump_normal.jpg",
+    "assets/stump_top.jpg"
   ],
   "ASSETS_SUBPACKAGE": "assets",
   "LOCAL_ASSET_BASE": "subpackages/assets/"

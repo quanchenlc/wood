@@ -13,12 +13,6 @@ const href = (path: string) => assetUrl(path);
 const range = (prefix: string, n: number) =>
   Array.from({ length: n }, (_, i) => `${prefix}${i + 1}`);
 
-/**
- * 仅看构建期 MODE：esbuild 小游戏打包 define 为 "minigame"，
- * 编译期折叠后包里只剩 .gltf 路径，不会再去加载嵌图 GLB。
- */
-const USE_EXTERNAL_GLTF = import.meta.env.MODE === "minigame";
-
 export const TEXTURES = {
   get barkColor() {
     return href("/assets/outsidebark.jpg");
@@ -42,23 +36,22 @@ export const TEXTURES = {
 
 export const MODELS = {
   get stump() {
-    // 小游戏：.gltf + 色图 jpg≤1024 + 法线 png≤512，禁止嵌图 GLB / Blob / btoa
-    return USE_EXTERNAL_GLTF
-      ? href("/assets/stump.gltf")
-      : href("/assets/stump_v02_mesh_warm_ktx2_2048.glb");
+    // 0.4.0：自研 / CC0 树桩外置 glTF（A/B 变体由 runtime 覆盖）
+    return href("/assets/stump.gltf");
   },
   get stumpData() {
-    return href("/assets/stump_v02_data.glb");
+    return href("/assets/stump_data.glb");
   },
   get axe() {
-    return USE_EXTERNAL_GLTF
-      ? href("/assets/axe.gltf")
-      : href("/assets/ax_v01_reduced_compressed.glb");
-  },
-  get axeAnimation() {
-    return href("/assets/ax_anim_v03_glb.glb");
+    // 自研木柄斧占位（build_axe_placeholder.mjs）
+    return href("/assets/axe.gltf");
   },
 } as const;
+
+/** 木桩 A/B 资源根（相对 /assets/） */
+export function stumpVariantRoot(variant: "A" | "B"): string {
+  return variant === "B" ? "/assets/stump-b/" : "/assets/stump-a/";
+}
 
 /** basis_transcoder.js / .wasm 所在目录,KTX2Loader 要求以斜杠结尾 */
 export function basisPath(): string {
@@ -85,7 +78,7 @@ export const SOUNDS = {
 
 export type SoundGroup = keyof typeof SOUNDS;
 
-/** 加载进度条的分母:6 张贴图 + 4 个模型 + 全部音频 */
+/** 加载进度条的分母:6 张贴图 + 3 个模型 + 全部音频 */
 export const TOTAL_ASSETS =
   Object.keys(TEXTURES).length +
   Object.keys(MODELS).length +

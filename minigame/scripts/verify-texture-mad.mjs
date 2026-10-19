@@ -58,7 +58,7 @@ function pageHtml(kind) {
     kind === "mg-axe"
       ? "/minigame/subpackages/assets/assets/axe.gltf"
       : kind === "web-stump"
-        ? "/public/assets/stump_v02_mesh_warm_ktx2_2048.glb"
+        ? "/public/assets/stump.gltf"
         : kind === "mg-stump"
           ? "/minigame/subpackages/assets/assets/stump.gltf"
           : kind === "mg-axe-stump"

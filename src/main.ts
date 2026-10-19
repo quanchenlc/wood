@@ -68,6 +68,13 @@ import type {
   RankRow,
 } from "./ui/parchment";
 import { ART_SET_CATALOG } from "./art/registry";
+import {
+  readStumpVariant,
+  writeStumpVariant,
+  stumpVariantUrls,
+  type StumpVariantId,
+} from "./art/stumpVariant";
+import { loadStump } from "./world/stump";
 import { formatCountdown } from "./economy/time";
 
 const renderer = createRenderer();
@@ -144,6 +151,8 @@ let lastSeenRedHash = "";
 let exhaustedBubble: { text: string; until: number } | null = null;
 let exhaustedAutoShownDay = "";
 let styleSwitching = false;
+let stumpVariant: StumpVariantId = readStumpVariant();
+let groundFloorMap: THREE.Texture | null = null;
 
 const STYLE_COLORS: Record<string, string> = {
   set0: "#b4966e",
@@ -371,11 +380,23 @@ function syncParchmentHud() {
     showRedDot,
     styleId,
     styleLabel,
-    styleOptions: ART_SET_CATALOG.map((e) => ({
-      id: e.id,
-      label: e.label,
-      color: STYLE_COLORS[e.id] || "#ceb688",
-    })),
+    styleOptions: [
+      ...ART_SET_CATALOG.map((e) => ({
+        id: e.id,
+        label: e.label,
+        color: STYLE_COLORS[e.id] || "#ceb688",
+      })),
+      {
+        id: "stumpA",
+        label: stumpVariant === "A" ? "木桩 A · 扫描 ✓" : "木桩 A · 扫描",
+        color: "#8a7355",
+      },
+      {
+        id: "stumpB",
+        label: stumpVariant === "B" ? "木桩 B · 程序 ✓" : "木桩 B · 程序",
+        color: "#6b5a44",
+      },
+    ],
     styleSwitching,
     exhaustedBubble,
     capsuleTop: capsuleTopPt(),
@@ -506,6 +527,15 @@ async function handleParchmentHit() {
   if (hit === "style_pick") {
     const full = hud.hitTestParchmentFull?.(pt.x, pt.y);
     const id = full?.meta;
+    if (id === "stumpA" || id === "stumpB") {
+      styleSwitching = true;
+      syncParchmentHud();
+      void applyStumpVariant(id === "stumpA" ? "A" : "B", { force: true }).finally(() => {
+        styleSwitching = false;
+        syncParchmentHud();
+      });
+      return true;
+    }
     if (id && isArtSetId(id)) {
       styleSwitching = true;
       writeStyleId(id);
@@ -713,6 +743,42 @@ async function applyResolvedArt(set: ArtSetResolved, opts?: { skipAxe?: boolean 
   syncArtSwitcherHud(null);
 }
 
+async function applyStumpVariant(id: StumpVariantId, opts?: { force?: boolean }) {
+  if (!opts?.force && id === stumpVariant && currentStump) {
+    return;
+  }
+  stumpVariant = id;
+  writeStumpVariant(id);
+  const urls = stumpVariantUrls(id);
+  if (currentStump) {
+    currentStump.dispose();
+    currentStump = null;
+  }
+  currentStump = await loadStump(scene, renderer, undefined, {
+    stump: urls.stump,
+    stumpLod: urls.stumpLod,
+    stumpData: urls.stumpData,
+  });
+  // 森林地面贴图
+  try {
+    const tex = await new THREE.TextureLoader().loadAsync(urls.groundFloor);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    groundFloorMap?.dispose();
+    groundFloorMap = tex;
+    const mat = ground.material as THREE.MeshStandardMaterial;
+    mat.map = tex;
+    mat.color.set(0xffffff);
+    mat.needsUpdate = true;
+  } catch (err) {
+    console.warn("[stump] ground floor", err);
+  }
+  if (game) {
+    // 物理碰撞半径不变（常量）；仅视觉替换
+  }
+  syncParchmentHud();
+}
+
 async function switchArtSet(id: ArtSetId) {
   if (artSwitching || id === artSets.activeId) {
     syncArtSwitcherHud(null);
@@ -730,6 +796,8 @@ async function switchArtSet(id: ArtSetId) {
     });
     await applyResolvedArt(set);
     writeStyleId(id);
+    // 艺术套装切换后仍叠当前木桩变体
+    await applyStumpVariant(stumpVariant, { force: true });
   } catch (err) {
     console.warn("[art] switch failed", err);
   } finally {
@@ -770,6 +838,8 @@ async function boot() {
 
   currentStump = stump;
   physics.addStumpCollider(stump.topY, stump.topRadius);
+  // 0.4.0：默认木桩 A（CC0 扫描），可切 B
+  await applyStumpVariant(stumpVariant, { force: true });
 
   warmUpSlicePipeline(scene, renderer, camera, materials);
 
@@ -1111,6 +1181,13 @@ if (enableDebugHooks) {
         },
         /** 便于 harness 轮询 */
         isSwitching: () => artSwitching,
+      }),
+      stump: () => ({
+        active: stumpVariant,
+        switchTo: (id: string) => {
+          if (id !== "A" && id !== "B") return Promise.reject(new Error("bad stump id"));
+          return applyStumpVariant(id);
+        },
       }),
       /** 性能画像：按物体汇总 verts/tris，并读 renderer.info */
       perf: () => {

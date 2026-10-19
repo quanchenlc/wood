@@ -547,11 +547,8 @@ function assertArtSetNormalPng(destDir, setId) {
 }
 
 function decompressAllKtx2(destAssets) {
-  // 斧头已换成美术木柄占位（public/assets/axe.*），不再从 Fiskars KTX2 GLB 导出
-  const targets = ["stump_v02_mesh_warm_ktx2_2048.glb"];
-  for (const file of targets) {
-    decompressKtx2Glb(join(destAssets, file), { quality: COLOR_JPEG_QUALITY });
-  }
+  // 0.4.0：不再解码 screen.toys KTX2 树桩；保留函数供旧脚本兼容
+  void destAssets;
 }
 
 /**
@@ -582,10 +579,14 @@ async function buildStumpFarLod(destAssets) {
 
   const json = JSON.parse(readFileSync(tmpGltf, "utf8"));
   // 贴图指回 dest 里的 hero 同款（不降分辨率、不复制）
+  const norUri = existsSync(join(destAssets, "stump_normal.jpg"))
+    ? "stump_normal.jpg"
+    : "stump_normal.png";
   for (const img of json.images || []) {
     if (!img.uri) continue;
     const base = basename(img.uri);
-    if (/normal/i.test(base) || img.mimeType === "image/png") img.uri = "stump_normal.png";
+    if (/normal/i.test(base) || /nor/i.test(base)) img.uri = norUri;
+    else if (/top|endgrain/i.test(base)) img.uri = basename(img.uri); // keep stump_top.jpg
     else img.uri = "stump_baseColor.jpg";
   }
   for (const buf of json.buffers || []) {
@@ -664,12 +665,23 @@ async function copyAssets() {
   cpSync(pubAssets, destAssets, { recursive: true });
   // 刻意不拷贝 basis_transcoder：小游戏已去掉 KTX2Loader
 
-  // Web 仍用旧 GLB；小游戏包去掉 Fiskars 嵌图，改用美术木柄占位 axe.*
-  rmSync(join(destAssets, "ax_v01_reduced_compressed.glb"), { force: true });
+  // 0.4.0：清除一切 screen.toys 残留文件名（若仍被拷入）
+  for (const banned of [
+    "ax_v01_reduced_compressed.glb",
+    "ax_anim_v03_glb.glb",
+    "stump_v02_mesh_warm_ktx2_2048.glb",
+    "stump_v02_data.glb",
+  ]) {
+    rmSync(join(destAssets, banned), { force: true });
+  }
 
-  decompressAllKtx2(destAssets);
-  await exportExternalGltf(destAssets, "stump_v02_mesh_warm_ktx2_2048.glb", "stump");
-  await buildStumpFarLod(destAssets);
+  // 树桩已是外置 glTF（stump-a/b 预烘焙）；仅在缺 stump.gltf 时兜底报错
+  if (!existsSync(join(destAssets, "stump.gltf"))) {
+    throw new Error("[build] missing stump.gltf — run art-work/ip-clean/build-stumps.mjs");
+  }
+  if (!existsSync(join(destAssets, "stump_lod.gltf"))) {
+    await buildStumpFarLod(destAssets);
+  }
   await resizeStandaloneTextures(destAssets);
   assertMinigameAxePlaceholder(destAssets);
 
@@ -905,6 +917,17 @@ function copyUiParchmentSubpackage() {
   console.log(`[build] ui-parchment subpackage ${formatMb(bytes)}`);
 }
 
+function checkIpHashes() {
+  console.log("[build] check-ip-hashes…");
+  const r = spawnSync(process.execPath, [join(ROOT, "scripts/check-ip-hashes.mjs")], {
+    cwd: ROOT,
+    stdio: "inherit",
+  });
+  if (r.status !== 0) {
+    throw new Error("check-ip-hashes.mjs failed — forbidden screen.toys hashes detected");
+  }
+}
+
 emitRuntimeAppConfig();
 await bundle();
 await copyAssets();
@@ -913,4 +936,5 @@ verifyTextureMad();
 syncProjectConfig();
 assertNoCjsRequireInPackage();
 reportSizes();
+checkIpHashes();
 console.log("\nminigame build ok →", MG);

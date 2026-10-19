@@ -4,15 +4,19 @@ import type { CameraController } from "../camera/CameraController";
 import { createGltfLoader } from "../core/gltf";
 import type { ProgressFn } from "../core/loading";
 
-const PROCEDURAL_DURATION = 0.25;
-const CLIP_FADE_SECONDS = 5 / 30;
-
 /**
- * 斧头。
- *
- * 原站使用一个动画 GLB 提供 `anim` 节点和 clip，再把真实斧头模型挂到该节点。
- * 这样支点、轨迹和资源作者导出的坐标系全部保留，不再根据包围盒猜测。
+ * 斧头挥砍动画 —— 0.4.0 起完全用自研关键帧，不再加载 ax_anim_*.glb。
+ * 节奏：预备抬起 → 下劈撞击 → 短暂停顿 → 淡出（总长约 0.28s，贴近原手感）。
  */
+const SWING_MS = {
+  windup: 0.06,
+  strike: 0.12,
+  hold: 0.04,
+  fade: 0.06,
+};
+const SWING_TOTAL =
+  SWING_MS.windup + SWING_MS.strike + SWING_MS.hold + SWING_MS.fade;
+
 export class AxeAnimation {
   private readonly scene: THREE.Scene;
   private readonly renderer: THREE.WebGLRenderer;
@@ -21,9 +25,6 @@ export class AxeAnimation {
   private animNull: THREE.Object3D | null = null;
   private animScene: THREE.Object3D | null = null;
   private axeModel: THREE.Object3D | null = null;
-  private mixer: THREE.AnimationMixer | null = null;
-  private action: THREE.AnimationAction | null = null;
-  private hasClip = false;
   private progress = 0;
   private readyState = false;
   private playing = false;
@@ -48,26 +49,16 @@ export class AxeAnimation {
   private async load(renderer: THREE.WebGLRenderer, onProgress?: ProgressFn) {
     const loader = createGltfLoader(renderer);
     try {
-      const [animationGltf, modelGltf] = await Promise.all([
-        loader.loadAsync(MODELS.axeAnimation).finally(() => onProgress?.()),
-        loader.loadAsync(MODELS.axe).finally(() => onProgress?.()),
-      ]);
+      // 仅加载自研斧模；挥砍轨道路径代码生成
+      const modelGltf = await loader.loadAsync(MODELS.axe).finally(() => onProgress?.());
+      onProgress?.(); // 占位：原 animation 资源的进度 tick
 
-      this.animScene = animationGltf.scene;
+      this.animScene = new THREE.Object3D();
+      this.animScene.name = "axe_anim_root";
+      this.animNull = new THREE.Object3D();
+      this.animNull.name = "anim";
+      this.animScene.add(this.animNull);
       this.animScene.visible = false;
-      this.animScene.traverse((object) => {
-        if (object.name === "anim") this.animNull = object;
-        if ((object as THREE.Mesh).isMesh) object.visible = false;
-      });
-      this.animNull ??= this.animScene;
-
-      if (animationGltf.animations.length > 0) {
-        this.hasClip = true;
-        this.mixer = new THREE.AnimationMixer(this.animScene);
-        this.action = this.mixer.clipAction(animationGltf.animations[0]);
-        this.action.setLoop(THREE.LoopOnce, 1);
-        this.action.clampWhenFinished = true;
-      }
 
       this.pivot.add(this.animScene);
       this.attachAxeModel(modelGltf.scene);
@@ -148,7 +139,6 @@ export class AxeAnimation {
     this.animNull?.add(this.axeModel);
   }
 
-  /** 热换斧模：保留 anim 轨道，只替换斧头 mesh */
   async reloadAxeModel(url: string) {
     if (this.playing || !this.animNull) return;
     const loader = createGltfLoader(this.renderer);
@@ -156,7 +146,6 @@ export class AxeAnimation {
     this.attachAxeModel(modelGltf.scene);
   }
 
-  /** 羊皮纸等：对当前斧模做后处理（如墨线描边） */
   withAxeModel(fn: (root: THREE.Object3D) => void) {
     if (this.axeModel) fn(this.axeModel);
   }
@@ -173,7 +162,6 @@ export class AxeAnimation {
     return this.playSerial;
   }
 
-  /** 斧头只负责视觉；几何切割由 GameController 的 0.1 秒 pending timer 触发。 */
   playFromImpact(point: THREE.Vector3, _sliceNormal: THREE.Vector3) {
     if (!this.readyState || !this.animNull || !this.animScene) return;
     this.playSerial++;
@@ -181,16 +169,10 @@ export class AxeAnimation {
     this.progress = 0;
     this.pivot.position.copy(point);
     this.orientToCamera();
-    // 上一段动画可能仍处在末尾淡出状态；新一刀必须从完整可见的初始状态重播。
     this.axeModel?.scale.setScalar(1);
     this.animNull.rotation.set(0, 0, 0);
     this.animNull.position.set(0, 0, 0);
     this.animNull.scale.setScalar(1);
-    if (this.hasClip && this.action && this.mixer) {
-      this.action.reset();
-      this.action.play();
-      this.mixer.update(0);
-    }
     this.pivot.visible = true;
     this.animScene.visible = true;
   }
@@ -198,36 +180,42 @@ export class AxeAnimation {
   update(dt: number) {
     if (!this.playing || !this.readyState || !this.animNull) return;
     this.orientToCamera();
+    this.progress += dt / SWING_TOTAL;
+    const t = Math.min(1, this.progress);
+    const elapsed = t * SWING_TOTAL;
 
-    if (this.hasClip && this.mixer) {
-      this.mixer.update(dt);
-      if (this.action && this.axeModel) {
-        const remaining = this.action.getClip().duration - this.action.time;
-        this.axeModel.scale.setScalar(
-          remaining <= CLIP_FADE_SECONDS
-            ? Math.max(0, remaining / CLIP_FADE_SECONDS)
-            : 1,
-        );
-      }
-      if (this.action?.paused) this.finish();
-      return;
-    }
+    let rotX = 0;
+    let posY = 0;
+    let scale = 1;
 
-    this.progress += dt / PROCEDURAL_DURATION;
-    if (this.progress <= 0.15) {
-      this.animNull.rotation.x = 0;
-      this.animNull.position.y = 0;
-    } else if (this.progress <= 1) {
-      const normalized = (this.progress - 0.15) / 0.85;
-      const eased = normalized * normalized;
-      this.animNull.rotation.x = -eased * Math.PI / 3;
-      this.animNull.position.y = eased * 0.4;
-      if (normalized > 0.7) {
-        this.animNull.scale.setScalar(1 - (normalized - 0.7) / 0.3);
-      }
+    if (elapsed <= SWING_MS.windup) {
+      const u = elapsed / SWING_MS.windup;
+      const e = u * u;
+      rotX = e * 0.35;
+      posY = e * 0.12;
+    } else if (elapsed <= SWING_MS.windup + SWING_MS.strike) {
+      const u = (elapsed - SWING_MS.windup) / SWING_MS.strike;
+      // ease-in strike
+      const e = u * u * (3 - 2 * u);
+      rotX = 0.35 - e * (0.35 + Math.PI / 2.6);
+      posY = 0.12 - e * 0.35;
+    } else if (elapsed <= SWING_MS.windup + SWING_MS.strike + SWING_MS.hold) {
+      rotX = -Math.PI / 2.6;
+      posY = -0.23;
     } else {
-      this.finish();
+      const u =
+        (elapsed - SWING_MS.windup - SWING_MS.strike - SWING_MS.hold) / SWING_MS.fade;
+      rotX = -Math.PI / 2.6;
+      posY = -0.23;
+      scale = Math.max(0, 1 - u);
     }
+
+    this.animNull.rotation.x = rotX;
+    this.animNull.position.y = posY;
+    this.animNull.scale.setScalar(1);
+    this.axeModel?.scale.setScalar(scale);
+
+    if (t >= 1) this.finish();
   }
 
   private orientToCamera() {
@@ -251,7 +239,6 @@ export class AxeAnimation {
 
   dispose() {
     this.scene.remove(this.pivot);
-    this.mixer?.stopAllAction();
     this.axeModel?.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (!mesh.isMesh) return;
