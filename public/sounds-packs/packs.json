@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "format": "mp3, mono, 22050 Hz, CBR 48 kbps (bg.mp3: 40 kbps); same 32 filenames as public/assets/sounds/",
+  "default": "pack1",
+  "packs": [
+    {"id": "pack1", "dir": "pack1", "name": "原味", "desc": "最贴近原版：棚内真实劈柴录音，起音、长度、响度和频谱按原版逐项对齐"},
+    {"id": "pack2", "dir": "pack2", "name": "清脆", "desc": "更干更脆的“咔”声，高频更亮、尾音更短；背景换成树叶沙沙声"},
+    {"id": "pack3", "dir": "pack3", "name": "厚重", "desc": "更低沉、更有分量的“咚”声，音调略低、尾音略长；背景换成林间大风"},
+    {"id": "pack4", "dir": "pack4", "name": "层次", "desc": "以原味为底，叠加一层清脆起音；劈开时都带碎块落地声；背景加一点松林微风"}
+  ]
+}

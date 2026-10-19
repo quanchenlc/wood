@@ -1,4 +1,4 @@
-# Credits & licences — Firewood 0.4.5 final_A
+# Credits & licences — Firewood 0.4.6 axe-fix + sound-packs
 
 All previously unlicensed screen.toys/firewood assets were removed in 0.4.0.
 Replacement sources below were verified on the download date **2026-10-19**.
@@ -44,9 +44,9 @@ Switch in drawer → 风格 → 「木桩 A / B」 (`fw_stump_variant`).
 
 Swing animation is **code-keyed** in `src/anim/AxeAnimation.ts` (no third-party clip).
 
-## Audio
+## Audio (built-in 「旧版」)
 
-All `public/assets/sounds/*.mp3` (bg, drop, split×6, splitb×10, stack×14) are **synthesized** for this project (`art-work/ip-clean/gen-sounds.py` + ffmpeg LAME). No Freesound or commercial samples were embedded — synthesis was chosen to guarantee clear provenance while keeping the same event mapping and a small footprint (~134–200KB).
+All `public/assets/sounds/*.mp3` (bg, drop, split×6, splitb×10, stack×14) are **synthesized** for this project (`art-work/ip-clean/gen-sounds.py` + ffmpeg LAME). Kept as the in-drawer option **旧版** for A/B comparison. Default at runtime is **pack1 原味** (see CREDITS_audio section below / `public/sounds-packs/`).
 
 ## UI parchment
 
@@ -56,3 +56,187 @@ See `ui-parchment-D/notes.md` (public-domain / CC0 scans and project-authored sl
 
 - Forbidden SHA-256 list: `scripts/ip-forbidden-hashes.json` (recorded before deletion).
 - CI gate: `node scripts/check-ip-hashes.mjs` (fails if any shipped file matches).
+
+---
+
+# Audio credits — sound packs for the WeChat mini-game (quanchenlc/wood)
+
+All 4 packs in this folder are built **only** from the Freesound recordings below. Every one is released under **Creative Commons 0 (CC0 1.0, public domain dedication)**, so no attribution is legally required; we list them anyway to document provenance.
+
+No audio from screen.toys / the original game is contained in, mixed into, or resampled into any pack. The original was used only as a *measurement* reference (durations, loudness, spectral balance numbers) to set trim lengths, gain and EQ targets.
+
+Licence pages re-checked on 2026-10-19 (Asia/Shanghai); each page shows "Creative Commons 0" linking to https://creativecommons.org/publicdomain/zero/1.0/ .
+
+Source quality: Freesound original-file downloads require a logged-in account, so the public high-quality previews (48 kHz stereo, ~190 kbps) were used as sources. That is far above the shipped format (22.05 kHz mono 48 kbps). Same licence as the originals.
+
+Processing (all packs): onset-tight trim (≤1 ms pre-roll, 1 ms fade-in), DC/rumble high-pass, cosine tail fade to digital silence, EQ toward the measured spectral balance (±8 dB cap), per-file loudness match with a 1 ms look-ahead peak limiter at −0.8 dBFS, varispeed pitch ±0–3 semitones and shelf-EQ variation for the multi-variant roles, seamless 3 s crossfade loop for bg.
+
+## Sources
+
+| Freesound id | Author | Title | URL | Licence | Used in |
+|---|---|---|---|---|---|
+| 181801 | keweldog | breeze.wav | https://freesound.org/people/keweldog/sounds/181801/ | CC0 1.0 | pack4 层次 |
+| 220951 | Islabonita | Splitting / chopping logs in a shed.wav | https://freesound.org/people/Islabonita/sounds/220951/ | CC0 1.0 | pack1 原味, pack2 清脆, pack3 厚重, pack4 层次 |
+| 249158 | MHockett | SplittingWood.wav | https://freesound.org/people/MHockett/sounds/249158/ | CC0 1.0 | pack1 原味, pack2 清脆, pack3 厚重, pack4 层次 |
+| 276294 | Sandermotions | Leaves in wind.WAV | https://freesound.org/people/Sandermotions/sounds/276294/ | CC0 1.0 | pack2 清脆 |
+| 354104 | Bini_trns | splitting an old tree trunk, close up, one single crack, H6.wav | https://freesound.org/people/Bini_trns/sounds/354104/ | CC0 1.0 | pack1 原味, pack3 厚重, pack4 层次 |
+| 403051 | teadrinker | wind_forest_08_strong_l_01.wav | https://freesound.org/people/teadrinker/sounds/403051/ | CC0 1.0 | pack3 厚重 |
+| 452114 | kyles | log wood branch drop in snow various and pick up.wav | https://freesound.org/people/kyles/sounds/452114/ | CC0 1.0 | pack2 清脆, pack4 层次 |
+| 457263 | kylecutsfilms | Sticks Dropping.WAV | https://freesound.org/people/kylecutsfilms/sounds/457263/ | CC0 1.0 | pack1 原味, pack2 清脆, pack3 厚重, pack4 层次 |
+| 460178 | johanwestling | forest_ambience_steady_breeze_summer_sweden_leaves_light_wind_distant_highway_loop_m10.wav | https://freesound.org/people/johanwestling/sounds/460178/ | CC0 1.0 | pack1 原味, pack4 层次 |
+| 483350 | craigsmith | R17-38-Wood Clattering.wav | https://freesound.org/people/craigsmith/sounds/483350/ | CC0 1.0 | pack1 原味, pack2 清脆, pack4 层次 |
+| 489885 | douglasbruce@look.ca | STACKING - MOVING - SPLIT FIREWOOD.wav | https://freesound.org/people/douglasbruce@look.ca/sounds/489885/ | CC0 1.0 | pack1 原味, pack2 清脆, pack3 厚重, pack4 层次 |
+| 537435 | wavecal22 | Wood Chop 8.wav | https://freesound.org/people/wavecal22/sounds/537435/ | CC0 1.0 | pack1 原味, pack3 厚重, pack4 层次 |
+| 573812 | TRP | Axe chop sequence v2 MIXED.flac | https://freesound.org/people/TRP/sounds/573812/ | CC0 1.0 | pack1 原味, pack3 厚重, pack4 层次 |
+| 584891 | KrystianPawlowski | big log on dirt throwing.wav | https://freesound.org/people/KrystianPawlowski/sounds/584891/ | CC0 1.0 | pack3 厚重, pack4 层次 |
+| 585324 | timetoarrive | SFX - Wood Splitting.wav | https://freesound.org/people/timetoarrive/sounds/585324/ | CC0 1.0 | pack1 原味, pack2 清脆, pack3 厚重, pack4 层次 |
+| 596484 | EugeneEverett | Planks Dropped.wav | https://freesound.org/people/EugeneEverett/sounds/596484/ | CC0 1.0 | pack1 原味, pack2 清脆, pack3 厚重, pack4 层次 |
+| 614449 | atomixsound | woodcutfx-001.WAV | https://freesound.org/people/atomixsound/sounds/614449/ | CC0 1.0 | pack1 原味, pack2 清脆, pack3 厚重, pack4 层次 |
+| 847818 | ElSchorscho | chopping wood_medium [459] | https://freesound.org/people/ElSchorscho/sounds/847818/ | CC0 1.0 | pack2 清脆 |
+
+Excluded on purpose: Freesound 519567 (a re-upload of a US National Park Service library recording, not the uploader's own work).
+
+## Per-file provenance
+
+Format: `file ← freesound_id @ start_seconds (pitch shift in semitones)`, plus any layers.
+
+### pack1 原味
+
+- bg.mp3 ← 460178 @ 39.0s (+0 dB) — 57.9 s seamless loop
+- drop.mp3 ← 489885 @ 8.2983s (+0 st)
+- split1.mp3 ← 573812 @ 33.6981s (+0 st)
+- split2.mp3 ← 537435 @ 1.2366s (+0.3 st)
+- split3.mp3 ← 573812 @ 2.6618s (-0.3 st)
+- split4.mp3 ← 220951 @ 75.8402s (+0 st)
+- split5.mp3 ← 220951 @ 8.8666s (+0.3 st)
+- split6.mp3 ← 220951 @ 87.2532s (-0.3 st)
+- splitb1.mp3 ← 573812 @ 24.15s (+0 st) + debris: 489885@5.235s→0.283s, 596484@2.1491s→0.427s, 457263@25.0575s→0.595s, 483350@3.2622s→0.712s
+- splitb2.mp3 ← 585324 @ 28.5227s (+0.4 st) + debris: 596484@2.1491s→0.293s, 457263@25.0575s→0.442s, 483350@3.2622s→0.651s
+- splitb3.mp3 ← 573812 @ 14.4542s (-0.4 st) + debris: 457263@25.0575s→0.285s, 483350@3.2622s→0.43s, 489885@8.2983s→0.613s, 483350@9.3332s→0.709s
+- splitb4.mp3 ← 220951 @ 45.3003s (+0 st) + debris: 483350@3.2622s→0.275s, 489885@8.2983s→0.401s, 483350@9.3332s→0.61s
+- splitb5.mp3 ← 249158 @ 1.6788s (+0.4 st)
+- splitb6.mp3 ← 614449 @ 0.7483s (-0.4 st) + debris: 483350@9.3332s→0.302s, 457263@25.4424s→0.415s, 489885@5.235s→0.65s
+- splitb7.mp3 ← 573812 @ 19.2095s (+0 st) + debris: 457263@25.4424s→0.295s, 489885@5.235s→0.388s, 596484@2.1491s→0.605s, 457263@25.0575s→0.692s
+- splitb8.mp3 ← 354104 @ 2.3466s (+0.4 st) + debris: 489885@5.235s→0.297s, 596484@2.1491s→0.414s, 457263@25.0575s→0.586s
+- splitb9.mp3 ← 220951 @ 17.5261s (-0.4 st)
+- splitb10.mp3 ← 220951 @ 82.0116s (+0 st) + debris: 457263@25.0575s→0.303s, 483350@3.2622s→0.445s, 489885@8.2983s→0.628s
+- stack1.mp3 ← 457263 @ 25.0575s (-0.8 st)
+- stack2.mp3 ← 457263 @ 25.4424s (+1.9 st)
+- stack3.mp3 ← 596484 @ 2.1491s (+0 st)
+- stack4.mp3 ← 457263 @ 25.0575s (+1.4 st)
+- stack5.mp3 ← 489885 @ 8.2983s (+1.9 st)
+- stack6.mp3 ← 483350 @ 3.2622s (+0.7 st)
+- stack7.mp3 ← 483350 @ 3.2622s (+1.4 st)
+- stack8.mp3 ← 489885 @ 8.2983s (-1.3 st)
+- stack9.mp3 ← 457263 @ 25.4424s (+0 st)
+- stack10.mp3 ← 483350 @ 9.3332s (+1.4 st)
+- stack11.mp3 ← 489885 @ 5.235s (-1.3 st)
+- stack12.mp3 ← 489885 @ 5.235s (+0.7 st)
+- stack13.mp3 ← 483350 @ 9.3332s (-0.8 st)
+- stack14.mp3 ← 596484 @ 2.1491s (+1.9 st)
+
+### pack2 清脆
+
+- bg.mp3 ← 276294 @ 14.0s (+0 dB) — 57.9 s seamless loop
+- drop.mp3 ← 483350 @ 9.3332s (+0 st)
+- split1.mp3 ← 220951 @ 49.4256s (+0.5 st)
+- split2.mp3 ← 220951 @ 6.1963s (+0.8 st)
+- split3.mp3 ← 220951 @ 73.4808s (+0.3 st)
+- split4.mp3 ← 585324 @ 3.2248s (+0.5 st)
+- split5.mp3 ← 585324 @ 37.9992s (+0.8 st)
+- split6.mp3 ← 614449 @ 5.1608s (+0.3 st)
+- splitb1.mp3 ← 585324 @ 11.1835s (+0.4 st) + debris: 596484@2.1491s→0.312s, 457263@25.4424s→0.402s, 452114@55.3935s→0.654s, 452114@57.0049s→0.704s
+- splitb2.mp3 ← 847818 @ 1.8428s (+0.8 st)
+- splitb3.mp3 ← 220951 @ 24.0869s (+0.1 st)
+- splitb4.mp3 ← 220951 @ 20.5425s (+0.4 st) + debris: 452114@57.0049s→0.271s, 489885@8.2983s→0.402s, 483350@3.2622s→0.605s
+- splitb5.mp3 ← 249158 @ 1.6788s (+0.8 st)
+- splitb6.mp3 ← 220951 @ 17.5261s (+0.1 st)
+- splitb7.mp3 ← 847818 @ 2.3382s (+0.4 st)
+- splitb8.mp3 ← 585324 @ 20.6712s (+0.8 st) + debris: 596484@2.1491s→0.269s, 457263@25.4424s→0.397s, 452114@55.3935s→0.588s
+- splitb9.mp3 ← 614449 @ 0.7483s (+0.1 st) + debris: 457263@25.4424s→0.267s, 452114@55.3935s→0.38s, 452114@57.0049s→0.647s, 489885@8.2983s→0.696s
+- splitb10.mp3 ← 585324 @ 28.5227s (+0.4 st) + debris: 452114@55.3935s→0.334s, 452114@57.0049s→0.378s, 489885@8.2983s→0.636s
+- stack1.mp3 ← 457263 @ 25.4424s (+0.2 st)
+- stack2.mp3 ← 489885 @ 8.2983s (+2.9 st)
+- stack3.mp3 ← 596484 @ 2.1491s (+1 st)
+- stack4.mp3 ← 457263 @ 25.4424s (+2.4 st)
+- stack5.mp3 ← 452114 @ 55.3935s (+2.9 st)
+- stack6.mp3 ← 452114 @ 57.0049s (+1.7 st)
+- stack7.mp3 ← 452114 @ 57.0049s (+2.4 st)
+- stack8.mp3 ← 452114 @ 55.3935s (-0.3 st)
+- stack9.mp3 ← 489885 @ 8.2983s (+1 st)
+- stack10.mp3 ← 483350 @ 3.2622s (+2.4 st)
+- stack11.mp3 ← 489885 @ 5.235s (-0.3 st)
+- stack12.mp3 ← 489885 @ 5.235s (+1.7 st)
+- stack13.mp3 ← 483350 @ 3.2622s (+0.2 st)
+- stack14.mp3 ← 596484 @ 2.1491s (+2.9 st)
+
+### pack3 厚重
+
+- bg.mp3 ← 403051 @ 0.0s (+0 dB) — 57.9 s seamless loop
+- drop.mp3 ← 584891 @ 4.1402s (-0.8 st)
+- split1.mp3 ← 573812 @ 45.8901s (-1 st)
+- split2.mp3 ← 220951 @ 37.6216s (-0.7 st)
+- split3.mp3 ← 573812 @ 2.6618s (-1.4 st)
+- split4.mp3 ← 573812 @ 29.0988s (-1 st)
+- split5.mp3 ← 220951 @ 56.6178s (-0.7 st)
+- split6.mp3 ← 220951 @ 75.8402s (-1.4 st)
+- splitb1.mp3 ← 585324 @ 3.2248s (-0.8 st) + debris: 489885@38.6721s→0.331s, 457263@25.0575s→0.414s, 457263@25.4424s→0.602s, 596484@2.3299s→0.741s
+- splitb2.mp3 ← 220951 @ 82.0116s (-0.4 st) + debris: 457263@25.0575s→0.325s, 457263@25.4424s→0.399s, 596484@2.3299s→0.643s
+- splitb3.mp3 ← 220951 @ 17.5261s (-1.2 st)
+- splitb4.mp3 ← 614449 @ 5.1608s (-0.8 st)
+- splitb5.mp3 ← 537435 @ 1.0969s (-0.4 st) + debris: 457263@14.2443s→0.288s, 489885@43.7541s→0.445s, 489885@8.2983s→0.613s, 489885@38.6721s→0.693s
+- splitb6.mp3 ← 354104 @ 2.3466s (-1.2 st) + debris: 489885@43.7541s→0.296s, 489885@8.2983s→0.394s, 489885@38.6721s→0.59s
+- splitb7.mp3 ← 249158 @ 1.6788s (-0.8 st)
+- splitb8.mp3 ← 585324 @ 28.8109s (-0.4 st) + debris: 489885@38.6721s→0.314s, 457263@25.0575s→0.444s, 457263@25.4424s→0.598s
+- splitb9.mp3 ← 220951 @ 61.2588s (-1.2 st)
+- splitb10.mp3 ← 614449 @ 0.7483s (-0.8 st) + debris: 457263@25.4424s→0.308s, 596484@2.3299s→0.383s, 457263@14.2443s→0.601s
+- stack1.mp3 ← 596484 @ 2.3299s (-2 st)
+- stack2.mp3 ← 489885 @ 8.2983s (+0.7 st)
+- stack3.mp3 ← 457263 @ 25.0575s (-1.2 st)
+- stack4.mp3 ← 596484 @ 2.3299s (+0.2 st)
+- stack5.mp3 ← 489885 @ 38.6721s (+0.7 st)
+- stack6.mp3 ← 457263 @ 25.4424s (-0.5 st)
+- stack7.mp3 ← 457263 @ 25.4424s (+0.2 st)
+- stack8.mp3 ← 489885 @ 38.6721s (-2.5 st)
+- stack9.mp3 ← 489885 @ 8.2983s (-1.2 st)
+- stack10.mp3 ← 457263 @ 14.2443s (+0.2 st)
+- stack11.mp3 ← 489885 @ 43.7541s (-2.5 st)
+- stack12.mp3 ← 489885 @ 43.7541s (-0.5 st)
+- stack13.mp3 ← 457263 @ 14.2443s (-2 st)
+- stack14.mp3 ← 457263 @ 25.0575s (+0.7 st)
+
+### pack4 层次
+
+- bg.mp3 ← 460178 @ 39.0s (+0 dB) + 181801 @ 4.0s (-8 dB) — 57.9 s seamless loop
+- drop.mp3 ← 489885 @ 8.2983s (+0 st) + low layer: 584891@4.1402s
+- split1.mp3 ← 573812 @ 33.6981s (+0 st) + transient: 220951@73.4808s
+- split2.mp3 ← 537435 @ 1.2366s (+0.3 st) + transient: 220951@49.4256s
+- split3.mp3 ← 573812 @ 2.6618s (-0.3 st) + transient: 585324@37.9992s
+- split4.mp3 ← 220951 @ 75.8402s (+0 st) + transient: 614449@5.1608s
+- split5.mp3 ← 220951 @ 8.8666s (+0.3 st) + transient: 220951@6.1963s
+- split6.mp3 ← 220951 @ 87.2532s (-0.3 st) + transient: 585324@3.2248s
+- splitb1.mp3 ← 573812 @ 24.15s (+0 st) + transient: 220951@73.4808s; debris: 489885@5.235s→0.308s, 596484@2.1491s→0.436s, 457263@25.0575s→0.654s, 483350@3.2622s→0.687s
+- splitb2.mp3 ← 585324 @ 28.5227s (+0.4 st) + transient: 220951@49.4256s; debris: 596484@2.1491s→0.267s, 457263@25.0575s→0.396s, 483350@3.2622s→0.587s
+- splitb3.mp3 ← 573812 @ 14.4542s (-0.4 st) + transient: 585324@37.9992s; debris: 457263@25.0575s→0.333s, 483350@3.2622s→0.41s, 489885@8.2983s→0.628s, 483350@9.3332s→0.718s
+- splitb4.mp3 ← 220951 @ 45.3003s (+0 st) + transient: 614449@5.1608s; debris: 483350@3.2622s→0.29s, 489885@8.2983s→0.402s, 483350@9.3332s→0.612s
+- splitb5.mp3 ← 249158 @ 1.6788s (+0.4 st) + transient: 220951@6.1963s; debris: 489885@8.2983s→0.328s, 483350@9.3332s→0.401s, 457263@25.4424s→0.592s, 489885@5.235s→0.714s
+- splitb6.mp3 ← 614449 @ 0.7483s (-0.4 st) + transient: 585324@3.2248s; debris: 483350@9.3332s→0.276s, 457263@25.4424s→0.433s, 489885@5.235s→0.619s
+- splitb7.mp3 ← 573812 @ 19.2095s (+0 st) + transient: 220951@73.4808s; debris: 457263@25.4424s→0.289s, 489885@5.235s→0.384s, 596484@2.1491s→0.604s, 457263@25.0575s→0.728s
+- splitb8.mp3 ← 354104 @ 2.3466s (+0.4 st) + transient: 220951@49.4256s; debris: 489885@5.235s→0.319s, 596484@2.1491s→0.402s, 457263@25.0575s→0.619s
+- splitb9.mp3 ← 220951 @ 17.5261s (-0.4 st) + transient: 585324@37.9992s; debris: 596484@2.1491s→0.327s, 457263@25.0575s→0.381s, 483350@3.2622s→0.615s, 489885@8.2983s→0.694s
+- splitb10.mp3 ← 220951 @ 82.0116s (+0 st) + transient: 614449@5.1608s; debris: 457263@25.0575s→0.293s, 483350@3.2622s→0.404s, 489885@8.2983s→0.587s
+- stack1.mp3 ← 457263 @ 25.0575s (-0.8 st) + transient: 489885@5.235s
+- stack2.mp3 ← 457263 @ 25.4424s (+1.9 st) + transient: 596484@2.1491s
+- stack3.mp3 ← 596484 @ 2.1491s (+0 st) + transient: 457263@25.4424s
+- stack4.mp3 ← 457263 @ 25.0575s (+1.4 st) + transient: 452114@55.3935s
+- stack5.mp3 ← 489885 @ 8.2983s (+1.9 st) + transient: 452114@57.0049s
+- stack6.mp3 ← 483350 @ 3.2622s (+0.7 st) + transient: 489885@8.2983s
+- stack7.mp3 ← 483350 @ 3.2622s (+1.4 st) + transient: 489885@5.235s
+- stack8.mp3 ← 489885 @ 8.2983s (-1.3 st) + transient: 596484@2.1491s
+- stack9.mp3 ← 457263 @ 25.4424s (+0 st) + transient: 457263@25.4424s
+- stack10.mp3 ← 483350 @ 9.3332s (+1.4 st) + transient: 452114@55.3935s
+- stack11.mp3 ← 489885 @ 5.235s (-1.3 st) + transient: 452114@57.0049s
+- stack12.mp3 ← 489885 @ 5.235s (+0.7 st) + transient: 489885@8.2983s
+- stack13.mp3 ← 483350 @ 9.3332s (-0.8 st) + transient: 489885@5.235s
+- stack14.mp3 ← 596484 @ 2.1491s (+1.9 st) + transient: 596484@2.1491s
+

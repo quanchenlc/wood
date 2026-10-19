@@ -74,6 +74,11 @@ import {
   stumpVariantUrls,
   type StumpVariantId,
 } from "./art/stumpVariant";
+import {
+  SOUND_PACK_CATALOG,
+  isSoundPackId,
+  type SoundPackId,
+} from "./audio/soundPacks";
 import { loadStump } from "./world/stump";
 import { formatCountdown } from "./economy/time";
 
@@ -155,6 +160,7 @@ let exhaustedBubble: { text: string; until: number } | null = null;
 let exhaustedAutoShownDay = "";
 let styleSwitching = false;
 let stumpVariant: StumpVariantId = readStumpVariant();
+let soundPackId: SoundPackId = "pack1";
 let groundFloorMap: THREE.Texture | null = null;
 
 const STYLE_COLORS: Record<string, string> = {
@@ -394,6 +400,12 @@ function syncParchmentHud() {
       color: STYLE_COLORS[e.id] || "#ceb688",
     })),
     stumpVariant,
+    soundPackId,
+    soundPackOptions: SOUND_PACK_CATALOG.map((e) => ({
+      id: e.id,
+      label: e.label,
+      color: e.color,
+    })),
     styleSwitching,
     exhaustedBubble,
     capsuleTop: capsuleTopPt(),
@@ -528,6 +540,18 @@ async function handleParchmentHit() {
       styleSwitching = true;
       syncParchmentHud();
       void applyStumpVariant(id === "stumpA" ? "A" : "B", { force: true }).finally(() => {
+        styleSwitching = false;
+        syncParchmentHud();
+      });
+      return true;
+    }
+    if (id && isSoundPackId(id)) {
+      styleSwitching = true;
+      soundPackId = id;
+      syncParchmentHud();
+      void audio.switchPack(id).then((applied) => {
+        soundPackId = applied;
+      }).finally(() => {
         styleSwitching = false;
         syncParchmentHud();
       });
@@ -821,7 +845,9 @@ async function boot() {
     loadWoodMaterialsForSet(initial.urls, progress.step),
     loadStumpForSet(scene, renderer, initial.urls, progress.step),
     axe.ready,
+    audio.ready,
   ]);
+  soundPackId = audio.packId;
   // 启动时 axe 已按 MODELS.axe（set0）加载；若偏好非 set0 再换斧
   if (initial.id !== "set0") {
     await axe.reloadAxeModel(initial.urls.axe);
@@ -925,15 +951,24 @@ function rankListMaxScroll(): number {
   return Math.max(0, contentH - scrollViewH);
 }
 
-/** 竖屏风格列表最大滚动（风格行 +「木桩」小节 + A/B；视口至脚注上） */
+/** 风格列表最大滚动（风格 + 木桩 + 音效；竖/横均可滚） */
 function styleListMaxScroll(): number {
   const { w, h } = screenSize();
-  if (isLandscape(w, h)) return 0;
-  const listTop = 132;
-  // tearY = bodyH - 16；首页 bodyH=384 → tear 368；脚注 tear−14；视口底脚注−12 → 342
-  const listBottom = 368 - 14 - 12;
+  const landscape = isLandscape(w, h);
+  const rowStep = landscape ? 48 : 46;
+  const headH = 28;
+  const listTop = landscape ? 58 : 132;
+  // 竖屏：tearY≈368；横屏：bodyH=302 → tear≈286，脚注≈272
+  const listBottom = landscape ? 272 - 12 : 368 - 14 - 12;
   const scrollViewH = Math.max(40, listBottom - listTop);
-  const contentH = ART_SET_CATALOG.length * 46 + 28 + 2 * 46;
+  const cols = landscape ? 2 : 1;
+  const styleRows = Math.ceil(ART_SET_CATALOG.length / cols);
+  const stumpRows = landscape ? 1 : 2;
+  const soundRows = landscape
+    ? Math.ceil(SOUND_PACK_CATALOG.length / cols)
+    : SOUND_PACK_CATALOG.length;
+  const contentH =
+    styleRows * rowStep + headH + stumpRows * rowStep + headH + soundRows * rowStep;
   return Math.max(0, contentH - scrollViewH);
 }
 
@@ -942,27 +977,44 @@ function styleListMaxScroll(): number {
  * 羊皮纸（content bottom 224）→ scrollTop = 224 − (210 − 16) = 30。
  * 选中木桩 A/B 行时用同一公式（contentY = styles×46 + 28 + i×46）。
  */
-function styleScrollToRevealSelection(focus: "style" | "stump" = "style"): number {
+function styleScrollToRevealSelection(
+  focus: "style" | "stump" | "sound" = "style",
+): number {
   const { w, h } = screenSize();
-  if (isLandscape(w, h)) return 0;
-  const listBottom = 368 - 14 - 12; // 342
-  const scrollViewH = Math.max(40, listBottom - 132); // 210
-  const rowStep = 46;
-  const rowH = 40;
+  const landscape = isLandscape(w, h);
+  const rowStep = landscape ? 48 : 46;
+  const rowH = landscape ? 42 : 40;
   const headH = 28;
+  const listTop = landscape ? 58 : 132;
+  const listBottom = landscape ? 272 - 12 : 368 - 14 - 12;
+  const scrollViewH = Math.max(40, listBottom - listTop);
+  const cols = landscape ? 2 : 1;
+  const styleRows = Math.ceil(ART_SET_CATALOG.length / cols);
+  const stumpRows = landscape ? 1 : 2;
   const margin = 16;
   let selTop: number;
   let selBottom: number;
-  if (focus === "stump") {
+  if (focus === "sound") {
+    const soundIdx = Math.max(
+      0,
+      SOUND_PACK_CATALOG.findIndex((e) => e.id === audio.packId),
+    );
+    const base = styleRows * rowStep + headH + stumpRows * rowStep + headH;
+    const rowI = cols === 2 ? Math.floor(soundIdx / cols) : soundIdx;
+    selTop = base + rowI * rowStep;
+    selBottom = selTop + rowH;
+  } else if (focus === "stump") {
     const stumpIdx = stumpVariant === "B" ? 1 : 0;
-    selTop = ART_SET_CATALOG.length * rowStep + headH + stumpIdx * rowStep;
+    const base = styleRows * rowStep + headH;
+    selTop = base + (landscape ? 0 : stumpIdx) * rowStep;
     selBottom = selTop + rowH;
   } else {
     const styleIdx = Math.max(
       0,
       ART_SET_CATALOG.findIndex((e) => e.id === artSets.activeId),
     );
-    selTop = styleIdx * rowStep;
+    const rowI = cols === 2 ? Math.floor(styleIdx / cols) : styleIdx;
+    selTop = rowI * rowStep;
     selBottom = selTop + rowH;
   }
   let scroll = 0;
@@ -1030,6 +1082,16 @@ function onListPointerUp() {
       styleSwitching = true;
       syncParchmentHud();
       void applyStumpVariant(pick === "stumpA" ? "A" : "B", { force: true }).finally(() => {
+        styleSwitching = false;
+        syncParchmentHud();
+      });
+    } else if (isSoundPackId(pick)) {
+      styleSwitching = true;
+      soundPackId = pick;
+      syncParchmentHud();
+      void audio.switchPack(pick).then((applied) => {
+        soundPackId = applied;
+      }).finally(() => {
         styleSwitching = false;
         syncParchmentHud();
       });
@@ -1320,6 +1382,24 @@ if (enableDebugHooks) {
           if (id !== "A" && id !== "B") return Promise.reject(new Error("bad stump id"));
           return applyStumpVariant(id);
         },
+      }),
+      soundPack: () => ({
+        active: audio.packId,
+        labels: () => SOUND_PACK_CATALOG.map((e) => ({ id: e.id, label: e.label })),
+        switchTo: (id: string) => {
+          if (!isSoundPackId(id)) return Promise.reject(new Error("bad sound pack id"));
+          styleSwitching = true;
+          soundPackId = id;
+          syncParchmentHud();
+          return audio.switchPack(id).then((applied) => {
+            soundPackId = applied;
+            return applied;
+          }).finally(() => {
+            styleSwitching = false;
+            syncParchmentHud();
+          });
+        },
+        isSwitching: () => audio.isSwitching,
       }),
       /** 性能画像：按物体汇总 verts/tris，并读 renderer.info */
       perf: () => {

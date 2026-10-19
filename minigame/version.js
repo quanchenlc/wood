@@ -1,7 +1,7 @@
 /** 体验版包版本号（上传时对照） */
 module.exports = {
-  VERSION: "0.4.5",
-  BUILD_NOTE: "final-A-textures",
+  VERSION: "0.4.6",
+  BUILD_NOTE: "axe-fix+sound-packs",
   /** 短提交标识，发版前由提交写入 */
-  BUILD_REV: "f23bcbd",
+  BUILD_REV: "pending",
 };

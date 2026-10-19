@@ -707,6 +707,7 @@ async function copyAssets() {
   }
 
   await packArtSetSubpackages();
+  packSoundPackSubpackages();
 }
 
 /**
@@ -724,6 +725,10 @@ async function packArtSetSubpackages() {
     { name: "art-set2", root: "subpackages/art-set2/" },
     { name: "art-set3", root: "subpackages/art-set3/" },
     { name: "art-set4", root: "subpackages/art-set4/" },
+    { name: "sounds-pack1", root: "subpackages/sounds-packs/pack1/" },
+    { name: "sounds-pack2", root: "subpackages/sounds-packs/pack2/" },
+    { name: "sounds-pack3", root: "subpackages/sounds-packs/pack3/" },
+    { name: "sounds-pack4", root: "subpackages/sounds-packs/pack4/" },
   ];
   gameJson.subpackages = subs;
   writeFileSync(gameJsonPath, `${JSON.stringify(gameJson, null, 2)}\n`);
@@ -763,6 +768,36 @@ async function packArtSetSubpackages() {
     // 原样交付：不再 resize/recompress（避免改动美术已校验的贴图）
     const bytes = walkSizes(dest).reduce((n, f) => n + f.size, 0);
     console.log(`[build] art-${id}: packed as-is from art-sets/${id} (${formatMb(bytes)})`);
+  }
+}
+
+/** 0.4.6：音效包 pack1–4 → 按需分包 sounds-packs/<id>/（旧版仍在 assets/sounds） */
+function packSoundPackSubpackages() {
+  const srcRoot = join(ROOT, "public/sounds-packs");
+  for (const id of ["pack1", "pack2", "pack3", "pack4"]) {
+    const srcDir = join(srcRoot, id);
+    const dest = join(MG, "subpackages/sounds-packs", id);
+    rmSync(dest, { recursive: true, force: true });
+    mkdirSync(dest, { recursive: true });
+    writeFileSync(
+      join(dest, "game.js"),
+      `console.log("[firewood] sounds ${id} subpackage ready");\n`,
+    );
+    if (!existsSync(srcDir)) {
+      throw new Error(`[build] missing public/sounds-packs/${id}`);
+    }
+    for (const name of readdirSync(srcDir)) {
+      if (name.startsWith(".")) continue;
+      if (!name.endsWith(".mp3")) continue;
+      cpSync(join(srcDir, name), join(dest, name));
+    }
+    const bytes = walkSizes(dest).reduce((n, f) => n + f.size, 0);
+    console.log(`[build] sounds-${id}: packed (${formatMb(bytes)})`);
+  }
+  // packs.json 放进 pack1 方便查阅（非运行时必需）
+  const packsJson = join(srcRoot, "packs.json");
+  if (existsSync(packsJson)) {
+    cpSync(packsJson, join(MG, "subpackages/sounds-packs/pack1/packs.json"));
   }
 }
 
@@ -834,6 +869,10 @@ function reportSizes() {
     ["art-set2", "subpackages/art-set2/"],
     ["art-set3", "subpackages/art-set3/"],
     ["art-set4", "subpackages/art-set4/"],
+    ["sounds-pack1", "subpackages/sounds-packs/pack1/"],
+    ["sounds-pack2", "subpackages/sounds-packs/pack2/"],
+    ["sounds-pack3", "subpackages/sounds-packs/pack3/"],
+    ["sounds-pack4", "subpackages/sounds-packs/pack4/"],
   ];
   const subpackages = {};
   let subBytes = 0;

@@ -2,6 +2,14 @@ import * as THREE from "three";
 import { SOUNDS, type SoundGroup } from "../config/assets";
 import type { ProgressFn } from "../core/loading";
 import { isMinigame } from "../platform/env";
+import {
+  DEFAULT_SOUND_PACK,
+  loadSoundSubpackage,
+  readSoundPack,
+  soundUrlsForPack,
+  writeSoundPack,
+  type SoundPackId,
+} from "./soundPacks";
 
 type InnerAudio = {
   src: string;
@@ -19,12 +27,14 @@ type InnerAudio = {
 
 const managers = new Set<AudioManager>();
 
+type SoundUrlMap = Record<SoundGroup, readonly string[]>;
+
 /**
  * 音效。
  *
  * Web：THREE.Audio + AudioContext。
  * 小游戏：WebAudio（若可用）+ InnerAudio 对象池播 SFX；BGM 用独立 InnerAudio。
- * 初始化失败不挡游戏。
+ * 初始化失败不挡游戏。支持音效包热切换（失败静默回退内置）。
  */
 export class AudioManager {
   private listener: THREE.AudioListener | null = null;
@@ -35,17 +45,18 @@ export class AudioManager {
   private bgVolume = 0.25;
   private unlocked = false;
   private disabled = false;
-  private readonly bgUrl: string | null;
+  private urls: SoundUrlMap = soundUrlsForPack(DEFAULT_SOUND_PACK);
+  private activePack: SoundPackId = DEFAULT_SOUND_PACK;
+  private switching = false;
 
   readonly ready: Promise<void>;
 
   constructor(camera: THREE.Camera, onProgress?: ProgressFn) {
-    this.bgUrl = SOUNDS.bg[0] ?? null;
     managers.add(this);
     try {
       this.listener = new THREE.AudioListener();
       camera.add(this.listener);
-      this.ready = this.loadAll(onProgress);
+      this.ready = this.boot(onProgress);
     } catch (err) {
       console.warn("音频初始化失败，本局静音:", err);
       this.disabled = true;
@@ -63,26 +74,51 @@ export class AudioManager {
     }
   }
 
+  get packId(): SoundPackId {
+    return this.activePack;
+  }
+
+  get isSwitching(): boolean {
+    return this.switching;
+  }
+
   private async skipProgress(onProgress?: ProgressFn) {
     const total = Object.values(SOUNDS).reduce((n, list) => n + list.length, 0);
     for (let i = 0; i < total; i++) onProgress?.();
   }
 
-  private async loadAll(onProgress?: ProgressFn) {
-    if (!this.listener) return;
-    const loader = new THREE.AudioLoader();
+  private async boot(onProgress?: ProgressFn) {
+    const preferred = readSoundPack();
+    const total = Object.values(SOUNDS).reduce((n, list) => n + list.length, 0);
+    let ticks = 0;
+    const tick: ProgressFn = () => {
+      ticks++;
+      onProgress?.();
+    };
+    const ok = await this.applyPack(preferred, { persist: false, preview: false, onProgress: tick });
+    if (!ok && preferred !== "legacy") {
+      // 回退内置：不再重复打进度（下面补齐剩余 tick）
+      await this.applyPack("legacy", { persist: false, preview: false });
+    }
+    while (ticks < total) tick();
+  }
 
-    const groups = Object.entries(SOUNDS) as Array<[SoundGroup, readonly string[]]>;
+  private async loadBuffers(urls: SoundUrlMap, onProgress?: ProgressFn) {
+    if (!this.listener) {
+      await this.skipProgress(onProgress);
+      return;
+    }
+    const loader = new THREE.AudioLoader();
+    const groups = Object.entries(urls) as Array<[SoundGroup, readonly string[]]>;
     await Promise.all(
-      groups.map(async ([group, urls]) => {
+      groups.map(async ([group, list]) => {
         if (isMinigame() && group === "bg") {
-          urls.forEach(() => onProgress?.());
+          list.forEach(() => onProgress?.());
           this.buffers.set(group, []);
           return;
         }
-        // 小游戏优先走 InnerAudio 池播 SFX，可不预解码；仍尝试解码以便 WebAudio 路径
         const loaded = await Promise.all(
-          urls.map((url) =>
+          list.map((url) =>
             loader
               .loadAsync(url)
               .catch((err) => {
@@ -92,9 +128,94 @@ export class AudioManager {
               .finally(() => onProgress?.()),
           ),
         );
-        this.buffers.set(group, loaded.filter((b): b is AudioBuffer => b !== null));
+        this.buffers.set(
+          group,
+          loaded.filter((b): b is AudioBuffer => b !== null),
+        );
       }),
     );
+  }
+
+  private stopBackground() {
+    try {
+      this.background?.stop();
+    } catch {
+      /* ignore */
+    }
+    this.background = null;
+    try {
+      this.backgroundInner?.stop();
+      this.backgroundInner?.destroy();
+    } catch {
+      /* ignore */
+    }
+    this.backgroundInner = null;
+  }
+
+  /**
+   * 装载指定音效包。失败返回 false（调用方静默回退）；不弹 wx.show*。
+   */
+  private async applyPack(
+    id: SoundPackId,
+    opts: { persist: boolean; preview: boolean; onProgress?: ProgressFn },
+  ): Promise<boolean> {
+    try {
+      await loadSoundSubpackage(id);
+      const urls = soundUrlsForPack(id);
+      await this.loadBuffers(urls, opts.onProgress);
+      // 至少要有一组可播 SFX，否则视为失败
+      const sfxCount =
+        (this.buffers.get("split")?.length ?? 0) +
+        (this.buffers.get("drop")?.length ?? 0) +
+        (this.buffers.get("stack")?.length ?? 0);
+      const hasInnerFallback = urls.split.length > 0;
+      if (sfxCount === 0 && !hasInnerFallback) return false;
+
+      this.urls = urls;
+      this.activePack = id;
+      if (opts.persist) writeSoundPack(id);
+
+      this.stopBackground();
+      if (this.unlocked) {
+        this.playBackground(this.bgVolume);
+        if (opts.preview) this.play("split", 1, true);
+      }
+      return true;
+    } catch (err) {
+      console.warn(`[audio] pack ${id} failed, will fall back:`, err);
+      return false;
+    }
+  }
+
+  /**
+   * 玩家切换音效包：热替换 buffer、重开 BGM、预览一记劈柴。
+   * 失败时静默回退到内置「旧版」（本局可播），不改已写入的偏好以外的 UI 提示。
+   */
+  async switchPack(id: SoundPackId): Promise<SoundPackId> {
+    if (this.disabled) return this.activePack;
+    if (id === this.activePack && !this.switching) {
+      // 再点当前项：仍给一记预览
+      if (this.unlocked) this.play("split", 1, true);
+      return this.activePack;
+    }
+    this.switching = true;
+    const prev = this.activePack;
+    try {
+      const ok = await this.applyPack(id, { persist: true, preview: true });
+      if (ok) return this.activePack;
+      // 静默回退内置
+      const legacyOk = await this.applyPack("legacy", {
+        persist: false,
+        preview: true,
+      });
+      if (!legacyOk) {
+        // 再试回上一包
+        await this.applyPack(prev, { persist: false, preview: false });
+      }
+      return this.activePack;
+    } finally {
+      this.switching = false;
+    }
   }
 
   private unlock = () => {
@@ -156,7 +277,7 @@ export class AudioManager {
   }
 
   private pickUrl(group: SoundGroup): string | null {
-    const list = SOUNDS[group];
+    const list = this.urls[group];
     if (!list || list.length === 0) return null;
     if (list.length === 1) return list[0];
     const last = this.lastIndex.get(group) ?? -1;
@@ -177,7 +298,6 @@ export class AudioManager {
       inner.loop = false;
       inner.volume = volume;
       inner.src = url;
-      // onEnded/onError 归还由适配层池在「新建时」挂一次，这里不再重复挂
       inner.play();
       return inner;
     } catch (err) {
@@ -215,10 +335,10 @@ export class AudioManager {
     this.bgVolume = volume;
     if (this.background || this.backgroundInner) return;
 
-    if (isMinigame() && this.bgUrl) {
+    const bgUrl = this.urls.bg[0] ?? null;
+    if (isMinigame() && bgUrl) {
       const factory = (globalThis as { __wxCreateInnerAudio?: () => InnerAudio | null })
         .__wxCreateInnerAudio;
-      // BGM 单独实例，不进一次性池归还逻辑：直接 create 并保留
       const raw =
         typeof wx !== "undefined" && wx.createInnerAudioContext
           ? wx.createInnerAudioContext()
@@ -227,7 +347,7 @@ export class AudioManager {
       try {
         raw.loop = true;
         raw.volume = volume;
-        raw.src = this.bgUrl;
+        raw.src = bgUrl;
         raw.play();
         this.backgroundInner = raw;
       } catch (err) {
@@ -258,19 +378,7 @@ export class AudioManager {
 
   dispose() {
     managers.delete(this);
-    try {
-      this.background?.stop();
-    } catch {
-      /* ignore */
-    }
-    this.background = null;
-    try {
-      this.backgroundInner?.stop();
-      this.backgroundInner?.destroy();
-    } catch {
-      /* ignore */
-    }
-    this.backgroundInner = null;
+    this.stopBackground();
     this.listener?.parent?.remove(this.listener);
   }
 }

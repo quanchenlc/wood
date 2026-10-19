@@ -31,6 +31,22 @@
     {
       "name": "art-set4",
       "root": "subpackages/art-set4/"
+    },
+    {
+      "name": "sounds-pack1",
+      "root": "subpackages/sounds-packs/pack1/"
+    },
+    {
+      "name": "sounds-pack2",
+      "root": "subpackages/sounds-packs/pack2/"
+    },
+    {
+      "name": "sounds-pack3",
+      "root": "subpackages/sounds-packs/pack3/"
+    },
+    {
+      "name": "sounds-pack4",
+      "root": "subpackages/sounds-packs/pack4/"
     }
   ]
 }
