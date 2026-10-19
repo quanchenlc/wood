@@ -122,7 +122,7 @@ export class EconomyService {
     this.state.offline_progress_ms = result.progressMs;
   }
 
-  /** 主动入垛 1 根（须已完成 3 刀）；耗日额度 */
+  /** 主动入垛 1 根（一整根木头劈完、开始入垛时调用一次）；耗日额度 */
   tryActiveStack(now = Date.now()): boolean {
     this.ensureDay(now);
     if (this.state.daily_remaining <= 0) return false;
