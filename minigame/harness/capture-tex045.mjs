@@ -94,10 +94,10 @@ async function waitReady(page) {
   throw new Error("fw not ready");
 }
 
-async function waitGame(page, pred, timeoutMs = 20000) {
+async function waitGame(page, pred, arg, timeoutMs = 20000) {
   const t0 = Date.now();
   while (Date.now() - t0 < timeoutMs) {
-    const ok = await page.evaluate(pred);
+    const ok = await page.evaluate(pred, arg);
     if (ok) return true;
     await sleep(50);
   }
@@ -133,7 +133,7 @@ async function captureVariant(page, id) {
   await sleep(600);
 
   // gameplay: stump + log IDLE
-  await waitGame(page, () => window.__fw?.state?.()?.game === "IDLE", 30000);
+  await waitGame(page, () => window.__fw?.state?.()?.game === "IDLE", undefined, 30000);
   await saveShot(page, `tex045_stump${tag}_gameplay.png`);
 
   // mid-split: chop then grab while SPLITTING
@@ -141,10 +141,11 @@ async function captureVariant(page, id) {
   await page.evaluate(() => window.__fw.click?.());
   const midOk = await waitGame(
     page,
-    () => {
+    (prev) => {
       const st = window.__fw?.state?.();
-      return st?.game === "SPLITTING" || (st?.axePlayCount ?? 0) > playBefore;
+      return st?.game === "SPLITTING" || (st?.axePlayCount ?? 0) > prev;
     },
+    playBefore,
     4000,
   );
   if (midOk) {
@@ -158,7 +159,7 @@ async function captureVariant(page, id) {
   }
 
   // settle then close-up
-  await waitGame(page, () => window.__fw?.state?.()?.game === "IDLE", 45000);
+  await waitGame(page, () => window.__fw?.state?.()?.game === "IDLE", undefined, 45000);
   await page.evaluate(() => window.__fw.look?.(28));
   await sleep(700);
   await saveShot(page, `tex045_stump${tag}_closeup.png`);
