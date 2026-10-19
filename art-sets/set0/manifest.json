@@ -8,11 +8,11 @@
     "stumpLod": "stump_lod.gltf",
     "stumpData": "stump_data.glb",
     "barkColor": "outsidebark.jpg",
-    "barkNormal": "outsidebark_n.jpg",
+    "barkNormal": "outsidebark_n.png",
     "endColor": "top.jpg",
-    "endNormal": "top_n.jpg",
+    "endNormal": "top_n.png",
     "innerColor": "insidegrain.jpg",
-    "innerNormal": "insidegrain_n.jpg"
+    "innerNormal": "insidegrain_n.png"
   },
   "sky": "#9fc4e0",
   "fog": "#9fc4e0",

@@ -579,15 +579,22 @@ async function buildStumpFarLod(destAssets) {
 
   const json = JSON.parse(readFileSync(tmpGltf, "utf8"));
   // 贴图指回 dest 里的 hero 同款（不降分辨率、不复制）
+  // Prefer PNG normals (final_A); legacy jpg only if still present
   const norUri = existsSync(join(destAssets, "stump_normal.jpg"))
     ? "stump_normal.jpg"
     : "stump_normal.png";
+  const norMime = /\.png$/i.test(norUri) ? "image/png" : "image/jpeg";
   for (const img of json.images || []) {
     if (!img.uri) continue;
     const base = basename(img.uri);
-    if (/normal/i.test(base) || /nor/i.test(base)) img.uri = norUri;
-    else if (/top|endgrain/i.test(base)) img.uri = basename(img.uri); // keep stump_top.jpg
-    else img.uri = "stump_baseColor.jpg";
+    if (/normal/i.test(base) || /nor/i.test(base)) {
+      img.uri = norUri;
+      img.mimeType = norMime;
+    } else if (/top|endgrain/i.test(base)) {
+      img.uri = basename(img.uri); // keep stump_top.jpg if present
+    } else {
+      img.uri = "stump_baseColor.jpg";
+    }
   }
   for (const buf of json.buffers || []) {
     if (buf.uri) buf.uri = "stump_lod.bin";

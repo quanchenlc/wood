@@ -1,27 +1,40 @@
-# Credits & licences — Firewood 0.4.0 ip-clean
+# Credits & licences — Firewood 0.4.5 final_A
 
 All previously unlicensed screen.toys/firewood assets were removed in 0.4.0.
 Replacement sources below were verified on the download date **2026-10-19**.
+All four sources are **CC0 1.0 Universal (public domain dedication)**: no attribution legally required, listed for provenance.
+No pixels from the screen.toys/firewood originals were used. Those originals were used only to measure scalar statistics (Lab means/std, crack count, ring count), which drove a global colour/tone grade.
 
 ## Log textures (bark / end grain / split face)
 
-| Asset | Source | Licence | Notes | Downloaded |
+| Asset (public/assets/) | Source | Author / site | Licence | Processing |
 |---|---|---|---|---|
-| `outsidebark.jpg` (+ `_n`) | [ambientCG Bark001](https://ambientcg.com/view?id=Bark001) Color + NormalGL (fallback PH bark_brown_02 / Bark012); warm grey-brown grade, green/moss stripped, vertical furrows, seam-blend wrap | **CC0 1.0** | UV 2048×1024; OpenGL normals | 2026-10-19 |
-| `top.jpg` (+ `_n`) | Procedural growth rings + radial crack; colour matched to RGB(201,178,144); fibre modulate from [ambientCG Wood062](https://ambientcg.com/view?id=Wood062) / [Wood048](https://ambientcg.com/view?id=Wood048) (CC0) | **CC0** (ACG) + original procedural | 1024×1024 | 2026-10-19 |
-| `insidegrain.jpg` (+ `_n`) | Procedural longitudinal fibre + [ambientCG Wood048](https://ambientcg.com/view?id=Wood048) recolor to RGB(213,190,157) | **CC0** + original procedural | 1024×1024 | 2026-10-19 |
+| `outsidebark.jpg` + `outsidebark_n.png` | [ambientCG Bark013](https://ambientcg.com/view?id=Bark013) (1K Color + NormalGL) | Lennart Demes / ambientCG | **CC0 1.0** | Tiled ×2 round the circumference, 1024×512. Global Lab grade: L→47.7 mean (16.5 sd), a +7.1, b −16.2 shift, chroma ×0.56. Normal 512×256 PNG. |
+| `top.jpg` + `top_n.png` | [ambientCG TreeEnd002](https://ambientcg.com/view?id=TreeEnd002) (1K Color + Opacity + NormalGL) | Lennart Demes / ambientCG | **CC0 1.0** | Opacity-masked disc warped to an inscribed circle. Global grade to L 81.5 / a 3.7 / b 23.3. 512² colour, 256² normal PNG. |
+| `insidegrain.jpg` + `insidegrain_n.png` | [ambientCG Wood061](https://ambientcg.com/view?id=Wood061) (1K Color + NormalGL) | Lennart Demes / ambientCG | **CC0 1.0** | Rotated 90° so the fibres run along the log axis (normal vectors rotated to match). Global grade to L 77.6 / a 3.4 / b 19.4. 512² colour, 256² normal PNG. |
 
-Generator: `art-work/ip-clean/gen-log-textures.py`.
+Generator: `art-work/ip-clean/gen-log-textures.py` (historical; no longer produces the shipped log maps).
 
-## Stump + forest floor
+## Stump atlas (A and B variants + root fallback)
 
-| Variant | Mesh / textures | Licence | Notes | Downloaded |
+| Asset | Source | Author / site | Licence | Processing |
 |---|---|---|---|---|
-| **A** (default) | Solid chopping-block mesh (`art-work/ip-clean/build-stumps.mjs`) + our bark/end atlas | Original mesh + CC0 bark maps | Wide squat cylinder, sawn top, mild root flare | 2026-10-19 |
-| **A/B** ground | [Poly Haven `forest_leaves_03`](https://polyhaven.com/a/forest_leaves_03) soft-edged falloff onto ground green | **CC0** | No hard disc edge | 2026-10-19 |
-| **B** | Same pipeline, taller flare / oval / ridge for a distinct silhouette | Original | Solid block (not a ring) | 2026-10-19 |
+| `stump_baseColor.jpg`, `stump_normal.png` (root, `stump-a/`, `stump-b/`, byte-identical) | Side band: [ambientCG Bark013](https://ambientcg.com/view?id=Bark013). Top cap: [ambientCG TreeEnd002](https://ambientcg.com/view?id=TreeEnd002) | Lennart Demes / ambientCG | **CC0 1.0** | Rebuilt into the existing gltf UV layout (side band v 0–0.42, cap centre (0.5, 0.78), r 0.18). Warm grade: bark L 62 / a 8.5 / b 25; cap L 89 / a 12 / b 28. |
+
+Meshes are unchanged and remain the project's own (`art-work/ip-clean/build-stumps.mjs`).
+
+| Variant | Mesh | Licence | Notes |
+|---|---|---|---|
+| **A** (default) | Solid chopping-block mesh (`art-work/ip-clean/build-stumps.mjs`) | Original mesh + CC0 atlas | Wide squat cylinder, sawn top, mild root flare |
+| **B** | Same pipeline, taller flare / oval / ridge | Original | Solid block (not a ring) |
 
 Switch in drawer → 风格 → 「木桩 A / B」 (`fw_stump_variant`).
+
+## Forest floor
+
+| Asset | Source | Author / site | Licence | Processing |
+|---|---|---|---|---|
+| `ground_floor.jpg` (root, `stump-a/`, `stump-b/`) | [Poly Haven leafy_grass](https://polyhaven.com/a/leafy_grass) (1K diffuse, 2 m × 2 m scan) | Charlotte Baglioni / Poly Haven | **CC0 1.0** | Seamless 512² wrap-resize. Large-scale gradient flattened (σ 40 px, 85 %). Grade to L 41 / a −4 / b 17, with a highlight knee at L 62. Repeated 6×6 over the disc. |
 
 ## Axe
 

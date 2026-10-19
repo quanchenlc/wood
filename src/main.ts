@@ -756,11 +756,13 @@ async function applyStumpVariant(id: StumpVariantId, opts?: { force?: boolean })
     stumpLod: urls.stumpLod,
     stumpData: urls.stumpData,
   });
-  // 森林地面贴图
+  // 森林地面贴图（final_A：512² tile，需 6×6 repeat；勿放进 applyGroundFromSet）
   try {
     const tex = await new THREE.TextureLoader().loadAsync(urls.groundFloor);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(6, 6);
+    tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
     groundFloorMap?.dispose();
     groundFloorMap = tex;
     const mat = ground.material as THREE.MeshStandardMaterial;

@@ -18,19 +18,19 @@ export const TEXTURES = {
     return href("/assets/outsidebark.jpg");
   },
   get barkNormal() {
-    return href("/assets/outsidebark_n.jpg");
+    return href("/assets/outsidebark_n.png");
   },
   get endColor() {
     return href("/assets/top.jpg");
   },
   get endNormal() {
-    return href("/assets/top_n.jpg");
+    return href("/assets/top_n.png");
   },
   get innerColor() {
     return href("/assets/insidegrain.jpg");
   },
   get innerNormal() {
-    return href("/assets/insidegrain_n.jpg");
+    return href("/assets/insidegrain_n.png");
   },
 } as const;
 
