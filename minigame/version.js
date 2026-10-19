@@ -3,5 +3,5 @@ module.exports = {
   VERSION: "0.4.2",
   BUILD_NOTE: "ui-polish",
   /** 短提交标识，发版前由提交写入 */
-  BUILD_REV: "pending",
+  BUILD_REV: "ea5496d",
 };
