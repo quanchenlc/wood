@@ -123,8 +123,8 @@ export async function loadStump(
       placement.updateWorldMatrix(true, false);
       placement.matrixWorld.decompose(farRoot.position, farRoot.quaternion, farRoot.scale);
     } else {
-      // Behind-left, well inside leafy disc; slight sink into GROUND_Y
-      farRoot.position.set(-1.15, -0.05, -0.85);
+      // Behind-left, well inside leafy disc; sink into GROUND_Y
+      farRoot.position.set(-1.2, -0.08, -0.7);
       farRoot.scale.set(-1, 1, 1);
     }
     // Stay clear of disc rim so silhouette doesn't read as floating over sky
@@ -135,7 +135,7 @@ export async function loadStump(
       farRoot.position.x *= s;
       farRoot.position.z *= s;
     }
-    if (farRoot.position.y > -0.02) farRoot.position.y = -0.05;
+    if (farRoot.position.y > -0.05) farRoot.position.y = -0.08;
     scene.add(farRoot);
   } catch (err) {
     console.warn("树桩模型加载失败,改用兜底几何体:", err);

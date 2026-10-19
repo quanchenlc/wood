@@ -10,8 +10,7 @@ import { spawnSync } from "node:child_process";
 import sharp from "sharp";
 import { Document, NodeIO } from "@gltf-transform/core";
 import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
-import { simplify, cloneDocument, dedup } from "@gltf-transform/functions";
-import { MeshoptSimplifier } from "meshoptimizer";
+import { dedup } from "@gltf-transform/functions";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "../..");
@@ -66,27 +65,34 @@ async function makeCollider(outPath, radius = TARGET_R, height = TARGET_H) {
   // Keep well inside ground disc (14*FOOT≈4.27). Prior −5.3 / −3.2 sat on the rim
   // and read as floating above the horizon. Y: mesh bottom ≈ -H → y = GROUND_Y + H.
   // Behind-left of hero stump, well inside leafy disc (not on horizon rim).
+  // Y slightly below 0 so mesh bottom (≈ -H) sits into GROUND_Y (-0.33).
   const instance = doc
     .createNode("instance")
-    .setTranslation([-1.15, -0.05, -0.85])
+    .setTranslation([-1.2, -0.08, -0.7])
     .setScale([-1, 1, 1]);
   const scene = doc.createScene("data").addChild(collider).addChild(instance);
   doc.getRoot().setDefaultScene(scene);
   await io.write(outPath, doc);
 }
 
-async function writeHeroAndLod(doc, outDir) {
+async function writeHeroAndLod(doc, outDir, lodMeshOpts) {
   for (const b of doc.getRoot().listBuffers()) b.setURI("stump.bin");
   await io.write(join(outDir, "stump.gltf"), doc);
   forceClampSamplers(join(outDir, "stump.gltf"));
-  await MeshoptSimplifier.ready;
-  const lodDoc = cloneDocument(doc);
-  await lodDoc.transform(
-    simplify({ simplifier: MeshoptSimplifier, ratio: 0.35, error: 0.012 }),
-  );
+  // Do NOT meshopt-simplify: it welds the u=0/u=1 seam column and melts far-stump UVs.
+  // Build a true low-seg mesh instead (same atlas, fewer rings).
+  const lodDir = join(outDir, ".lod-tmp");
+  ensureDir(lodDir);
+  const { cpSync: cp, rmSync: rm } = await import("node:fs");
+  cp(join(outDir, "stump_baseColor.jpg"), join(lodDir, "stump_baseColor.jpg"));
+  cp(join(outDir, "stump_normal.jpg"), join(lodDir, "stump_normal.jpg"));
+  genSolidBlockPy(lodDir, lodMeshOpts);
+  let lodDoc = await io.read(join(lodDir, "stump.gltf"));
+  await lodDoc.transform(dedup());
   for (const b of lodDoc.getRoot().listBuffers()) b.setURI("stump_lod.bin");
   await io.write(join(outDir, "stump_lod.gltf"), lodDoc);
   forceClampSamplers(join(outDir, "stump_lod.gltf"));
+  rm(lodDir, { recursive: true, force: true });
 }
 
 /** Soft-edged forest floor: leaves/chips in center → fade to ground green. */
@@ -212,7 +218,12 @@ async function processVariant(id, outDir, meshOpts, leafSrc) {
   // dedup only — do NOT weld: seam column shares XYZ but needs distinct UVs (u=0 vs u=1).
   // Welding re-merges them and brings back the dark vertical stripe.
   await doc.transform(dedup());
-  await writeHeroAndLod(doc, outDir);
+  const lodOpts = {
+    ...meshOpts,
+    segs: Math.max(16, Math.round((meshOpts.segs || 64) * 0.4)),
+    stacks: Math.max(6, Math.round((meshOpts.stacks || 12) * 0.5)),
+  };
+  await writeHeroAndLod(doc, outDir, lodOpts);
   await makeCollider(join(outDir, "stump_data.glb"));
   // drop png normals if any leftover
   const png = join(outDir, "stump_normal.png");
