@@ -1,5 +1,5 @@
 /**
- * 0.4.6 axe046c — re-authored swing (no ax_anim curves) vs pre-clean.
+ * 0.4.7 axe046c — re-authored swing (no ax_anim curves); metal head must be visible.
  *
  * Usage:
  *   # Reuse axe046b preclean frames, or recapture:
@@ -262,9 +262,9 @@ async function composeContactSheets() {
       BUILD_REV: version.BUILD_REV,
     },
     tip: version.BUILD_REV,
-    note: "0.4.6 axe046c — rotX tip-zeroed swing (edge down / cheek to camera) + pack4 audio; boss-face harness",
+    note: "0.4.7 axe046c — tip seated ABOVE log top so metal head is visible; pack4 audio; bare-stick harness",
     root_cause:
-      "Boss 体验版 showed vertical stick + sideways cool-grey cheek on the log FACE (detached head). Cause: authored keys still used ax_anim-like compound quaternions that laid the edge line toward the camera. Fix: pure Euler(rotX) keys with tip-zeroed Mesh T/S positions so cheek +Z faces the camera, tip sits on the log TOP, handle foreshortens clear of the top tab. Harness fails bossSidewaysFace + sidewaysBossPattern.",
+      "Boss 体验版 bare stick: tip-zero used authoring tip coords as Mesh-bin local, so keys seated the mid-handle on the log and buried the real metal head ~35 cm below (handle-only silhouette). Fix: tip via AuxScene/authoring space + AXE_MODEL_SCALE; impact tip ~2.5 cm above pivot, edge bite, cheek to camera. Harness fails bareStick when cool-steel pixel count near tip is near-zero.",
     asserts: metaAsserts,
     shots: [
       "axe046c_contact_portrait.png",
@@ -492,10 +492,24 @@ async function probeBossSidewaysFace(pngPath, logTopCss, { dpr = 2, tipCss = nul
   };
 }
 
+/** Cool steel vs warm wood/bark (boss bare-stick false-positive guard). */
+function isCoolSteelPixel(r, g, bl) {
+  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+  const max = Math.max(r, g, bl);
+  const min = Math.min(r, g, bl);
+  const chroma = max - min;
+  // Warm wood / endgrain — never count as metal head.
+  if (r > g + 10 && g > bl + 6 && chroma > 22) return false;
+  if (r > bl + 28 && r > 110) return false;
+  // Cool mid-grey steel albedo (0.4.7 axe_baseColor).
+  return lum > 70 && lum < 210 && chroma < 48 && bl + 10 >= r && r < 200;
+}
+
 /**
  * Metal axe-head bbox near the tip (diff vs idle). Returns aspect = width/height.
  * Cheek-facing → wider than tall (aspect > 1). Sideways-on-face often also wide but
  * sits below the log top (centroid deep on the log face).
+ * Counts ONLY cool-steel pixels so bark/endgrain cannot fake metalVisible.
  */
 async function probeHeadBBox(pngPath, baselinePath, tipCss, logTopCss, { dpr = 2 } = {}) {
   const { data, info } = await sharp(pngPath).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
@@ -505,10 +519,10 @@ async function probeHeadBBox(pngPath, baselinePath, tipCss, logTopCss, { dpr = 2
   const h = info.height;
   const tx = (tipCss?.x ?? w / dpr / 2) * dpr;
   const ty = (tipCss?.y ?? h / dpr / 2) * dpr;
-  // Tight box around the blade tip / head — exclude the tall wooden handle above.
-  const radX = Math.round(Math.min(w, h) * 0.18);
-  const radUp = Math.round(Math.min(w, h) * 0.08);
-  const radDown = Math.round(Math.min(w, h) * 0.12);
+  // Box around blade tip / head — include cheek to the side of the handle.
+  const radX = Math.round(Math.min(w, h) * 0.22);
+  const radUp = Math.round(Math.min(w, h) * 0.1);
+  const radDown = Math.round(Math.min(w, h) * 0.14);
   const x0 = Math.max(0, Math.floor(tx - radX));
   const x1 = Math.min(w, Math.ceil(tx + radX));
   const y0 = Math.max(0, Math.floor(ty - radUp));
@@ -519,23 +533,21 @@ async function probeHeadBBox(pngPath, baselinePath, tipCss, logTopCss, { dpr = 2
   let maxY = 0;
   let n = 0;
   let sumY = 0;
+  let sumX = 0;
   for (let y = y0; y < y1; y++) {
     for (let x = x0; x < x1; x++) {
       const i = (y * w + x) * 4;
       const dr = Math.abs(data[i] - b.data[i]);
       const dg = Math.abs(data[i + 1] - b.data[i + 1]);
       const db = Math.abs(data[i + 2] - b.data[i + 2]);
-      if (dr + dg + db <= 110) continue;
-      // Axe head baseColor is warm steel (not cool grey); accept bright low-chroma diffs.
+      if (dr + dg + db <= 90) continue;
       const r = data[i];
       const g = data[i + 1];
       const bl = data[i + 2];
-      const lum = 0.2126 * r + 0.7152 * g + 0.0722 * bl;
-      const max = Math.max(r, g, bl);
-      const min = Math.min(r, g, bl);
-      if (!(lum > 130 && max - min < 70)) continue;
+      if (!isCoolSteelPixel(r, g, bl)) continue;
       n++;
       sumY += y;
+      sumX += x;
       if (x < minX) minX = x;
       if (x > maxX) maxX = x;
       if (y < minY) minY = y;
@@ -547,10 +559,11 @@ async function probeHeadBBox(pngPath, baselinePath, tipCss, logTopCss, { dpr = 2
   const bh = Math.max(1, maxY - minY);
   const aspect = bw / bh;
   const centroidY = sumY / n / dpr;
+  const centroidX = sumX / n / dpr;
   const logY = logTopCss?.y ?? centroidY;
   // Boss sideways bug: tip itself sits on the vertical log FACE (well below log top),
   // not merely the blade biting a few cm into the kerf from above.
-  const tipY = (tipCss?.y ?? centroidY);
+  const tipY = tipCss?.y ?? centroidY;
   const tipOnFace = tipY - logY > 48;
   const onLogFace = tipOnFace && centroidY - logY > 70;
   return {
@@ -558,12 +571,46 @@ async function probeHeadBBox(pngPath, baselinePath, tipCss, logTopCss, { dpr = 2
     widthCss: bw / dpr,
     heightCss: bh / dpr,
     metalCount: n,
-    centroidCss: { x: (minX + maxX) / 2 / dpr, y: centroidY },
+    centroidCss: { x: centroidX, y: centroidY },
     // Cheek-facing head silhouette is wider than tall (allow near-square).
     widerThanTall: aspect >= 0.9,
     onLogFace,
     tipOnFace,
     sidewaysBossPattern: aspect >= 0.9 && onLogFace,
+  };
+}
+
+/**
+ * Sample cool-steel presence in a small patch around the projected tip and
+ * toward the expected cheek (left of tip in portrait). Boss bare-stick frames
+ * have near-zero cool steel here (only warm wood / handle).
+ */
+async function probeTipCoolSteel(pngPath, tipCss, { dpr = 2, radiusCss = 28 } = {}) {
+  const { data, info } = await sharp(pngPath).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const w = info.width;
+  const h = info.height;
+  const tx = Math.round((tipCss?.x ?? w / dpr / 2) * dpr);
+  const ty = Math.round((tipCss?.y ?? h / dpr / 2) * dpr);
+  const rad = Math.round(radiusCss * dpr);
+  let cool = 0;
+  let warm = 0;
+  let total = 0;
+  for (let y = Math.max(0, ty - rad); y < Math.min(h, ty + rad); y++) {
+    for (let x = Math.max(0, tx - rad); x < Math.min(w, tx + rad * 1.4); x++) {
+      const i = (y * w + x) * 4;
+      const r = data[i];
+      const g = data[i + 1];
+      const bl = data[i + 2];
+      total++;
+      if (isCoolSteelPixel(r, g, bl)) cool++;
+      else if (r > g + 10 && g > bl + 6) warm++;
+    }
+  }
+  return {
+    coolSteelCount: cool,
+    warmCount: warm,
+    sample: total,
+    tipHasCoolSteel: cool >= 120,
   };
 }
 
@@ -627,11 +674,12 @@ function compareMetrics(pre, cur, orient) {
   const dy = Math.abs((curTip?.y ?? 0) - (preTip?.y ?? 0));
   // Pre-clean tip match is a soft visual guide; authored swing may land a bit
   // off-pre while still on the log top (tipVsLogOk) with correct head aspect.
+  // Raised tip (visible metal head) can sit higher than pre-clean; keep soft.
   const tipVsPreOk =
     preTip?.x != null &&
     curTip?.x != null &&
-    dx <= 72 &&
-    dy <= 40;
+    dx <= 120 &&
+    dy <= 80;
 
   // Contact vs log top centre line: image centroid (same method as tipVsPre) OR
   // harness world-space blade tip vs impact point (current build only).
@@ -653,12 +701,18 @@ function compareMetrics(pre, cur, orient) {
     // Keep image dx/dy as primary report; note hook deltas alongside
     if (tipVsLogDx == null) tipVsLogDx = hookDx;
     if (tipVsLogDy == null) tipVsLogDy = hookDy;
-    hookLogOk = tipVsLogWorldDy <= 0.12 && hookDx <= 45;
+    // Allow tip seated above the log top (visible head) up to ~14 cm.
+    hookLogOk = tipVsLogWorldDy <= 0.14 && hookDx <= 45;
   }
   const tipVsLogOk = imgLogOk || hookLogOk;
 
-  // Impact must not put metal in the top drawer tab (pre-clean impact was clean).
-  const impactTabOk = !cur.impact?.img?.overlapsTopTab;
+  // Impact must not put the axe handle through the top drawer tab.
+  // Prefer closeup probeIdleTab (same cold-bright test as idle); parchment UI
+  // alone stays under the overlapsTopTab threshold.
+  const closeupTabHit = cur.impact?.closeup?.overlapsTopTab;
+  const impactTabOk =
+    closeupTabHit === false ||
+    (closeupTabHit == null && !cur.impact?.img?.overlapsTopTab);
   const preImpactTab = Boolean(pre.impact?.img?.overlapsTopTab);
 
   // Head orientation: must NOT match boss sideways-on-face (wide cool cheek on log FACE).
@@ -684,6 +738,20 @@ function compareMetrics(pre, cur, orient) {
         curHead.widerThanTall === true &&
         curHead.onLogFace !== true &&
         bossFace?.bossSidewaysFace !== true));
+  // Boss "bare stick": metal head fully occluded / near-zero cool steel at tip.
+  // Require a measurable cool-steel head bbox AND tip-local cool steel samples
+  // (warm bark must not inflate metalCount). Landscape crops are smaller — allow
+  // a lower bbox count when tip-local cool steel is clearly present.
+  const metalCount = curHead?.metalCount ?? 0;
+  const tipSteel = cur.impact?.tipSteel || cur.impact?.closeup?.tipSteel || null;
+  const tipCool = tipSteel?.coolSteelCount ?? 0;
+  const metalVisible =
+    curHead != null &&
+    (curHead.widthCss ?? 0) >= 28 &&
+    (curHead.heightCss ?? 0) >= 14 &&
+    tipSteel?.tipHasCoolSteel === true &&
+    (metalCount >= 350 || (metalCount >= 180 && tipCool >= 800));
+  const bareStick = !metalVisible;
   const headAspectMatchPre =
     preHead?.aspect != null &&
     curHead?.aspect != null &&
@@ -695,7 +763,9 @@ function compareMetrics(pre, cur, orient) {
     tipVsLogOk &&
     idleMatch &&
     impactTabOk &&
-    headAspectOk;
+    headAspectOk &&
+    metalVisible &&
+    !bareStick;
   return {
     ok,
     idleOk,
@@ -707,6 +777,10 @@ function compareMetrics(pre, cur, orient) {
     headAspectOk,
     headAspectMatchPre,
     notBossFace,
+    metalVisible,
+    bareStick,
+    metalCount,
+    tipSteel,
     bossFace,
     curHead,
     preHead,
@@ -823,6 +897,8 @@ async function captureSequence(orient, cssW, cssH) {
   let closeupPath = null;
   let closeupHead = null;
   let closeupBossFace = null;
+  let closeupTipSteel = null;
+  let closeupTab = null;
   const hasSeek = await page.evaluate(() => {
     if (!window.__fw.projectWorld) return false;
     return typeof window.__fw.projectLogTop === "function";
@@ -871,10 +947,21 @@ async function captureSequence(orient, cssW, cssH) {
         };
     closeupHead = await probeHeadBBox(closeupPath, idlePath, headTip, logRef);
     closeupBossFace = await probeBossSidewaysFace(closeupPath, logRef, { tipCss: headTip });
+    closeupTipSteel = await probeTipCoolSteel(closeupPath, headTip);
+    closeupTab = await probeIdleTab(closeupPath);
     await page.evaluate(() => window.__fw.axe().seekTime(5));
     await sleep(80);
     await waitIdle(30000);
-    console.log(LABEL, orient, "closeup head", closeupHead, "bossFace", closeupBossFace);
+    console.log(
+      LABEL,
+      orient,
+      "closeup head",
+      closeupHead,
+      "bossFace",
+      closeupBossFace,
+      "tipSteel",
+      closeupTipSteel,
+    );
   }
 
   const framePaths = [];
@@ -969,6 +1056,9 @@ async function captureSequence(orient, cssW, cssH) {
   const bossFace =
     closeupBossFace ||
     (await probeBossSidewaysFace(bestImpact.path || impactPath, logTopCss, { tipCss }));
+  const tipSteel =
+    closeupTipSteel ||
+    (await probeTipCoolSteel(bestImpact.path || impactPath, tipCss));
 
   const impact = {
     frame: `f${String(chosenImpactIdx).padStart(2, "0")}.png`,
@@ -982,8 +1072,16 @@ async function captureSequence(orient, cssW, cssH) {
     hook: hookImpact,
     head,
     bossFace,
+    tipSteel,
     closeup: closeupPath
-      ? { path: "impact_closeup.png", head: closeupHead, bossFace: closeupBossFace }
+      ? {
+          path: "impact_closeup.png",
+          head: closeupHead,
+          bossFace: closeupBossFace,
+          tipSteel: closeupTipSteel,
+          overlapsTopTab: Boolean(closeupTab?.overlapsTopTab),
+          tabSteelCount: closeupTab?.tabMetalCount ?? 0,
+        }
       : null,
   };
 

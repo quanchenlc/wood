@@ -16,7 +16,7 @@ import {
   splitPlaneNormal,
   type SplittableMesh,
 } from "../wood/slicer";
-import { INCH } from "../config/constants";
+import { INCH, IS_MINIGAME } from "../config/constants";
 
 export type GameState = "SPAWNING" | "IDLE" | "SPLITTING" | "SETTLING" | "STACKING";
 
@@ -442,6 +442,8 @@ export class GameController {
   }
 
   private updateHover() {
+    // Shipping minigame: never show the red tip/slice debug ray.
+    if (IS_MINIGAME) return this.d.debugLine.hide();
     const hover = this.d.controller.getHoverNdc();
     if (!hover) return this.d.debugLine.hide();
     const hit = this.raycastForSplittable(hover);

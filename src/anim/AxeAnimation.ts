@@ -8,7 +8,17 @@ import {
   AXE_ANIM_FADE,
   AXE_ANIM_IMPACT_AT,
   AXE_KEYS,
+  AXE_MODEL_SCALE_X,
+  AXE_MODEL_SCALE_Y,
+  AXE_MODEL_SCALE_Z,
+  AXE_TIP_LOCAL,
 } from "./axeAnimClip";
+
+function applyAxeModelScale(obj: THREE.Object3D | null, fade = 1) {
+  if (!obj) return;
+  const f = Math.max(0, fade);
+  obj.scale.set(AXE_MODEL_SCALE_X * f, AXE_MODEL_SCALE_Y * f, AXE_MODEL_SCALE_Z * f);
+}
 
 /**
  * 斧头挥砍 —— 项目自撰关键姿态 + smoothstep 插值。
@@ -104,14 +114,14 @@ export class AxeAnimation {
         clampMap(mat.metalnessMap, false);
         clampMap(mat.roughnessMap, false);
         clampMap(mat.aoMap, false);
-        // Painted steel: no envMap (sky tint → translucent ghost). Warm grade +
-        // metalness 0 so the cheek reads as solid opaque steel on the log top.
-        if (mat.color) mat.color.setRGB(1.1, 1.05, 0.95);
-        mat.metalness = 0;
+        // Neutral steel albedo; slight metalness for lit specular (no envMap — sky
+        // ghost). Keep tint white so cheek reads grey metal, not sky-blue plastic.
+        if (mat.color) mat.color.setRGB(1.0, 1.0, 1.0);
+        mat.metalness = 0.28;
         mat.metalnessMap = null;
         mat.roughness = Math.max(mat.roughness ?? 0.45, 0.42);
         mat.envMapIntensity = 0;
-        if (mat.emissive) mat.emissive.setRGB(0, 0, 0);
+        if (mat.emissive) mat.emissive.setRGB(0.025, 0.025, 0.028);
         mat.transparent = false;
         mat.opacity = 1;
         mat.depthWrite = true;
@@ -157,9 +167,10 @@ export class AxeAnimation {
     this.disposeAxeModel();
     this.axeModel = root;
     // Identity pose: cheek ±Z faces camera after pivot.lookAt (see class note).
+    // Non-uniform scale: big head (X/Z), shorter handle (Y) for tab clearance.
     this.axeModel.position.set(0, 0, 0);
     this.axeModel.rotation.set(0, 0, 0);
-    this.axeModel.scale.setScalar(1);
+    applyAxeModelScale(this.axeModel, 1);
     this.prepareAxeMaterials(this.axeModel);
     this.animNull?.add(this.axeModel);
   }
@@ -206,7 +217,7 @@ export class AxeAnimation {
     else this.lastSliceNormal.normalize();
     this.pivot.position.copy(point);
     this.orientToCamera();
-    this.axeModel?.scale.setScalar(1);
+    applyAxeModelScale(this.axeModel, 1);
     this.pivot.visible = true;
     this.animScene.visible = true;
     this.applyClipAt(0);
@@ -230,17 +241,17 @@ export class AxeAnimation {
     elapsed: number;
     visible: boolean;
   } {
-    // Blade tip in axe.gltf Mesh local space (see build_axe_placeholder XE).
-    const bladeTip = new THREE.Vector3(-0.162, 0.05, 0);
+    // Tip in AuxScene / authoring space (AXE_TIP_LOCAL). Do NOT apply through
+    // Mesh-bin local — Mesh T/S remaps authored points; treating authoring
+    // coords as bin-local zeroed the mid-handle and buried the metal head.
+    const bladeTip = new THREE.Vector3(
+      AXE_TIP_LOCAL[0],
+      AXE_TIP_LOCAL[1],
+      AXE_TIP_LOCAL[2],
+    );
     if (this.axeModel) {
       this.axeModel.updateWorldMatrix(true, true);
-      let meshNode: THREE.Object3D | null = null;
-      this.axeModel.traverse((o) => {
-        if (meshNode) return;
-        if ((o as THREE.Mesh).isMesh) meshNode = o;
-      });
-      const target = meshNode ?? this.axeModel;
-      bladeTip.applyMatrix4(target.matrixWorld);
+      bladeTip.applyMatrix4(this.axeModel.matrixWorld);
     }
     return {
       bladeTip,
@@ -281,8 +292,8 @@ export class AxeAnimation {
     this.animNull.scale.setScalar(1);
 
     const remaining = AXE_ANIM_DURATION - tt;
-    const scale = remaining <= AXE_ANIM_FADE ? Math.max(0, remaining / AXE_ANIM_FADE) : 1;
-    this.axeModel?.scale.setScalar(scale);
+    const fade = remaining <= AXE_ANIM_FADE ? Math.max(0, remaining / AXE_ANIM_FADE) : 1;
+    applyAxeModelScale(this.axeModel, fade);
   }
 
   private orientToCamera() {
@@ -302,7 +313,7 @@ export class AxeAnimation {
       this.animNull.quaternion.identity();
       this.animNull.scale.setScalar(1);
     }
-    this.axeModel?.scale.setScalar(1);
+    applyAxeModelScale(this.axeModel, 1);
   }
 
   dispose() {

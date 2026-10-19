@@ -216,24 +216,21 @@ function woodColor(p, isCap){
   return col;
 }
 function steelColor(p,a){
-  // Warm mid-grey steel (avoid blue cast under sky hemi). Readable as steel without envMap.
+  // Neutral mid-grey steel (not sky-blue plastic). Must read as METAL on light wood.
+  // Runtime uses metalness 0 (no sky envMap); contrast comes from albedo alone.
   const [x,y,z]=p; const brushed=fbm(x*28,y*720,z*28,3);
-  let col=[158,154,145].map(c=>c*(0.9+0.26*brushed)); // brighter warm steel (readable in split shadow)
-  // forge scale blotches near eye/poll — warm dark, not blue
+  // Darker base + bright ridge so the cheek reads as solid steel (not washed sky).
+  let col=[110,112,116].map(c=>c*(0.86+0.30*brushed));
   const sc=fbm(x*140+3,y*140,z*140,4); const scale=smooth(0.62,0.75,sc)*(1-smooth(0.45,0.8,a))*0.5;
-  col=col.map((c,i)=>c*(1-0.32*scale)*(i===0?1.02:i===2?0.96:1));
-  // ground bevel lighter with grinding streaks
+  col=col.map((c)=>c*(1-0.32*scale));
   const bev=smooth(AB-0.012,AB+0.004,a);
   const grind=fbm(x*30,y*1100,z*1100,3);
-  const bcol=[186,184,176].map(c=>c*(0.88+0.22*grind));
+  const bcol=[168,170,174].map(c=>c*(0.88+0.22*grind));
   col=col.map((c,i)=>lerp(c,bcol[i],bev));
-  // honed edge line
-  const hone=smooth(0.982,0.996,a); col=col.map((c,i)=>lerp(c, i===2?210:225, hone*0.75));
-  // wear scratches on cheeks
-  const scr=vnoise(x*1600,y*90,z*40); if(scr>0.93&&a<AB) col=col.map(c=>c+36*(scr-0.93)/0.07);
-  // cheek specular ridge (fake highlight so head isn't a flat box)
-  const ridge=Math.exp(-((z*z)/(0.012*0.012)))*0.22*(1-bev);
-  col=col.map(c=>c+ridge*55);
+  const hone=smooth(0.982,0.996,a); col=col.map((c)=>lerp(c, 210, hone*0.8));
+  const scr=vnoise(x*1600,y*90,z*40); if(scr>0.93&&a<AB) col=col.map(c=>c+40*(scr-0.93)/0.07);
+  const ridge=Math.exp(-((z*z)/(0.012*0.012)))*0.28*(1-bev);
+  col=col.map(c=>c+ridge*70);
   return col;
 }
 async function paint(){

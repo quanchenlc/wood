@@ -1190,6 +1190,7 @@ if (enableDebugHooks) {
             visible: d.visible,
           };
         },
+        withAxeModel: (fn: (root: THREE.Object3D) => void) => axe.withAxeModel(fn),
       }),
       /** CSS 像素：世界坐标 → 画布 client 坐标（与截图像素 / deviceScaleFactor 对齐时再乘 dpr） */
       projectWorld: (xyz: [number, number, number] | number[]) => {
