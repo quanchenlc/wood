@@ -3,5 +3,5 @@ module.exports = {
   VERSION: "0.4.5",
   BUILD_NOTE: "final-A-textures",
   /** 短提交标识，发版前由提交写入 */
-  BUILD_REV: "b8f0707",
+  BUILD_REV: "f23bcbd",
 };
