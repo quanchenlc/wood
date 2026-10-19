@@ -3,5 +3,5 @@ module.exports = {
   VERSION: "0.4.6",
   BUILD_NOTE: "axe-fix+pack4-audio",
   /** 短提交标识，发版前由提交写入 */
-  BUILD_REV: "c70f498",
+  BUILD_REV: "85506ee",
 };
