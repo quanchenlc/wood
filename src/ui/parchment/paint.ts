@@ -56,6 +56,8 @@ export interface ParchmentUiState {
   styleId?: string;
   styleLabel?: string;
   styleOptions?: { id: string; label: string; color: string }[];
+  /** 木桩 A/B（fw_stump_variant）；风格页单独一节，不进 styleOptions */
+  stumpVariant?: "A" | "B";
   styleSwitching?: boolean;
   exhaustedBubble?: { text: string; until: number } | null;
   capsuleTop?: number;
@@ -737,6 +739,11 @@ function paintStyleRow(
   }
 }
 
+const STUMP_STYLE_OPTS: { id: "stumpA" | "stumpB"; label: string; color: string; variant: "A" | "B" }[] = [
+  { id: "stumpA", label: "A · 扫描", color: "#8a7355", variant: "A" },
+  { id: "stumpB", label: "B · 程序", color: "#6b5a44", variant: "B" },
+];
+
 function paintStylePage(
   ctx: CanvasRenderingContext2D,
   layout: DrawerLayout,
@@ -748,39 +755,54 @@ function paintStylePage(
   const left = layout.contentLeft;
   const right = layout.contentRight;
   const w = layout.screenW;
-  const clipBottom = contentClipBottom(layout);
+  const tearY = layout.bodyH - layout.tearOverlap;
+  // 脚注至少在撕口顶之上 12pt
+  const footnoteY = tearY - 14;
+  const clipBottom = Math.min(contentClipBottom(layout), footnoteY + 8);
   // D_fix_v3：竖屏顶栏中心 106 / 线 124；横屏顶栏中心 40 / 线 58
   const headerY = layout.landscape ? 40 : 106;
   paintDrawerBackHeader(ctx, layout, "选择风格", "style_back", hits, headerY);
   const opts = state.styleOptions || [];
+  const stumpId = state.stumpVariant === "B" ? "stumpB" : "stumpA";
 
-  // 内容裁切到纸身底 − 8pt（竖屏首页 = 376），防止行漏出撕口画到 3D 场景
   ctx.save();
   ctx.beginPath();
   ctx.rect(0, 0, w, clipBottom);
   ctx.clip();
 
   if (layout.landscape) {
-    // P1-2：双列 300×42，行 y 72 / 122 / 172；列 1 左 60、列 2 右 698
+    // 双列 300×42：风格 72/122/172；木桩小节 + A/B 同行
     const rowW = 300;
     const rowH = 42;
-    const colGapY = 50; // 72, 122, 172
-    const col1X = left; // 60 on X-class
+    const colGapY = 50;
+    const col1X = left;
     const col2X = 698 - rowW;
     const listTop = 72;
     opts.forEach((opt, i) => {
       const col = i % 2;
       const rowI = Math.floor(i / 2);
       const y = listTop + rowI * colGapY;
-      if (y + rowH > clipBottom) return;
+      if (y + rowH > footnoteY - 4) return;
       const x = col === 0 ? col1X : col2X;
-      const active = opt.id === state.styleId;
-      paintStyleRow(ctx, tex, opt, active, x, y, rowW, rowH, dpr);
+      paintStyleRow(ctx, tex, opt, opt.id === state.styleId, x, y, rowW, rowH, dpr);
       pushHit(hits, "style_pick", x, y, rowW, rowH, opt.id);
     });
-    // 脚注：末行底以下，仍在裁切内
-    const lastRow = Math.ceil(opts.length / 2) - 1;
-    const footnoteY = Math.min(clipBottom - 10, listTop + Math.max(0, lastRow) * colGapY + rowH + 14);
+    const styleRows = Math.ceil(opts.length / 2);
+    const headY = listTop + styleRows * colGapY - 6; // ~216 after 3 style rows
+    const stumpY = headY + 22; // ~238
+    if (stumpY + rowH <= footnoteY - 4) {
+      ctx.fillStyle = INK_SOFT;
+      ctx.font = fontSans(12, "600");
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText("木桩", col1X, headY + 8);
+      STUMP_STYLE_OPTS.forEach((opt, i) => {
+        const x = i === 0 ? col1X : col2X;
+        const active = opt.id === stumpId;
+        paintStyleRow(ctx, tex, opt, active, x, stumpY, rowW, rowH, dpr);
+        pushHit(hits, "style_pick", x, stumpY, rowW, rowH, opt.id);
+      });
+    }
     ctx.fillStyle = INK_SOFT;
     ctx.font = fontSans(11);
     ctx.textAlign = "center";
@@ -790,16 +812,18 @@ function paintStylePage(
     return;
   }
 
-  // 竖屏：行 y = 132 + 46i，行高 40；≥6 项可滚，视口 132–368 + 16pt 渐隐
+  // 竖屏：风格行 +「木桩」小节 + A/B，统一可滚视口 + 16pt 渐隐
   const rowStep = 46;
   const rowH = 40;
+  const headH = 28;
   const listTop = 132;
-  const listBottom = Math.min(368, clipBottom);
+  const listBottom = Math.min(footnoteY - 12, clipBottom - 4);
   const scrollViewH = Math.max(40, listBottom - listTop);
   const rowW = Math.min(w - 48, right - left);
   const rowX = 24;
-  const contentH = opts.length * rowStep;
-  const needScroll = opts.length >= 6;
+  // content: styles, heading, stump×2
+  const contentH = opts.length * rowStep + headH + STUMP_STYLE_OPTS.length * rowStep;
+  const needScroll = contentH > scrollViewH;
   const maxScroll = needScroll ? Math.max(0, contentH - scrollViewH) : 0;
   const scrollY = Math.max(0, Math.min(maxScroll, state.styleScrollY ?? 0));
 
@@ -812,12 +836,29 @@ function paintStylePage(
   ctx.rect(rowX - 4, listTop, rowW + 8, scrollViewH);
   ctx.clip();
 
-  opts.forEach((opt, i) => {
-    const y = listTop + i * rowStep - scrollY;
-    if (y + rowH < listTop || y > listTop + scrollViewH) return;
-    const active = opt.id === state.styleId;
-    paintStyleRow(ctx, tex, opt, active, rowX, y, rowW, rowH, dpr);
-    pushHit(hits, "style_pick", rowX, y, rowW, rowH, opt.id);
+  let cy = listTop - scrollY;
+  opts.forEach((opt) => {
+    if (cy + rowH >= listTop && cy <= listTop + scrollViewH) {
+      paintStyleRow(ctx, tex, opt, opt.id === state.styleId, rowX, cy, rowW, rowH, dpr);
+      pushHit(hits, "style_pick", rowX, cy, rowW, rowH, opt.id);
+    }
+    cy += rowStep;
+  });
+  // 木桩小节
+  if (cy + headH >= listTop && cy <= listTop + scrollViewH) {
+    ctx.fillStyle = INK_SOFT;
+    ctx.font = fontSans(12, "600");
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText("木桩", rowX + 4, cy + headH / 2);
+  }
+  cy += headH;
+  STUMP_STYLE_OPTS.forEach((opt) => {
+    if (cy + rowH >= listTop && cy <= listTop + scrollViewH) {
+      paintStyleRow(ctx, tex, opt, opt.id === stumpId, rowX, cy, rowW, rowH, dpr);
+      pushHit(hits, "style_pick", rowX, cy, rowW, rowH, opt.id);
+    }
+    cy += rowStep;
   });
   ctx.restore();
 
@@ -828,18 +869,11 @@ function paintStylePage(
     });
   }
 
-  // 脚注：列表底以下，仍在 376 裁切内
-  const footnoteY = Math.min(
-    clipBottom - 8,
-    listTop + Math.min(opts.length, needScroll ? 5 : opts.length) * rowStep + 8,
-  );
-  if (!needScroll || scrollY < 1) {
-    ctx.fillStyle = INK_SOFT;
-    ctx.font = fontSans(11);
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("切换即时生效，下次启动保留", w / 2, footnoteY);
-  }
+  ctx.fillStyle = INK_SOFT;
+  ctx.font = fontSans(11);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("切换即时生效，下次启动保留", w / 2, footnoteY);
   ctx.restore();
 }
 
@@ -1173,7 +1207,7 @@ export function paintParchmentLoading(
   ctx.fillText(`${status || COPY_C.loading} ${pct}%`, w / 2, barY + 28);
   ctx.globalAlpha = 0.35;
   ctx.font = fontSans(11);
-  ctx.fillText("v0.4.3 · stump-fix", w / 2, h - 24);
+  ctx.fillText("v0.4.4 · stump-style", w / 2, h - 24);
   ctx.globalAlpha = 1;
 }
 

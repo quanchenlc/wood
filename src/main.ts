@@ -387,23 +387,12 @@ function syncParchmentHud() {
     showRedDot,
     styleId,
     styleLabel,
-    styleOptions: [
-      ...ART_SET_CATALOG.map((e) => ({
-        id: e.id,
-        label: e.label,
-        color: STYLE_COLORS[e.id] || "#ceb688",
-      })),
-      {
-        id: "stumpA",
-        label: stumpVariant === "A" ? "木桩 A · 扫描 ✓" : "木桩 A · 扫描",
-        color: "#8a7355",
-      },
-      {
-        id: "stumpB",
-        label: stumpVariant === "B" ? "木桩 B · 程序 ✓" : "木桩 B · 程序",
-        color: "#6b5a44",
-      },
-    ],
+    styleOptions: ART_SET_CATALOG.map((e) => ({
+      id: e.id,
+      label: e.label,
+      color: STYLE_COLORS[e.id] || "#ceb688",
+    })),
+    stumpVariant,
     styleSwitching,
     exhaustedBubble,
     capsuleTop: capsuleTopPt(),
@@ -933,16 +922,15 @@ function rankListMaxScroll(): number {
   return Math.max(0, contentH - scrollViewH);
 }
 
-/** 竖屏风格列表最大滚动（≥6 项；视口 132–368，行距 46） */
+/** 竖屏风格列表最大滚动（风格行 +「木桩」小节 + A/B；视口至脚注上） */
 function styleListMaxScroll(): number {
   const { w, h } = screenSize();
   if (isLandscape(w, h)) return 0;
-  const n = ART_SET_CATALOG.length + 2; // sets + stump A/B
-  if (n < 6) return 0;
   const listTop = 132;
-  const listBottom = 368;
+  // tearY = bodyH - 16；首页 bodyH=384 → tear 368；脚注 tear−14；视口底脚注−12
+  const listBottom = 368 - 14 - 12;
   const scrollViewH = Math.max(40, listBottom - listTop);
-  const contentH = n * 46;
+  const contentH = ART_SET_CATALOG.length * 46 + 28 + 2 * 46;
   return Math.max(0, contentH - scrollViewH);
 }
 

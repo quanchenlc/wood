@@ -843,7 +843,7 @@
    "file": "tear_edge@2x.png",
    "width": 1624,
    "height": 64,
-   "bytes": 21600,
+   "bytes": 22506,
    "scale": 2,
    "logical_size": [
     812,
@@ -877,7 +877,7 @@
      "file": "tear_edge@2x.png",
      "width": 1624,
      "height": 64,
-     "bytes": 21600,
+     "bytes": 22506,
      "scale": 2,
      "nine_slice_insets": [
       96,
@@ -890,7 +890,7 @@
      "file": "tear_edge@3x.png",
      "width": 2436,
      "height": 96,
-     "bytes": 37261,
+     "bytes": 39787,
      "scale": 3,
      "nine_slice_insets": [
       144,
