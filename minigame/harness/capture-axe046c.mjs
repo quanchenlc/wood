@@ -262,9 +262,9 @@ async function composeContactSheets() {
       BUILD_REV: version.BUILD_REV,
     },
     tip: version.BUILD_REV,
-    note: "0.4.6 axe046c — re-authored swing keys (no ax_anim curves) + pack4 audio",
+    note: "0.4.6 axe046c — rotX tip-zeroed swing (edge down / cheek to camera) + pack4 audio; boss-face harness",
     root_cause:
-      "Baked ax_anim_v03 TRS reintroduced screen.toys keyframe IP. Replaced with project-authored 5-key smoothstep poses aimed at measured goals (idle hidden, tip on log top at impact, no top-tab overlap). check:ip now fingerprints the discarded float sequences.",
+      "Boss 体验版 showed vertical stick + sideways cool-grey cheek on the log FACE (detached head). Cause: authored keys still used ax_anim-like compound quaternions that laid the edge line toward the camera. Fix: pure Euler(rotX) keys with tip-zeroed Mesh T/S positions so cheek +Z faces the camera, tip sits on the log TOP, handle foreshortens clear of the top tab. Harness fails bossSidewaysFace + sidewaysBossPattern.",
     asserts: metaAsserts,
     shots: [
       "axe046c_contact_portrait.png",
@@ -437,6 +437,58 @@ async function probeAxeNearLog(pngPath, baselinePath, logTopCss, { dpr = 2, band
 }
 
 /**
+ * Boss wrong-shot detector: large cool-grey cheek silhouette on the vertical log FACE
+ * (mid-body), NOT on the log top. Matches boss_axe_wrong.png (handle stick + detached head).
+ */
+async function probeBossSidewaysFace(pngPath, logTopCss, { dpr = 2 } = {}) {
+  const { data, info } = await sharp(pngPath).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const w = info.width;
+  const h = info.height;
+  const logY = Math.round((logTopCss?.y ?? h / dpr / 2) * dpr);
+  const logX = Math.round((logTopCss?.x ?? w / dpr / 2) * dpr);
+  // Face band: well below log top, central column (where the boss grey cheek sits)
+  const y0 = Math.min(h - 2, logY + Math.round(40 * dpr));
+  const y1 = Math.min(h, logY + Math.round(160 * dpr));
+  const x0 = Math.max(0, logX - Math.round(90 * dpr));
+  const x1 = Math.min(w, logX + Math.round(90 * dpr));
+  let n = 0;
+  let minX = w;
+  let maxX = 0;
+  let minY = h;
+  let maxY = 0;
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
+      const i = (y * w + x) * 4;
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      const max = Math.max(r, g, b);
+      const min = Math.min(r, g, b);
+      // Cool translucent grey cheek (boss shot) — not warm bark
+      if (!(lum > 120 && lum < 210 && max - min < 35 && b + 6 >= r && r < 200)) continue;
+      n++;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+  const bw = Math.max(1, maxX - minX);
+  const bh = Math.max(1, maxY - minY);
+  const aspect = bw / bh;
+  // Boss pattern: substantial cool-grey mass on the face, typically wider than tall
+  const hit = n > 800 && aspect >= 0.85;
+  return {
+    coolFaceCount: n,
+    aspect,
+    widthCss: bw / dpr,
+    heightCss: bh / dpr,
+    bossSidewaysFace: hit,
+  };
+}
+
+/**
  * Metal axe-head bbox near the tip (diff vs idle). Returns aspect = width/height.
  * Cheek-facing → wider than tall (aspect > 1). Sideways-on-face often also wide but
  * sits below the log top (centroid deep on the log face).
@@ -605,13 +657,15 @@ function compareMetrics(pre, cur, orient) {
   const impactTabOk = !cur.impact?.img?.overlapsTopTab;
   const preImpactTab = Boolean(pre.impact?.img?.overlapsTopTab);
 
-  // Head orientation: must NOT match boss sideways-on-face (wide head on log FACE).
+  // Head orientation: must NOT match boss sideways-on-face (wide cool cheek on log FACE).
   // When metal bbox is measurable, require cheek-facing (wider than tall) on the log top.
-  // If bbox is unavailable, tip-on-log + no tab overlap is the gate (warm steel is hard to segment).
   const curHead = cur.impact?.head || cur.impact?.closeup?.head || null;
   const preHead = pre.impact?.head || null;
+  const bossFace = cur.impact?.bossFace || cur.impact?.closeup?.bossFace || null;
+  const notBossFace = bossFace?.bossSidewaysFace !== true;
   const headAspectOk =
     tipVsLogOk &&
+    notBossFace &&
     curHead?.sidewaysBossPattern !== true &&
     (curHead == null || (curHead.widerThanTall === true && curHead.onLogFace !== true));
   const headAspectMatchPre =
@@ -636,6 +690,8 @@ function compareMetrics(pre, cur, orient) {
     preImpactTab,
     headAspectOk,
     headAspectMatchPre,
+    notBossFace,
+    bossFace,
     curHead,
     preHead,
     dx,
@@ -750,6 +806,7 @@ async function captureSequence(orient, cssW, cssH) {
   let hookImpact = null;
   let closeupPath = null;
   let closeupHead = null;
+  let closeupBossFace = null;
   const hasSeek = await page.evaluate(() => {
     if (!window.__fw.projectWorld) return false;
     return typeof window.__fw.projectLogTop === "function";
@@ -780,22 +837,28 @@ async function captureSequence(orient, cssW, cssH) {
     closeupPath = join(dir, "impact_closeup.png");
     await page.screenshot({ path: closeupPath, type: "png" });
     const closeupLog = await probeLogTop(closeupPath);
-    // Prefer image tip near the log top; hook tip can sit high when the head is tilted.
+    const logRef =
+      closeupLog?.y != null ? closeupLog : { x: hookImpact.logCenterX, y: hookImpact.logTopY };
+    // Prefer harness tip when it sits on the log top (world + screen). Image tip
+    // can latch onto bark/handle noise and falsely flag tipOnFace.
     const closeupImg = await probeAxeInImage(closeupPath, { baselinePath: idlePath });
-    const headTip = closeupImg.tipCss || {
-      x: hookImpact.bladeScreenX,
-      y: (hookImpact.bladeScreenY + (closeupLog?.y ?? hookImpact.logTopY ?? hookImpact.bladeScreenY)) / 2,
-    };
-    closeupHead = await probeHeadBBox(
-      closeupPath,
-      idlePath,
-      headTip,
-      closeupLog?.y != null ? closeupLog : { x: hookImpact.logCenterX, y: hookImpact.logTopY },
+    const hookDyWorld = Math.abs((hookImpact.tip?.[1] ?? 0) - (hookImpact.imp?.[1] ?? 0));
+    const hookDyScreen = Math.abs(
+      (hookImpact.bladeScreenY ?? 0) - (hookImpact.logTopY ?? hookImpact.bladeScreenY ?? 0),
     );
+    const hookTipOk = hookDyWorld <= 0.12 && hookDyScreen <= 40;
+    const headTip = hookTipOk
+      ? { x: hookImpact.bladeScreenX, y: hookImpact.bladeScreenY }
+      : closeupImg.tipCss || {
+          x: hookImpact.bladeScreenX,
+          y: (hookImpact.bladeScreenY + (logRef?.y ?? hookImpact.bladeScreenY)) / 2,
+        };
+    closeupHead = await probeHeadBBox(closeupPath, idlePath, headTip, logRef);
+    closeupBossFace = await probeBossSidewaysFace(closeupPath, logRef);
     await page.evaluate(() => window.__fw.axe().seekTime(5));
     await sleep(80);
     await waitIdle(30000);
-    console.log(LABEL, orient, "closeup head", closeupHead);
+    console.log(LABEL, orient, "closeup head", closeupHead, "bossFace", closeupBossFace);
   }
 
   const framePaths = [];
@@ -887,6 +950,9 @@ async function captureSequence(orient, cssW, cssH) {
     );
     if (burstHead && (!head || !burstHead.sidewaysBossPattern)) head = burstHead;
   }
+  const bossFace =
+    closeupBossFace ||
+    (await probeBossSidewaysFace(bestImpact.path || impactPath, logTopCss));
 
   const impact = {
     frame: `f${String(chosenImpactIdx).padStart(2, "0")}.png`,
@@ -899,8 +965,9 @@ async function captureSequence(orient, cssW, cssH) {
     img: impactImg,
     hook: hookImpact,
     head,
+    bossFace,
     closeup: closeupPath
-      ? { path: "impact_closeup.png", head: closeupHead }
+      ? { path: "impact_closeup.png", head: closeupHead, bossFace: closeupBossFace }
       : null,
   };
 

@@ -1,15 +1,18 @@
 /**
  * Original authored axe swing (0.4.6).
  *
- * Measured goals from a pre-clean playthrough (not its keyframe data):
+ * Measured goals from pre-clean playthrough + boss wrong-shot (references only):
  * - idle: axe hidden
  * - wind-up: raised, clear of the top HUD band
- * - impact (~0.12s): tip on log top; handle from above; blade edge into the
- *   log (−Y); cheek ≈ +X; head attached to the handle
+ * - impact (~0.12s): tip on log TOP centre; handle from above (edge line ≈ +Y,
+ *   tilted toward camera so the handle foreshortens clear of the top tab);
+ *   blade EDGE into the log; cheek ≈ +Z (toward camera after pivot.lookAt);
+ *   head attached to the handle
+ *   (NOT the boss pattern: vertical stick + sideways cheek on the log FACE)
  * - follow-through then fade
  *
- * Tip placement accounts for axe.gltf Mesh translation/scale. Keys / timing /
- * easing are project-authored — no ax_anim keyframe arrays.
+ * Keys are pure rotX + tip-zeroed translation (axe.gltf Mesh T/S accounted for).
+ * No ax_anim_v03 / screen.toys keyframe floats.
  */
 
 export const AXE_ANIM_DURATION = 0.78;
@@ -22,11 +25,21 @@ export type AxeKey = {
   q: readonly [number, number, number, number];
 };
 
-/** Five keys; smoothstep (cubic) between neighbours. */
+/**
+ * Five keys; smoothstep between neighbours.
+ * Quaternions are Euler(rotX, 0, 0) only — keeps cheek +Z / edge +Y in pivot space.
+ * Positions place the mesh tip (Mesh local −X) on the pivot at impact; a small
+ * negative Y bite sinks the edge into the log top without parking on the bark face.
+ */
 export const AXE_KEYS: readonly AxeKey[] = [
-  { t: 0, p: [0.3105, 0.0264, -0.2335], q: [-0.17904, -0.67468, -0.19349, -0.68943] },
-  { t: 0.08, p: [0.1292, -0.1602, -0.4037], q: [-0.21495, -0.66296, -0.2253, -0.68083] },
-  { t: AXE_ANIM_IMPACT_AT, p: [0.0283, -0.273, -0.4894], q: [-0.24964, -0.65044, -0.25721, -0.66966] },
-  { t: 0.36, p: [-0.117, -0.4096, -0.4444], q: [-0.32101, -0.65596, -0.31477, -0.6063] },
-  { t: AXE_ANIM_DURATION, p: [-0.1962, -0.5969, -0.3207], q: [-0.36385, -0.64749, -0.36385, -0.56213] },
+  // wind-up — raised; strong rotX keeps handle clear of the top tab
+  { t: 0, p: [0.1808, 0.0506, -0.5073], q: [0.54383, 0, 0, 0.83919] },
+  // pre-strike
+  { t: 0.06, p: [0.1608, -0.2296, -0.4612], q: [0.45734, 0, 0, 0.88929] },
+  // impact — tip on log top (−2 cm bite); edge down; cheek to camera; head on handle
+  { t: AXE_ANIM_IMPACT_AT, p: [0.1408, -0.4079, -0.4245], q: [0.39861, 0, 0, 0.91712] },
+  // follow-through
+  { t: 0.34, p: [0.1408, -0.5451, -0.2555], q: [0.22311, 0, 0, 0.97479] },
+  // exit
+  { t: AXE_ANIM_DURATION, p: [0.1408, -0.654, -0.0148], q: [0.025, 0, 0, 0.99969] },
 ];

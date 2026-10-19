@@ -16,8 +16,10 @@ import {
  * 测量目标来自 pre-clean 实机观感（闲置隐藏、落点贴齐木顶、柄自上方落下、
  * 颊面朝相机、不挡顶栏）。不含 ax_anim / screen.toys 的关键帧数据。
  *
- * 模型约定：柄 +Y，刃口 −X，颊面 ±Z。pivot.lookAt 后 −Z 朝向相机一侧，
- * 颊面 +Z 朝镜头（宽面剪影）；animNull 仅做 rotX 下劈。
+ * 模型约定（build_axe_placeholder）：柄 +Y，刃口线 ∥ Y，刃朝 −X，颊面 ±Z。
+ * pivot.lookAt 后 local +Z 朝镜头、+X 朝右；animNull 只用 rotX 下劈
+ * （勿套用 ax_anim 的复合四元数，否则刃口线会躺平、颊面贴在原木立面上）。
+ * 挂模保持 identity（不要 MODEL_YAW），否则颊面转到 ±X，屏幕上只剩窄侧影。
  */
 const _qa = new THREE.Quaternion();
 const _qb = new THREE.Quaternion();
@@ -102,12 +104,17 @@ export class AxeAnimation {
         clampMap(mat.metalnessMap, false);
         clampMap(mat.roughnessMap, false);
         clampMap(mat.aoMap, false);
-        if (mat.color) mat.color.set(0xffffff);
+        // Painted steel: no envMap (sky tint → translucent ghost). Warm grade,
+        // metalness 0 so the cheek reads as solid opaque steel on the log top.
+        if (mat.color) mat.color.setRGB(1.1, 1.05, 0.95);
         mat.metalness = 0;
         mat.metalnessMap = null;
-        mat.roughness = Math.max(mat.roughness ?? 0.45, 0.4);
+        mat.roughness = Math.max(mat.roughness ?? 0.45, 0.42);
         mat.envMapIntensity = 0;
-        mat.color.setRGB(1.08, 1.04, 0.94);
+        mat.transparent = false;
+        mat.opacity = 1;
+        mat.depthWrite = true;
+        mat.depthTest = true;
         mat.needsUpdate = true;
       }
     });
@@ -148,6 +155,7 @@ export class AxeAnimation {
   private attachAxeModel(root: THREE.Object3D) {
     this.disposeAxeModel();
     this.axeModel = root;
+    // Identity pose: cheek ±Z faces camera after pivot.lookAt (see class note).
     this.axeModel.position.set(0, 0, 0);
     this.axeModel.rotation.set(0, 0, 0);
     this.axeModel.scale.setScalar(1);
