@@ -5,57 +5,57 @@
   },
   "accessors": [
     {
-      "type": "VEC3",
-      "componentType": 5126,
-      "count": 1034,
-      "max": [
-        0.4347217381000519,
-        0.035062987357378006,
-        0.4388216435909271
-      ],
-      "min": [
-        -0.4118024706840515,
-        -0.44999998807907104,
-        -0.4314376413822174
-      ],
+      "type": "SCALAR",
+      "componentType": 5123,
+      "count": 5880,
       "bufferView": 0,
       "byteOffset": 0
     },
     {
       "type": "VEC3",
       "componentType": 5126,
-      "count": 1034,
-      "bufferView": 0,
+      "count": 1011,
+      "max": [
+        0.5093514323234558,
+        0.02151915431022644,
+        0.45558592677116394
+      ],
+      "min": [
+        -0.4681185781955719,
+        -0.4309999942779541,
+        -0.4856824576854706
+      ],
+      "bufferView": 1,
+      "byteOffset": 0
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 1011,
+      "bufferView": 1,
       "byteOffset": 12
     },
     {
       "type": "VEC2",
       "componentType": 5126,
-      "count": 1034,
-      "bufferView": 0,
-      "byteOffset": 24
-    },
-    {
-      "type": "SCALAR",
-      "componentType": 5123,
-      "count": 5400,
+      "count": 1011,
       "bufferView": 1,
-      "byteOffset": 0
+      "byteOffset": 24
     }
   ],
   "bufferViews": [
     {
       "buffer": 0,
       "byteOffset": 0,
-      "byteLength": 33088,
-      "byteStride": 32,
-      "target": 34962
+      "byteLength": 11760,
+      "target": 34963
     },
     {
       "buffer": 0,
-      "byteOffset": 33088,
-      "byteLength": 10800,
-      "target": 34963
+      "byteOffset": 11760,
+      "byteLength": 32352,
+      "byteStride": 32,
+      "target": 34962
     }
   ],
   "samplers": [
@@ -82,19 +82,20 @@
       "uri": "stump_baseColor.jpg"
     },
     {
-      "mimeType": "image/png",
-      "uri": "stump_normal.png"
+      "mimeType": "image/jpeg",
+      "uri": "stump_normal.jpg"
     }
   ],
   "buffers": [
     {
       "uri": "stump.bin",
-      "byteLength": 43888
+      "byteLength": 44112
     }
   ],
   "materials": [
     {
       "name": "stump",
+      "doubleSided": true,
       "pbrMetallicRoughness": {
         "roughnessFactor": 0.85,
         "metallicFactor": 0,
@@ -113,13 +114,13 @@
       "primitives": [
         {
           "attributes": {
-            "POSITION": 0,
-            "NORMAL": 1,
-            "TEXCOORD_0": 2
+            "POSITION": 1,
+            "NORMAL": 2,
+            "TEXCOORD_0": 3
           },
           "mode": 4,
           "material": 0,
-          "indices": 3
+          "indices": 0
         }
       ]
     }

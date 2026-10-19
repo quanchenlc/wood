@@ -92,8 +92,13 @@ export class AxeAnimation {
         clampMap(mat.roughnessMap, false);
         clampMap(mat.aoMap, false);
         if (mat.color) mat.color.set(0xffffff);
-        if (typeof mat.metalness === "number") mat.metalness = 0;
-        if (typeof mat.roughness === "number") mat.roughness = Math.max(mat.roughness, 0.55);
+        // No envMap: metalness>0 mirrors the blue sky → "flat blue box".
+        // Painted steel albedo + warm tint; ORM drives roughness only.
+        mat.metalness = 0;
+        mat.metalnessMap = null;
+        mat.roughness = Math.max(mat.roughness ?? 0.45, 0.4);
+        mat.envMapIntensity = 0;
+        mat.color.setRGB(1.08, 1.04, 0.94);
         mat.needsUpdate = true;
       }
     });

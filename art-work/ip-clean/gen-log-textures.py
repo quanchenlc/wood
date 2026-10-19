@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Generate log albedo/normal maps matching original mean colours & resolutions.
+"""0.4.1 — remake log maps from CC0 bark scans with vertical furrows.
 
-Sources (see CREDITS.md):
-- Optional ambientCG Bark007 / Wood* (CC0) recolored to target means
-- Procedural rings / fibres / crack when CC0 tiles absent
+Prefer Poly Haven bark_brown_02 / ambientCG Bark001 (OpenGL normals).
+Warm grey-brown grade, no blue/lilac cast, no blotch overlays.
 """
 from __future__ import annotations
 
@@ -17,9 +16,10 @@ from PIL import Image, ImageFilter
 ROOT = Path("/workspace")
 OUT = ROOT / "public/assets"
 ACG = Path("/tmp/ip-clean-dl/acg")
-DATE = "2026-10-19"
+PH = Path("/tmp/ip-clean-dl/ph")
 
-BARK_MEAN = np.array([115.0, 107.0, 98.0])
+# Original mood targets (warm grey-brown — not a hard mean match)
+BARK_MEAN = np.array([118.0, 108.0, 92.0])  # warmer than cool grey
 END_MEAN = np.array([201.0, 178.0, 144.0])
 INNER_MEAN = np.array([213.0, 190.0, 157.0])
 
@@ -61,11 +61,11 @@ def fbm(h, w, octaves=5, scale=4.0, seed=0.0):
     return total
 
 
-def to_normal(height: np.ndarray, strength=4.0) -> Image.Image:
-    """Central difference height → tangent-space normal RGB."""
+def to_normal_gl(height: np.ndarray, strength=5.0) -> Image.Image:
+    """OpenGL tangent-space normal (Y+ up in map = green)."""
     dy, dx = np.gradient(height)
     nx = -dx * strength
-    ny = -dy * strength
+    ny = dy * strength  # OpenGL: +Y in green
     nz = np.ones_like(height)
     length = np.sqrt(nx * nx + ny * ny + nz * nz) + 1e-8
     nx, ny, nz = nx / length, ny / length, nz / length
@@ -76,172 +76,235 @@ def to_normal(height: np.ndarray, strength=4.0) -> Image.Image:
     return Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8))
 
 
-def recolor_to_mean(rgb: np.ndarray, target: np.ndarray) -> np.ndarray:
-    cur = rgb.mean(axis=(0, 1))
-    scale = target / np.maximum(cur, 1.0)
-    out = rgb * scale
-    # mild contrast preserve
-    mean = out.mean(axis=(0, 1), keepdims=True)
-    out = mean + (out - mean) * 1.05
+def strip_blue_cast(rgb: np.ndarray) -> np.ndarray:
+    """Kill lilac/blue cast: pull B down toward warm grey-brown."""
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    # where blue exceeds red, blend B toward min(R,G)*0.92
+    excess = np.maximum(b - r, 0)
+    b2 = b - excess * 0.85
+    # slight warm push
+    r2 = r * 1.02 + 2.0
+    g2 = g * 1.0
+    out = np.stack([r2, g2, b2], axis=-1)
     return np.clip(out, 0, 255)
 
 
-def load_acg_color(zip_name: str, prefer=("Color", "color", "diff")) -> np.ndarray | None:
+def grade_warm(rgb: np.ndarray, target: np.ndarray, contrast=1.25) -> np.ndarray:
+    """Contrast around luminance, then shift mean toward warm target; strip blue."""
+    rgb = strip_blue_cast(rgb)
+    lum = 0.299 * rgb[..., 0] + 0.587 * rgb[..., 1] + 0.114 * rgb[..., 2]
+    lum_m = lum.mean()
+    rgb = (rgb - lum_m) * contrast + lum_m
+    # per-channel mean shift (preserves relative detail better than uniform scale)
+    cur = rgb.reshape(-1, 3).mean(0)
+    shift = target - cur
+    rgb = rgb + shift
+    # rein in any remaining blue cast after shift
+    rgb = strip_blue_cast(rgb)
+    # final soft mean nudge
+    cur2 = rgb.reshape(-1, 3).mean(0)
+    rgb = rgb * (target / np.maximum(cur2, 1.0))
+    return np.clip(rgb, 0, 255)
+
+
+def load_jpg(path: Path) -> np.ndarray | None:
+    if not path.exists() or path.stat().st_size < 1000:
+        return None
+    return np.asarray(Image.open(path).convert("RGB"), dtype=np.float64)
+
+
+def load_acg(zip_name: str, kind="Color") -> np.ndarray | None:
     zpath = ACG / zip_name
-    if not zpath.exists() or zpath.stat().st_size < 1000:
+    if not zpath.exists():
         return None
-    try:
-        with zipfile.ZipFile(zpath) as zf:
-            names = zf.namelist()
-            pick = None
-            for p in prefer:
-                for n in names:
-                    if p.lower() in n.lower() and n.lower().endswith((".jpg", ".jpeg", ".png")):
-                        if "normal" in n.lower() or "rough" in n.lower() or "metal" in n.lower():
-                            continue
-                        pick = n
-                        break
-                if pick:
-                    break
-            if not pick:
-                return None
-            with zf.open(pick) as f:
-                im = Image.open(f).convert("RGB")
-            return np.asarray(im, dtype=np.float64)
-    except Exception as e:
-        print("acg load fail", zip_name, e)
-        return None
+    with zipfile.ZipFile(zpath) as zf:
+        names = zf.namelist()
+        if kind == "Color":
+            picks = [n for n in names if "Color" in n and n.lower().endswith((".jpg", ".jpeg", ".png"))]
+        else:
+            picks = [
+                n
+                for n in names
+                if "NormalGL" in n and n.lower().endswith((".jpg", ".jpeg", ".png"))
+            ]
+            if not picks:
+                picks = [n for n in names if "Normal" in n and "DX" not in n]
+        if not picks:
+            return None
+        with zf.open(picks[0]) as f:
+            return np.asarray(Image.open(f).convert("RGB"), dtype=np.float64)
+
+
+def tile_to(rgb: np.ndarray, w: int, h: int) -> np.ndarray:
+    """Cover 2:1 bark atlas by repeating the scan along U (vertical furrows stay vertical)."""
+    im = Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8))
+    # bark scans are usually square; for cylinder U wraps around → width=2048, height=1024
+    # Keep furrows vertical on the log: V = up the trunk (h), U = around (w)
+    src_w, src_h = im.size
+    # Scale so height fills h, then tile horizontally
+    scale = h / src_h
+    nw = max(1, int(src_w * scale))
+    im = im.resize((nw, h), Image.Resampling.LANCZOS)
+    canvas = Image.new("RGB", (w, h))
+    x = 0
+    while x < w:
+        canvas.paste(im, (x, 0))
+        x += nw
+    return np.asarray(canvas, dtype=np.float64)
+
+
+def height_from_albedo(rgb: np.ndarray) -> np.ndarray:
+    lum = 0.299 * rgb[..., 0] + 0.587 * rgb[..., 1] + 0.114 * rgb[..., 2]
+    # invert: dark fissures = deep
+    h = 1.0 - lum / 255.0
+    h = np.asarray(
+        Image.fromarray((h * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(0.6)),
+        dtype=np.float64,
+    ) / 255.0
+    return h
 
 
 def gen_bark(w=2048, h=1024) -> tuple[Image.Image, Image.Image]:
-    src = load_acg_color("Bark007.zip")
-    if src is not None:
-        im = Image.fromarray(src.astype(np.uint8)).resize((w, h), Image.LANCZOS)
-        rgb = np.asarray(im, dtype=np.float64)
-        # tile vertically for 2:1 aspect if needed
-        rgb = recolor_to_mean(rgb, BARK_MEAN)
-        # add vertical fissures
-        n = fbm(h, w, 6, 6.0, 2.0)
-        fissure = (value_noise(h, w, 18, 8.0) > 0.72).astype(np.float64)
-        fissure = Image.fromarray((fissure * 255).astype(np.uint8)).filter(
-            ImageFilter.GaussianBlur(1.2)
-        )
-        fissure = np.asarray(fissure, dtype=np.float64) / 255.0
-        rgb = rgb * (1 - 0.18 * fissure[..., None])
-        height = fbm(h, w, 5, 10.0, 1.0) * 0.6 + fissure * 0.5
+    # Prefer Bark001 (high-contrast vertical furrows, fewer unique knots → cleaner wrap)
+    # then bark_brown_02, Bark012
+    src = load_acg("Bark001.zip", "Color")
+    nrm_src = load_acg("Bark001.zip", "Normal")
+    label = "Bark001"
+    if src is None:
+        src = load_jpg(PH / "bark_brown_02_diff_1k.jpg")
+        nrm_src = load_jpg(PH / "bark_brown_02_nor_gl_1k.jpg")
+        label = "bark_brown_02"
+    if src is None:
+        src = load_acg("Bark012.zip", "Color")
+        nrm_src = load_acg("Bark012.zip", "Normal")
+        label = "Bark012"
+    if src is None:
+        raise SystemExit("no CC0 bark source found")
+
+    rgb = tile_to(src, w, h)
+    # Kill moss/green cast (common on PH bark_brown_02) → warm grey-brown
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    green_excess = np.maximum(g - np.maximum(r, b), 0)
+    g = g - green_excess * 0.85
+    # Also pull cyan/blue moss remnants
+    rgb = np.stack([r, g, b], axis=-1)
+    rgb = strip_blue_cast(rgb)
+
+    # Avoid obvious tile seams: cross-blend a horizontally shifted copy
+    shift = w // 3
+    rgb2 = np.roll(rgb, shift, axis=1)
+    mix = 0.5 + 0.5 * np.sin(np.linspace(0, 2 * np.pi, w)[None, :])
+    rgb = rgb * (1 - 0.35 * mix[..., None]) + rgb2 * (0.35 * mix[..., None])
+
+    # boost local contrast in fissures (no rectangular blotch overlay)
+    lum = 0.299 * rgb[..., 0] + 0.587 * rgb[..., 1] + 0.114 * rgb[..., 2]
+    blur = np.asarray(
+        Image.fromarray(np.clip(lum, 0, 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(2.5)),
+        dtype=np.float64,
+    )
+    detail = (lum - blur) * 1.55
+    rgb = rgb + detail[..., None]
+    # warm reddish flecks in midtones
+    fleck = (value_noise(h, w, 40, 3.0) > 0.82) & (lum > 80) & (lum < 150)
+    rgb[fleck, 0] = np.minimum(rgb[fleck, 0] + 22, 255)
+    rgb[fleck, 1] = np.minimum(rgb[fleck, 1] + 6, 255)
+    rgb[fleck, 2] = np.maximum(rgb[fleck, 2] - 8, 0)
+
+    rgb = grade_warm(rgb, BARK_MEAN, contrast=1.4)
+    albedo = Image.fromarray(rgb.astype(np.uint8))
+
+    if nrm_src is not None:
+        nrm = tile_to(nrm_src, w, h)
+        # Ensure OpenGL Y (already from nor_gl); strip any sRGB-ish encoding by keeping linear
+        # Re-normalize channels around 128
+        n = (nrm / 255.0) * 2 - 1
+        # Flip green if source was DX (bark_brown is GL)
+        length = np.sqrt((n**2).sum(-1, keepdims=True)) + 1e-8
+        n = n / length
+        nrm_img = Image.fromarray(np.clip((n + 1) * 0.5 * 255, 0, 255).astype(np.uint8))
     else:
-        n = fbm(h, w, 6, 8.0, 1.0)
-        v = fbm(h, w, 4, 22.0, 5.0)
-        rgb = np.zeros((h, w, 3), dtype=np.float64)
-        for c, m in enumerate(BARK_MEAN):
-            rgb[..., c] = m + (n - 0.5) * 42 + (v - 0.5) * 18
-        # vertical cracks
-        xs = np.linspace(0, 1, w)
-        cracks = np.zeros((h, w))
-        for k in range(14):
-            cx = (0.07 + 0.86 * hash2(k * 1.3, 2.1)) % 1.0
-            wobble = 0.01 * np.sin(np.linspace(0, 18, h) + k)
-            d = np.abs(xs[None, :] - (cx + wobble[:, None]))
-            cracks += np.exp(-((d * w) ** 2) / 8.0)
-        rgb *= 1 - 0.22 * np.clip(cracks, 0, 1)[..., None]
-        height = n * 0.7 + cracks * 0.6
-        rgb = recolor_to_mean(np.clip(rgb, 0, 255), BARK_MEAN)
-    albedo = Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8))
-    return albedo, to_normal(height, strength=6.0)
+        nrm_img = to_normal_gl(height_from_albedo(rgb), strength=7.0)
+
+    print(f"[bark] source={label} mean={tuple(rgb.reshape(-1,3).mean(0).round(1))} warm(R-B)={rgb[:,:,0].mean()-rgb[:,:,2].mean():.1f}")
+    return albedo, nrm_img
 
 
 def gen_end(size=1024) -> tuple[Image.Image, Image.Image]:
-    """End grain: rings + radial crack, mean ~ (201,178,144)."""
     yy, xx = np.mgrid[0:size, 0:size]
     cx = cy = size / 2
     dx = (xx - cx) / (size / 2)
     dy = (yy - cy) / (size / 2)
     r = np.sqrt(dx * dx + dy * dy)
     ang = np.arctan2(dy, dx)
-    # growth rings
-    rings = 0.5 + 0.5 * np.sin(r * 42 + fbm(size, size, 3, 3.0, 0.5) * 3.5)
-    rings = rings * (r < 1.02)
-    grain = fbm(size, size, 4, 14.0, 2.2)
+    rings = 0.5 + 0.5 * np.sin(r * 48 + fbm(size, size, 3, 3.0, 0.5) * 4.0)
+    grain = fbm(size, size, 4, 16.0, 2.2)
     rgb = np.zeros((size, size, 3), dtype=np.float64)
     for c, m in enumerate(END_MEAN):
-        rgb[..., c] = m + (rings - 0.5) * 38 + (grain - 0.5) * 16
-    # radial crack
-    crack_ang = 0.35
-    dang = np.minimum(np.abs(ang - crack_ang), np.abs(ang - crack_ang + 2 * math.pi))
-    crack = (dang < 0.045) & (r > 0.08) & (r < 0.98)
-    crack_f = Image.fromarray((crack.astype(np.uint8) * 255)).filter(ImageFilter.GaussianBlur(1.0))
-    crack_f = np.asarray(crack_f, dtype=np.float64) / 255.0
-    rgb *= 1 - 0.45 * crack_f[..., None]
-    rgb[crack] = rgb[crack] * 0.55
-    # soft disk mask edge
-    edge = np.clip((1.05 - r) * 8, 0, 1)
-    rgb = rgb * edge[..., None] + END_MEAN * (1 - edge[..., None]) * 0.85
-    # optional wood tile modulate
-    src = load_acg_color("Wood062.zip")
-    if src is None:
-        src = load_acg_color("Wood048.zip")
-    if src is not None:
-        tile = np.asarray(
-            Image.fromarray(src.astype(np.uint8)).resize((size, size), Image.LANCZOS),
-            dtype=np.float64,
-        )
-        tile = recolor_to_mean(tile, END_MEAN)
-        rgb = 0.55 * rgb + 0.45 * tile
-        rgb = recolor_to_mean(rgb, END_MEAN)
-    height = rings * 0.35 + grain * 0.25 - crack_f * 0.8
-    return Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8)), to_normal(height, 5.0)
+        rgb[..., c] = m + (rings - 0.5) * 44 + (grain - 0.5) * 14
+    # heartwood slightly cooler-darker, still warm
+    heart = np.clip(1.0 - r * 1.3, 0, 1)[..., None]
+    rgb = rgb * (1 - 0.12 * heart) + np.array([170, 145, 110]) * 0.12 * heart
+    crack_ang = 0.4
+    dang = np.minimum(np.abs(ang - crack_ang), 2 * math.pi - np.abs(ang - crack_ang))
+    crack = (dang < 0.04) & (r > 0.06) & (r < 0.97)
+    crack_f = np.asarray(
+        Image.fromarray((crack.astype(np.uint8) * 255)).filter(ImageFilter.GaussianBlur(0.8)),
+        dtype=np.float64,
+    ) / 255.0
+    rgb = rgb * (1 - 0.55 * crack_f[..., None])
+    rgb = strip_blue_cast(rgb)
+    rgb = grade_warm(rgb, END_MEAN, contrast=1.15)
+    height = rings * 0.4 + grain * 0.2 - crack_f * 0.9
+    return Image.fromarray(rgb.astype(np.uint8)), to_normal_gl(height, 5.5)
 
 
 def gen_inner(size=1024) -> tuple[Image.Image, Image.Image]:
-    """Split face: longitudinal fibres."""
-    src = load_acg_color("Wood048.zip")
+    src = load_acg("Wood048.zip")
     if src is None:
-        src = load_acg_color("Wood062.zip")
+        src = load_acg("Wood062.zip")
     n = fbm(size, size, 5, 6.0, 3.0)
-    # long fibres along X
-    fibre = fbm(size, size, 4, 40.0, 7.0)
+    fibre = fbm(size, size, 4, 48.0, 7.0)
     ys = np.linspace(0, 1, size)[:, None]
-    stretch = np.sin(ys * math.pi * 28 + fibre * 4)
+    stretch = np.sin(ys * math.pi * 36 + fibre * 5)
     rgb = np.zeros((size, size, 3), dtype=np.float64)
     for c, m in enumerate(INNER_MEAN):
-        rgb[..., c] = m + (n - 0.5) * 22 + stretch * 10
+        rgb[..., c] = m + (n - 0.5) * 24 + stretch * 12
     if src is not None:
         tile = np.asarray(
-            Image.fromarray(src.astype(np.uint8)).resize((size, size), Image.LANCZOS),
+            Image.fromarray(src.astype(np.uint8)).resize((size, size), Image.Resampling.LANCZOS),
             dtype=np.float64,
         )
-        # stretch vertically for fibre look
-        tile = recolor_to_mean(tile, INNER_MEAN)
-        rgb = 0.4 * rgb + 0.6 * tile
-        rgb = recolor_to_mean(rgb, INNER_MEAN)
-    height = n * 0.4 + stretch * 0.15
-    return Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8)), to_normal(height, 4.5)
+        # stretch along fibre axis
+        tile = np.asarray(
+            Image.fromarray(tile.astype(np.uint8)).resize((size, int(size * 1.4)), Image.Resampling.LANCZOS)
+            .crop((0, int(size * 0.2), size, int(size * 0.2) + size)),
+            dtype=np.float64,
+        )
+        rgb = 0.35 * rgb + 0.65 * tile
+    rgb = strip_blue_cast(rgb)
+    rgb = grade_warm(rgb, INNER_MEAN, contrast=1.2)
+    height = n * 0.45 + stretch * 0.2
+    return Image.fromarray(rgb.astype(np.uint8)), to_normal_gl(height, 5.0)
 
 
-def save_jpg(im: Image.Image, path: Path, quality=88):
+def save_jpg(im: Image.Image, path: Path, quality=90):
     path.parent.mkdir(parents=True, exist_ok=True)
     im.save(path, "JPEG", quality=quality, optimize=True)
-    print("wrote", path, path.stat().st_size, im.size)
+    a = np.asarray(im.convert("RGB"), dtype=np.float64)
+    print("wrote", path.name, path.stat().st_size, im.size, "mean", tuple(a.mean((0, 1)).round(1)),
+          "R-B", round(float(a[:, :, 0].mean() - a[:, :, 2].mean()), 1))
 
 
 def main():
     bark, bark_n = gen_bark()
     end, end_n = gen_end()
     inner, inner_n = gen_inner()
-    save_jpg(bark, OUT / "outsidebark.jpg", 90)
+    save_jpg(bark, OUT / "outsidebark.jpg", 91)
     save_jpg(bark_n, OUT / "outsidebark_n.jpg", 88)
-    save_jpg(end, OUT / "top.jpg", 90)
+    save_jpg(end, OUT / "top.jpg", 91)
     save_jpg(end_n, OUT / "top_n.jpg", 88)
-    save_jpg(inner, OUT / "insidegrain.jpg", 90)
+    save_jpg(inner, OUT / "insidegrain.jpg", 91)
     save_jpg(inner_n, OUT / "insidegrain_n.jpg", 88)
-    # report means
-    for name in [
-        "outsidebark.jpg",
-        "top.jpg",
-        "insidegrain.jpg",
-    ]:
-        a = np.asarray(Image.open(OUT / name).convert("RGB"), dtype=np.float64)
-        print(name, "mean", tuple(a.mean(axis=(0, 1)).round(1)))
 
 
 if __name__ == "__main__":

@@ -58,9 +58,11 @@ function prepareStumpMaterials(root: THREE.Object3D, opts: { castShadow: boolean
       mat.emissiveMap.wrapT = THREE.ClampToEdgeWrapping;
       mat.emissiveMap.needsUpdate = true;
     }
-    mat.color.set(0xffffff);
-    mat.roughness = Math.max(mat.roughness, 0.7);
+    mat.color.setRGB(1.08, 1.02, 0.92);
+    mat.roughness = Math.max(mat.roughness, 0.78);
     mat.metalness = 0;
+    mat.side = THREE.DoubleSide;
+    if (mat.normalScale) mat.normalScale.set(1.05, 1.05);
   });
 }
 

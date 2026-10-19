@@ -7,23 +7,23 @@
     {
       "type": "SCALAR",
       "componentType": 5123,
-      "count": 1620,
+      "count": 2055,
       "bufferView": 0,
       "byteOffset": 0
     },
     {
       "type": "VEC3",
       "componentType": 5126,
-      "count": 335,
+      "count": 367,
       "max": [
-        0.4347217381000519,
-        0.035062987357378006,
-        0.4388216435909271
+        0.5093514323234558,
+        0.02151915431022644,
+        0.45558592677116394
       ],
       "min": [
-        -0.4118024706840515,
-        -0.44999998807907104,
-        -0.4314376413822174
+        -0.4681185781955719,
+        -0.4309999942779541,
+        -0.4856824576854706
       ],
       "bufferView": 1,
       "byteOffset": 0
@@ -31,14 +31,14 @@
     {
       "type": "VEC3",
       "componentType": 5126,
-      "count": 335,
+      "count": 367,
       "bufferView": 1,
       "byteOffset": 12
     },
     {
       "type": "VEC2",
       "componentType": 5126,
-      "count": 335,
+      "count": 367,
       "bufferView": 1,
       "byteOffset": 24
     }
@@ -47,13 +47,13 @@
     {
       "buffer": 0,
       "byteOffset": 0,
-      "byteLength": 3240,
+      "byteLength": 4112,
       "target": 34963
     },
     {
       "buffer": 0,
-      "byteOffset": 3240,
-      "byteLength": 10720,
+      "byteOffset": 4112,
+      "byteLength": 11744,
       "byteStride": 32,
       "target": 34962
     }
@@ -82,19 +82,20 @@
       "uri": "stump_baseColor.jpg"
     },
     {
-      "mimeType": "image/png",
-      "uri": "stump_normal.png"
+      "mimeType": "image/jpeg",
+      "uri": "stump_normal.jpg"
     }
   ],
   "buffers": [
     {
       "uri": "stump_lod.bin",
-      "byteLength": 13960
+      "byteLength": 15856
     }
   ],
   "materials": [
     {
       "name": "stump",
+      "doubleSided": true,
       "pbrMetallicRoughness": {
         "roughnessFactor": 0.85,
         "metallicFactor": 0,

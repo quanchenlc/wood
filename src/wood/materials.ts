@@ -56,9 +56,12 @@ export async function loadWoodMaterials(
   const side = new THREE.MeshStandardMaterial({
     map: barkColor,
     normalMap: barkNormal,
-    normalScale: new THREE.Vector2(2, 2),
-    roughness: 0.7,
+    // Keep modest — strong normals + sky hemi read as a cool/blue cast
+    normalScale: new THREE.Vector2(1.05, 1.05),
+    roughness: 0.88,
     metalness: 0,
+    // Warm tint so NeutralToneMapping + blue sky doesn't push bark lilac
+    color: new THREE.Color(1.1, 1.02, 0.9),
     side: THREE.DoubleSide,
   });
 

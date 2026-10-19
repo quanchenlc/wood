@@ -7,7 +7,7 @@ Replacement sources below were verified on the download date **2026-10-19**.
 
 | Asset | Source | Licence | Notes | Downloaded |
 |---|---|---|---|---|
-| `outsidebark.jpg` (+ `_n`) | [ambientCG Bark007](https://ambientcg.com/view?id=Bark007) 1K JPG pack, recolored to mean RGB(115,107,98); fissure detail procedural | **CC0 1.0** | UV 2048×1024 | 2026-10-19 |
+| `outsidebark.jpg` (+ `_n`) | [ambientCG Bark001](https://ambientcg.com/view?id=Bark001) Color + NormalGL (fallback PH bark_brown_02 / Bark012); warm grey-brown grade, green/moss stripped, vertical furrows, seam-blend wrap | **CC0 1.0** | UV 2048×1024; OpenGL normals | 2026-10-19 |
 | `top.jpg` (+ `_n`) | Procedural growth rings + radial crack; colour matched to RGB(201,178,144); fibre modulate from [ambientCG Wood062](https://ambientcg.com/view?id=Wood062) / [Wood048](https://ambientcg.com/view?id=Wood048) (CC0) | **CC0** (ACG) + original procedural | 1024×1024 | 2026-10-19 |
 | `insidegrain.jpg` (+ `_n`) | Procedural longitudinal fibre + [ambientCG Wood048](https://ambientcg.com/view?id=Wood048) recolor to RGB(213,190,157) | **CC0** + original procedural | 1024×1024 | 2026-10-19 |
 
@@ -17,10 +17,9 @@ Generator: `art-work/ip-clean/gen-log-textures.py`.
 
 | Variant | Mesh / textures | Licence | Notes | Downloaded |
 |---|---|---|---|---|
-| **A** (default) | [Poly Haven `tree_stump_01`](https://polyhaven.com/a/tree_stump_01) glTF 1k (diff/nor) | **CC0** | Scaled to game radius; Y stretched for playable height; LOD simplified; flat end-grain cap uses our remade `top.jpg` | 2026-10-19 |
-| **A** ground | [Poly Haven `forest_leaves_03`](https://polyhaven.com/a/forest_leaves_03) diffuse 1k | **CC0** | Disc albedo under stump | 2026-10-19 |
-| **B** | Original procedural stump (`art-work/ip-clean/build-stumps.mjs`) textured with our log maps | Original | Uneven top silhouette | 2026-10-19 |
-| **B** ground | [ambientCG Ground037](https://ambientcg.com/view?id=Ground037) (fallback: forest_leaves_03) | **CC0** | | 2026-10-19 |
+| **A** (default) | Solid chopping-block mesh (`art-work/ip-clean/build-stumps.mjs`) + our bark/end atlas | Original mesh + CC0 bark maps | Wide squat cylinder, sawn top, mild root flare | 2026-10-19 |
+| **A/B** ground | [Poly Haven `forest_leaves_03`](https://polyhaven.com/a/forest_leaves_03) soft-edged falloff onto ground green | **CC0** | No hard disc edge | 2026-10-19 |
+| **B** | Same pipeline, taller flare / oval / ridge for a distinct silhouette | Original | Solid block (not a ring) | 2026-10-19 |
 
 Switch in drawer → 风格 → 「木桩 A / B」 (`fw_stump_variant`).
 

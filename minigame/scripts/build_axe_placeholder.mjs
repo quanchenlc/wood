@@ -216,21 +216,24 @@ function woodColor(p, isCap){
   return col;
 }
 function steelColor(p,a){
-  const [x,y,z]=p; const brushed=fbm(x*25,y*700,z*25,3);
-  let col=[70,72,76].map(c=>c*(0.85+0.3*brushed));
-  // forge scale blotches near eye/poll
+  // Warm mid-grey steel (avoid blue cast under sky hemi). Readable as steel without envMap.
+  const [x,y,z]=p; const brushed=fbm(x*28,y*720,z*28,3);
+  let col=[158,154,145].map(c=>c*(0.9+0.26*brushed)); // brighter warm steel (readable in split shadow)
+  // forge scale blotches near eye/poll — warm dark, not blue
   const sc=fbm(x*140+3,y*140,z*140,4); const scale=smooth(0.62,0.75,sc)*(1-smooth(0.45,0.8,a))*0.5;
-  col=col.map((c,i)=>c*(1-0.35*scale)*(i===2?1.02:1));
-  // ground bevel lighter with grinding streaks perpendicular to edge (along x)
+  col=col.map((c,i)=>c*(1-0.32*scale)*(i===0?1.02:i===2?0.96:1));
+  // ground bevel lighter with grinding streaks
   const bev=smooth(AB-0.012,AB+0.004,a);
   const grind=fbm(x*30,y*1100,z*1100,3);
-  const bcol=[176,180,186].map(c=>c*(0.86+0.24*grind));
+  const bcol=[186,184,176].map(c=>c*(0.88+0.22*grind));
   col=col.map((c,i)=>lerp(c,bcol[i],bev));
   // honed edge line
-  const hone=smooth(0.982,0.996,a); col=col.map(c=>lerp(c,222,hone*0.8));
-  // small wear scratches on cheeks
-  const scr=vnoise(x*1600,y*90,z*40); if(scr>0.93&&a<AB) col=col.map(c=>c+40*(scr-0.93)/0.07);
-  // darker top/bottom of head & near handle (AO)
+  const hone=smooth(0.982,0.996,a); col=col.map((c,i)=>lerp(c, i===2?210:225, hone*0.75));
+  // wear scratches on cheeks
+  const scr=vnoise(x*1600,y*90,z*40); if(scr>0.93&&a<AB) col=col.map(c=>c+36*(scr-0.93)/0.07);
+  // cheek specular ridge (fake highlight so head isn't a flat box)
+  const ridge=Math.exp(-((z*z)/(0.012*0.012)))*0.22*(1-bev);
+  col=col.map(c=>c+ridge*55);
   return col;
 }
 async function paint(){
@@ -241,11 +244,11 @@ async function paint(){
   for(let k=0;k<S*S;k++)if(!m[k])img.set([120,96,70],k*3);
   const buf=Buffer.alloc(S*S*3);for(let i=0;i<buf.length;i++)buf[i]=clamp(Math.round(img[i]),0,255);
   await sharp(buf,{raw:{width:S,height:S,channels:3}}).jpeg({quality:85,mozjpeg:true,progressive:false}).toFile(`${OUT}/axe_baseColor.jpg`);
-  // ORM 256: R=AO 1, G=roughness, B=metal 0
+  // ORM 256: R=AO, G=roughness, B=metal (steel=1, wood=0)
   const s=256; const r2=rasterAttrs(s); const orm=new Float32Array(s*s*3); const om=new Uint8Array(s*s);
   for(let k=0;k<s*s;k++){if(r2.part[k]<0)continue;om[k]=1;const steel=r2.part[k]===2;const a=r2.aa[k];
-    const rough=steel?lerp(0.48,0.32,smooth(AB-0.01,AB+0.01,a)):(r2.pos[k*3+1]>0.78&&r2.pos[k*3+1]<1.06?0.62:0.74);
-    orm.set([255,rough*255,0],k*3);}
+    const rough=steel?lerp(0.42,0.28,smooth(AB-0.01,AB+0.01,a)):(r2.pos[k*3+1]>0.78&&r2.pos[k*3+1]<1.06?0.62:0.74);
+    orm.set([255,rough*255, steel?255:0],k*3);}
   const m2=dilate(orm,om,s,3,8); for(let k=0;k<s*s;k++)if(!m2[k])orm.set([255,0.7*255,0],k*3);
   const ob=Buffer.alloc(s*s*3);for(let i=0;i<ob.length;i++)ob[i]=Math.round(orm[i]);
   await sharp(ob,{raw:{width:s,height:s,channels:3}}).png({compressionLevel:9,palette:false}).toFile(`${OUT}/axe_orm.png`);
