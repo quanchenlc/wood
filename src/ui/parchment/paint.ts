@@ -94,8 +94,12 @@ export interface HitRect {
 
 const INK = "#3a2a18";
 const INK_SOFT = "#5c4a32";
+/** 柴棚空了等低对比文案（P2-3 ≈4.6:1） */
+const INK_CLAIM_EMPTY = "#5E4A2E";
 const CREAM = "#f3e6c8";
 const MADDER = "#8b2e2e";
+const RANK_FADE_PT = 16;
+const RANK_FOOTER_H = 52;
 
 function fontSerif(size: number, weight = "600") {
   return `${weight} ${size}px "Songti SC", "Noto Serif CJK SC", "STSong", serif`;
@@ -270,7 +274,10 @@ export function getTagHitRect(
   };
 }
 
-/** paper_tile：cover（竖屏）或 tile（横屏），禁止九宫格纸身 */
+/**
+ * paper_tile：只平铺。1 texel = 1 设备像素（cell = texPx / density ≈ 256pt）。
+ * 禁止 cover / 九宫格纸身（D_fix_v3 / P1-1）。
+ */
 function drawPaperFill(
   ctx: CanvasRenderingContext2D,
   tex: ParchmentTex | undefined,
@@ -278,7 +285,7 @@ function drawPaperFill(
   y: number,
   w: number,
   h: number,
-  mode: "cover" | "tile",
+  _mode: "cover" | "tile",
   dpr: number,
 ) {
   const r = snapRect(x, y, w, h, dpr);
@@ -290,44 +297,28 @@ function drawPaperFill(
   const img = tex.img;
   const iw = img.naturalWidth || img.width;
   const ih = img.naturalHeight || img.height;
-  if (mode === "tile") {
-    // 用 pattern 缩放，避免逐块 snap 产生竖缝
-    const tileCss = Math.max(1, iw / tex.density);
-    const scale = tileCss / iw;
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(r.x, r.y, r.w, r.h);
-    ctx.clip();
-    ctx.translate(r.x, r.y);
-    ctx.scale(scale, scale);
-    const pat = ctx.createPattern(img, "repeat");
-    if (pat) {
-      ctx.fillStyle = pat;
-      ctx.fillRect(0, 0, r.w / scale + 1, r.h / scale + 1);
-    } else {
-      // fallback：整块 drawImage 叠 0.5pt 防缝
-      const tileH = ih * scale;
-      for (let py = 0; py < r.h; py += tileCss - 0.5) {
-        for (let px = 0; px < r.w; px += tileCss - 0.5) {
-          ctx.drawImage(img, px / scale, py / scale, iw + 1, ih + 1);
-        }
-      }
-      void tileH;
-    }
-    ctx.restore();
-    return;
-  }
-  // cover：等比放大铺满，居中裁切（单张放大勿超过 ~1.5× 时仍用 cover）
-  const s = Math.max(r.w / iw, r.h / ih);
-  const bw = iw * s;
-  const bh = ih * s;
-  const ox = r.x + (r.w - bw) / 2;
-  const oy = r.y + (r.h - bh) / 2;
+  // cell pt = logical 256；density=scale → iw/density
+  const tileCss = Math.max(1, tex.logicalW || iw / tex.density);
+  const scale = tileCss / iw;
   ctx.save();
   ctx.beginPath();
   ctx.rect(r.x, r.y, r.w, r.h);
   ctx.clip();
-  ctx.drawImage(img, ox, oy, bw, bh);
+  ctx.translate(r.x, r.y);
+  ctx.scale(scale, scale);
+  const pat = ctx.createPattern(img, "repeat");
+  if (pat) {
+    ctx.fillStyle = pat;
+    ctx.fillRect(0, 0, r.w / scale + 1, r.h / scale + 1);
+  } else {
+    for (let py = 0; py < r.h; py += tileCss - 0.5) {
+      for (let px = 0; px < r.w; px += tileCss - 0.5) {
+        ctx.drawImage(img, px / scale, py / scale, iw + 1, ih + 1);
+      }
+    }
+  }
+  void ih;
+  void dpr;
   ctx.restore();
 }
 
@@ -470,7 +461,8 @@ function paintDrawerIcon(
   dpr: number,
   badge?: number,
 ) {
-  const size = 46;
+  // P2-2：按 manifest logical 52pt 绘制并对齐设备像素
+  const size = 52;
   const x = cx - size / 2;
   const entry = tex[id];
   const r = snapRect(x, y, size, size, dpr);
@@ -536,15 +528,8 @@ function paintRankRow(
   const ay = y + rowH / 2;
   const r = opts?.compact ? 12 : 14;
   const ax = x + (opts?.compact ? 16 : 18);
-  if (opts?.pinned) {
-    ctx.fillStyle = "rgba(243,230,200,0.92)";
-    ctx.fillRect(x, y, w, rowH);
-    ctx.strokeStyle = "rgba(58,42,24,0.22)";
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + w, y);
-    ctx.stroke();
-  }
+  // pinned 底由 row_self_highlight 九宫格绘制，此处不再平涂奶白矩形
+  void opts?.pinned;
   ctx.beginPath();
   ctx.arc(ax, ay, r, 0, Math.PI * 2);
   ctx.fillStyle = row.self ? "#c4a882" : "#b4966e";
@@ -566,6 +551,28 @@ function paintRankRow(
   ctx.fillText(`${row.pieces} 根`, x + w - 4, ay);
 }
 
+/** 列表视口上下 16pt 纸色渐隐（P1-2） */
+function paintRankEdgeFades(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  fade = RANK_FADE_PT,
+) {
+  const paper = "rgba(215,192,151,";
+  const top = ctx.createLinearGradient(0, y, 0, y + fade);
+  top.addColorStop(0, `${paper}1)`);
+  top.addColorStop(1, `${paper}0)`);
+  ctx.fillStyle = top;
+  ctx.fillRect(x, y, w, fade);
+  const bot = ctx.createLinearGradient(0, y + h - fade, 0, y + h);
+  bot.addColorStop(0, `${paper}0)`);
+  bot.addColorStop(1, `${paper}1)`);
+  ctx.fillStyle = bot;
+  ctx.fillRect(x, y + h - fade, w, fade);
+}
+
 function paintRankPage(
   ctx: CanvasRenderingContext2D,
   layout: DrawerLayout,
@@ -577,17 +584,22 @@ function paintRankPage(
   const left = layout.contentLeft;
   const right = layout.contentRight;
   const listW = right - left;
-  const headerY = layout.landscape ? 52 : 96;
-  // 顶栏固定：返回不随列表滚
+
+  // P2-4：标题顶 = 胶囊底 + 12（竖屏规范 ≈92）
+  const headerY = layout.landscape
+    ? Math.max(36, layout.capsuleTop + 8)
+    : layout.capsuleBottom + 12;
+
   paintDrawerBackHeader(ctx, layout, "好友柴榜", "rank_back", hits, headerY);
 
-  const listTop = headerY + 22;
-  const listBottom = layout.landscape
-    ? Math.min(layout.h1 - 36, layout.screenH - 28)
-    : layout.h1 - 44;
-  const listH = Math.max(120, listBottom - listTop);
-  const pinReserve = RANK_PIN_H + 4;
-  const scrollViewH = Math.max(80, listH - pinReserve);
+  // 竖屏规范：视口 132–500，页脚 508–560；横屏：视口到撕口上，页脚钉在内容底
+  const listTop = layout.landscape ? headerY + 22 : 132;
+  const footerH = RANK_FOOTER_H;
+  const footerY = layout.landscape
+    ? Math.min(layout.h1 - footerH - 8, 260)
+    : 508;
+  const listBottom = layout.landscape ? footerY - 4 : 500;
+  const scrollViewH = Math.max(80, listBottom - listTop);
 
   try {
     const wx = (globalThis as {
@@ -610,14 +622,15 @@ function paintRankPage(
     state.rankRows && state.rankRows.length > 0
       ? state.rankRows
       : buildMockRankRows(pieces, selfName);
-  const selfRow = rows.find((r) => r.self) || null;
+  const selfRow = rows.find((r) => r.self) || rows[0] || null;
   const rowH = layout.landscape ? 48 : RANK_ROW_H;
-  const contentH = rows.length * rowH;
+  const contentH = layout.landscape
+    ? Math.ceil(rows.length / 2) * rowH
+    : rows.length * rowH;
   const maxScroll = Math.max(0, contentH - scrollViewH);
   const scrollY = Math.max(0, Math.min(maxScroll, state.rankScrollY ?? 0));
 
-  // 列表滚动热区（不含顶栏）
-  pushHit(hits, "rank_list", left, listTop, listW, listH);
+  pushHit(hits, "rank_list", left, listTop, listW, scrollViewH);
 
   ctx.save();
   ctx.beginPath();
@@ -625,9 +638,7 @@ function paintRankPage(
   ctx.clip();
 
   if (layout.landscape) {
-    // 横屏双列 + 纵向滚动
     const colW = (listW - 20) / 2;
-    const colRows = Math.ceil(rows.length / 2);
     for (let i = 0; i < rows.length; i++) {
       const col = i % 2;
       const rowI = Math.floor(i / 2);
@@ -636,15 +647,16 @@ function paintRankPage(
       const x0 = left + col * (colW + 20);
       paintRankRow(ctx, rows[i], x0, y, colW, rowH, { compact: true });
     }
-    void colRows;
   } else {
     rows.forEach((row, i) => {
       const y = listTop + i * rowH - scrollY;
       if (y + rowH < listTop || y > listTop + scrollViewH) return;
       paintRankRow(ctx, row, left, y, listW, rowH);
-      if (i < rows.length - 1) {
-        const ly = y + rowH - 1;
-        if (ly >= listTop && ly <= listTop + scrollViewH) {
+      // P2-6：第一可见行距视口顶 < 8pt 时不画其上方分隔线（避免标题下双线）
+      if (i > 0) {
+        const ly = y - 1;
+        const rowTopInView = y - listTop;
+        if (rowTopInView >= 8 && ly >= listTop && ly <= listTop + scrollViewH) {
           ctx.strokeStyle = "rgba(58,42,24,0.14)";
           ctx.beginPath();
           ctx.moveTo(left + 42, ly);
@@ -656,28 +668,27 @@ function paintRankPage(
   }
   ctx.restore();
 
-  // 若「我」不在可视区，钉在列表底
+  paintRankEdgeFades(ctx, left, listTop, listW, scrollViewH, RANK_FADE_PT);
+
+  // P1-3/P1-4：固定 52pt「我」页脚，始终绘制（不闪烁）
   if (selfRow) {
-    const selfIndex = rows.findIndex((r) => r.self);
-    let selfVisible = false;
-    if (layout.landscape) {
-      const rowI = Math.floor(selfIndex / 2);
-      const y = listTop + rowI * rowH - scrollY;
-      selfVisible = y + rowH > listTop + 4 && y < listTop + scrollViewH - 4;
+    const pinY = footerY;
+    const pinH = footerH;
+    if (tex.row_self_highlight) {
+      drawTexNine(ctx, tex.row_self_highlight, left, pinY, listW, pinH, dpr);
     } else {
-      const y = listTop + selfIndex * rowH - scrollY;
-      selfVisible = y + rowH > listTop + 4 && y < listTop + scrollViewH - 4;
+      const rr = snapRect(left, pinY, listW, pinH, dpr);
+      ctx.fillStyle = "rgba(255,248,230,0.45)";
+      roundPath(ctx, rr.x, rr.y, rr.w, rr.h, 6);
+      ctx.fill();
     }
-    if (!selfVisible) {
-      const pinY = listTop + scrollViewH;
-      paintRankRow(ctx, selfRow, left, pinY, listW, RANK_PIN_H, {
-        compact: layout.landscape,
-        pinned: true,
-      });
-    }
+    paintRankRow(ctx, selfRow, left, pinY, listW, pinH, {
+      compact: layout.landscape,
+      pinned: true,
+    });
   }
-  void tex;
   void maxScroll;
+  void RANK_PIN_H;
 }
 
 function paintStylePage(
@@ -694,8 +705,9 @@ function paintStylePage(
   const headerY = layout.landscape ? 58 : 108;
   paintDrawerBackHeader(ctx, layout, "选择风格", "style_back", hits, headerY);
   const opts = state.styleOptions || [];
-  const rowW = Math.min(layout.landscape ? 420 : w - 48, right - left);
-  const rowX = layout.landscape ? (left + right - rowW) / 2 : 24;
+  // P1-8：横屏选中行 ≤ 300pt，避免 strip 中段拉丝
+  const rowW = Math.min(layout.landscape ? 300 : w - 48, right - left);
+  const rowX = layout.landscape ? left : 24;
   opts.forEach((opt, i) => {
     const y = headerY + 28 + i * (layout.landscape ? 44 : 48);
     const active = opt.id === state.styleId;
@@ -811,7 +823,7 @@ function paintDrawerMain(
       pushHit(hits, "claim_free", bx, y, bw, 44);
       targets.claim = { x: bx, y, w: bw, h: 44 };
     } else {
-      ctx.fillStyle = "rgba(92,74,50,0.55)";
+      ctx.fillStyle = INK_CLAIM_EMPTY;
       ctx.font = fontSans(13);
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
@@ -866,7 +878,7 @@ function paintDrawerMain(
     pushHit(hits, "claim_free", 32, 164, w - 64, 48);
     targets.claim = { x: 32, y: 164, w: w - 64, h: 48 };
   } else {
-    ctx.fillStyle = "rgba(92,74,50,0.55)";
+    ctx.fillStyle = INK_CLAIM_EMPTY;
     ctx.font = fontSans(13);
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -957,7 +969,7 @@ function paintDrawerShell(
   ctx.rect(0, 0, w, ch);
   ctx.clip();
 
-  // soft drop shadow under paper
+  // soft drop shadow under paper body only（撕口自带烘焙投影，勿再加）
   ctx.shadowColor = "rgba(25,15,5,0.40)";
   ctx.shadowBlur = 5;
   ctx.shadowOffsetY = 3;
@@ -966,7 +978,7 @@ function paintDrawerShell(
   ctx.shadowBlur = 0;
   ctx.shadowOffsetY = 0;
 
-  // tear_edge：仅左右九宫格，高 32pt，上叠约 10pt
+  // tear_edge：仅左右九宫格，高 32pt，上叠 16pt（14pt 羽化全在纸上）
   drawTexNine(ctx, tex.tear_edge, paperX, tearY, paperW, layout.tearH, dpr);
 
   let targets: GuideTargets = {};
@@ -1062,7 +1074,7 @@ export function paintParchmentLoading(
   ctx.fillText(`${status || COPY_C.loading} ${pct}%`, w / 2, barY + 28);
   ctx.globalAlpha = 0.35;
   ctx.font = fontSans(11);
-  ctx.fillText("v0.4.1 · ip-clean", w / 2, h - 24);
+  ctx.fillText("v0.4.2 · ui-polish", w / 2, h - 24);
   ctx.globalAlpha = 1;
 }
 

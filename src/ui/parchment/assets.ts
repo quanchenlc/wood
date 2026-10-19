@@ -17,6 +17,7 @@ export type TexId =
   | "roll_paper"
   | "roll_shadow"
   | "strip_parchment"
+  | "row_self_highlight"
   | "tag_madder"
   | "tag_parchment"
   | "tear_edge";

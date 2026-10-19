@@ -9,13 +9,19 @@ const CLOSE_EASE = [0.55, 0, 0.8, 0.35] as const;
 const H0_PORTRAIT = 20;
 /** 竖屏首页 / 风格页 */
 export const H1_PORTRAIT_MAIN = 400;
-/** 竖屏柴榜页：约屏高 78%，留树桩顶 + 小签 */
-export const H1_PORTRAIT_RANK_FRAC = 0.78;
+/** 竖屏柴榜：撕口下沿 600pt（D_fix_v3） */
+export const H1_PORTRAIT_RANK = 600;
+/** @deprecated 保留导出名；柴榜已改为固定 600pt */
+export const H1_PORTRAIT_RANK_FRAC = 600 / 812;
+/** 横屏：撕口下沿固定 318pt（小签 318–350） */
+export const H1_LANDSCAPE = 318;
 const D0 = 40;
 const D1 = 14;
-/** 横屏近铺满：顶/底各 8pt（D_fix_v2） */
-export const LANDSCAPE_INSET = 8;
+/** @deprecated 横屏不再用底 inset；撕口钉在 318 */
+export const LANDSCAPE_INSET = 0;
 const TEAR_H = 32;
+/** 撕口顶叠在纸底之上：14pt 羽化须全在纸上 */
+const TEAR_OVERLAP = 16;
 
 export type DrawerPageKind = "main" | "style" | "rank";
 
@@ -52,29 +58,61 @@ export interface DrawerLayout {
   h1: number;
   paperY: number;
   paperX: number;
-  paperMode: "cover" | "tile";
+  /** 一律 tile：1 texel = 1 设备 px（cell 256pt） */
+  paperMode: "tile";
   bodyH: number;
   tearH: number;
   tearOverlap: number;
   capsuleTop: number;
+  capsuleBottom: number;
   capsuleLeft: number;
   contentLeft: number;
   contentRight: number;
   page: DrawerPageKind;
+  safeLeft: number;
+  safeBottom: number;
 }
 
 export function isLandscape(w: number, h: number): boolean {
   return w > h;
 }
 
-/** 目标纸底高度（pt）：竖屏 rank≈78% 屏高；横屏近铺满 */
+function readSafeArea(_screenW: number, landscape: boolean): { left: number; bottom: number } {
+  try {
+    const wx = (globalThis as {
+      wx?: {
+        getSystemInfoSync?: () => {
+          safeArea?: { left?: number; bottom?: number; top?: number };
+          windowHeight?: number;
+        };
+      };
+    }).wx;
+    const info = wx?.getSystemInfoSync?.();
+    const sa = info?.safeArea;
+    if (sa) {
+      const winH = info?.windowHeight ?? (landscape ? 375 : 812);
+      const bottomInset =
+        typeof sa.bottom === "number" ? Math.max(0, winH - sa.bottom) : landscape ? 21 : 0;
+      return {
+        left: Math.max(0, sa.left ?? (landscape ? 44 : 0)),
+        bottom: bottomInset,
+      };
+    }
+  } catch {
+    /* ignore */
+  }
+  // iPhone X 档横屏默认
+  return { left: landscape ? 44 : 0, bottom: landscape ? 21 : 0 };
+}
+
+/** 目标纸底高度（pt）= 撕口下沿 */
 export function targetDrawerH1(
-  screenH: number,
+  _screenH: number,
   landscape: boolean,
   page: DrawerPageKind = "main",
 ): number {
-  if (landscape) return screenH - LANDSCAPE_INSET;
-  if (page === "rank") return Math.round(screenH * H1_PORTRAIT_RANK_FRAC);
+  if (landscape) return H1_LANDSCAPE;
+  if (page === "rank") return H1_PORTRAIT_RANK;
   return H1_PORTRAIT_MAIN;
 }
 
@@ -86,35 +124,42 @@ export function layoutFor(
 ): DrawerLayout {
   const landscape = isLandscape(w, h);
   const page = opts?.page ?? "main";
+  const safe = readSafeArea(w, landscape);
   const capTop = capsule?.top ?? (landscape ? 18 : 48);
+  const capBottom = capsule?.bottom ?? capTop + 32;
   const capLeft = capsule?.left ?? (landscape ? w - 7 - 87 : w - 7 - 87);
   const h1 = opts?.h1 ?? targetDrawerH1(h, landscape, page);
+  const paperY = 0;
+  const paperX = landscape ? -12 : -16;
+  // tear bottom ≈ h1；bodyH = h1 - tearH + tearOverlap - paperY
+  const bodyH = Math.max(80, h1 - TEAR_H + TEAR_OVERLAP - paperY);
+
   if (landscape) {
-    const paperY = LANDSCAPE_INSET;
-    const bodyH = Math.max(80, h1 - paperY - 18);
-    const left = 24;
-    const right = Math.min(w - 24, capLeft - 20);
+    const left = safe.left + 16; // X 档 = 60
+    const right = Math.min(698, Math.min(w - 24, capLeft - 20));
     return {
       landscape: true,
       screenW: w,
       screenH: h,
-      h0: LANDSCAPE_INSET + 12,
+      h0: 12,
       h1,
       paperY,
-      paperX: -12,
+      paperX,
       paperMode: "tile",
       bodyH,
       tearH: TEAR_H,
-      tearOverlap: 10,
+      tearOverlap: TEAR_OVERLAP,
       capsuleTop: capTop,
+      capsuleBottom: capBottom,
       capsuleLeft: capLeft,
       contentLeft: left,
       contentRight: Math.max(left + 200, right),
       page,
+      safeLeft: safe.left,
+      safeBottom: safe.bottom,
     };
   }
-  const paperY = -8;
-  const bodyH = Math.max(80, h1 - paperY - 22);
+
   return {
     landscape: false,
     screenW: w,
@@ -122,16 +167,19 @@ export function layoutFor(
     h0: H0_PORTRAIT,
     h1,
     paperY,
-    paperX: -16,
-    paperMode: "cover",
+    paperX,
+    paperMode: "tile",
     bodyH,
     tearH: TEAR_H,
-    tearOverlap: 10,
+    tearOverlap: TEAR_OVERLAP,
     capsuleTop: capTop,
+    capsuleBottom: capBottom,
     capsuleLeft: capLeft,
     contentLeft: 24,
     contentRight: w - 24,
     page,
+    safeLeft: safe.left,
+    safeBottom: safe.bottom,
   };
 }
 
@@ -144,8 +192,17 @@ export function diam(p: number) {
 export function rollAlpha(p: number) {
   return p < 0.93 ? 1 : Math.max(0, (1 - p) / 0.07);
 }
-export function tagTop(p: number, h0 = H0_PORTRAIT, h1 = H1_PORTRAIT_MAIN, minY = 48) {
-  return Math.max(minY, clipH(p, h0, h1) - 16 + 1.25 * (diam(p) - D1));
+/** 竖屏：小签略低于 clip；横屏：小签挂在撕口下沿（clip = 318） */
+export function tagTop(
+  p: number,
+  h0 = H0_PORTRAIT,
+  h1 = H1_PORTRAIT_MAIN,
+  minY = 48,
+  landscape = false,
+) {
+  const ch = clipH(p, h0, h1);
+  if (landscape) return Math.max(minY, ch);
+  return Math.max(minY, ch - 16 + 1.25 * (diam(p) - D1));
 }
 export function contentAlphaOpen(ms: number) {
   const t = Math.min(1, Math.max(0, (ms - 203) / 120));
@@ -174,7 +231,7 @@ export function adaptMotion(m: DrawerMotion, layout: DrawerLayout): DrawerMotion
     ...m,
     clipH: ch,
     rollY: ch,
-    tagY: tagTop(m.p, layout.h0, layout.h1, layout.capsuleTop),
+    tagY: tagTop(m.p, layout.h0, layout.h1, layout.capsuleTop, layout.landscape),
   };
 }
 
@@ -185,13 +242,14 @@ export function stateOpen(q: number, layout?: DrawerLayout): DrawerMotion {
   const h0 = layout?.h0 ?? H0_PORTRAIT;
   const h1 = layout?.h1 ?? H1_PORTRAIT_MAIN;
   const minY = layout?.capsuleTop ?? 48;
+  const landscape = layout?.landscape ?? false;
   return {
     p,
     clipH: clipH(p, h0, h1),
     d: diam(p),
     rollY: clipH(p, h0, h1),
     rollA: rollAlpha(p),
-    tagY: tagTop(p, h0, h1, minY),
+    tagY: tagTop(p, h0, h1, minY, landscape),
     contentA: contentAlphaOpen(ms),
     dim: dimOpen(ms),
     contentTY: 6 * (1 - contentAlphaOpen(ms)),
@@ -210,13 +268,14 @@ export function stateClose(q: number, layout?: DrawerLayout): DrawerMotion {
   const h0 = layout?.h0 ?? H0_PORTRAIT;
   const h1 = layout?.h1 ?? H1_PORTRAIT_MAIN;
   const minY = layout?.capsuleTop ?? 48;
+  const landscape = layout?.landscape ?? false;
   return {
     p,
     clipH: clipH(p, h0, h1),
     d: diam(p),
     rollY: clipH(p, h0, h1),
     rollA: ra,
-    tagY: tagTop(p, h0, h1, minY),
+    tagY: tagTop(p, h0, h1, minY, landscape),
     contentA: ca,
     dim,
     contentTY,
@@ -247,13 +306,14 @@ export function motionAt(
   const h0 = layout?.h0 ?? H0_PORTRAIT;
   const h1 = layout?.h1 ?? H1_PORTRAIT_MAIN;
   const minY = layout?.capsuleTop ?? 48;
+  const landscape = layout?.landscape ?? false;
   return {
     p,
     clipH: clipH(p, h0, h1),
     d: diam(p),
     rollY: clipH(p, h0, h1),
     rollA: rollAlpha(p),
-    tagY: tagTop(p, h0, h1, minY),
+    tagY: tagTop(p, h0, h1, minY, landscape),
     contentA,
     dim,
     contentTY,

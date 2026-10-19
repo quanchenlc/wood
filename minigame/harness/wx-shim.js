@@ -444,17 +444,31 @@
       return ctx;
     },
     getSystemInfoSync() {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const landscape = w > h;
+      // iPhone X 档：竖屏左右 0 / 底 34；横屏左 44 / 底 21
+      const safeLeft = landscape ? 44 : 0;
+      const safeBottomInset = landscape ? 21 : 34;
       return {
-        windowWidth: window.innerWidth,
-        windowHeight: window.innerHeight,
-        screenWidth: window.innerWidth,
-        screenHeight: window.innerHeight,
+        windowWidth: w,
+        windowHeight: h,
+        screenWidth: w,
+        screenHeight: h,
         pixelRatio: window.devicePixelRatio || 2,
         platform: "devtools-harness",
         brand: "harness",
         model: "chromium",
         system: "Linux",
         language: "zh_CN",
+        safeArea: {
+          left: safeLeft,
+          right: w - (landscape ? 44 : 0),
+          top: landscape ? 0 : 44,
+          bottom: h - safeBottomInset,
+          width: w - safeLeft - (landscape ? 44 : 0),
+          height: h - (landscape ? 0 : 44) - safeBottomInset,
+        },
       };
     },
     getFileSystemManager() {

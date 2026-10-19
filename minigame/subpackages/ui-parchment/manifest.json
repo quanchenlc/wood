@@ -1,12 +1,12 @@
 {
- "name": "ui-parchment-D-drawer-fix-v2",
- "version": "3.1-D-fix-v2",
- "based_on": "D_final 3.1-D + seamless paper_tile/tear_edge",
+ "name": "ui-parchment-D-drawer-fix-v3",
+ "version": "3.1-D-fix-v3",
+ "based_on": "D_fix_v2 + 0.3.6 review fixes (tear fade, paper 256pt tile, strip w/o stain, row_self_highlight)",
  "design_space": "portrait 375x812 pt; landscape 812x375 pt; specs rendered @2x",
  "density_note": "scale = texels per pt. Top-level fields = the @2x file (scale 2). Draw size (pt) = px / scale = logical_size. 9-slice: source insets px = nine_slice_insets of the variant actually loaded; destination insets = nine_slice_insets_pt. Snap all dest rects to device pixels.",
- "variant_rule": "dpr>=2.5 -> variants.3x if present else 2x; otherwise 2x. panel_vellum has 2x only. paper_tile@3x is 1024² (denser tile).",
+ "variant_rule": "dpr>=2.5 -> variants.3x if present else 2x; otherwise 2x. panel_vellum has 2x only. paper_tile: @2x 512² / @3x 768², both = 256pt cell.",
  "nine_slice_convention": "[left, top, right, bottom]",
- "drawer_draw_note": "DO NOT 9-slice paper body. Fill drawer rect with paper_tile (cover or tile), clip by height during unroll, composite tear_edge at bottom (9-slice L/R only, fixed height 32pt), place roll_paper on the revealed bottom edge.",
+ "drawer_draw_note": "DO NOT 9-slice or cover the paper body. Fill drawer rect by TILING paper_tile at 1 texel = 1 device px (cell = 256pt; repeat from drawer origin, do not scale with drawer height). Clip by height during unroll. tear_edge: top = paperBottom - 16pt (its 14pt top fade must lie over paper), 9-slice L/R only (center stretch), fixed height 32pt. roll_paper on the revealed bottom edge. Landscape: paper from y=0, tear bottom = windowHeight - safeBottom - 36 (318pt on iPhone X), tag hangs below it.",
  "removed": [
   "drawer_vellum (was 200x140 9-slice — caused vertical seam + blur)",
   "btn_icon_style (unused; style entry is strip row only)"
@@ -567,7 +567,7 @@
    "file": "strip_parchment@2x.png",
    "width": 480,
    "height": 96,
-   "bytes": 28718,
+   "bytes": 22864,
    "scale": 2,
    "logical_size": [
     240,
@@ -591,15 +591,17 @@
     32,
     24
    ],
-   "role": "次级条：风格行 / 列表行",
+   "role": "次级条：风格行 / 选中风格行。v3：无大污渍；中段 208pt 横向无缝，可 stretch（≤2.2× 已验证）或 repeat-x",
    "png": "PNG8 pngquant, light dither, full alpha",
-   "origin": "v3.1",
+   "origin": "D_fix_v3",
+   "center_mode": "stretch_or_repeat_x",
+   "center_period_pt": 208,
    "variants": {
     "2x": {
      "file": "strip_parchment@2x.png",
      "width": 480,
      "height": 96,
-     "bytes": 28718,
+     "bytes": 22864,
      "scale": 2,
      "nine_slice_insets": [
       32,
@@ -612,12 +614,72 @@
      "file": "strip_parchment@3x.png",
      "width": 720,
      "height": 144,
-     "bytes": 53772,
+     "bytes": 46128,
      "scale": 3,
      "nine_slice_insets": [
       48,
       36,
       48,
+      36
+     ]
+    }
+   }
+  },
+  {
+   "file": "row_self_highlight@2x.png",
+   "width": 686,
+   "height": 104,
+   "bytes": 1271,
+   "scale": 2,
+   "logical_size": [
+    343,
+    52
+   ],
+   "nine_slice_insets": [
+    24,
+    24,
+    24,
+    24
+   ],
+   "nine_slice_insets_pt": [
+    12,
+    12,
+    12,
+    12
+   ],
+   "nine_slice_insets_2x": [
+    24,
+    24,
+    24,
+    24
+   ],
+   "role": "柴榜固定页脚「我」行底（浅羊皮纸，6pt 圆角，半透明）。9-slice，宽=内容宽，高 52pt",
+   "png": "PNG8 pngquant, light dither, full alpha",
+   "origin": "D_fix_v3",
+   "variants": {
+    "2x": {
+     "file": "row_self_highlight@2x.png",
+     "width": 686,
+     "height": 104,
+     "bytes": 1271,
+     "scale": 2,
+     "nine_slice_insets": [
+      24,
+      24,
+      24,
+      24
+     ]
+    },
+    "3x": {
+     "file": "row_self_highlight@3x.png",
+     "width": 1029,
+     "height": 156,
+     "bytes": 1777,
+     "scale": 3,
+     "nine_slice_insets": [
+      36,
+      36,
+      36,
       36
      ]
     }
@@ -747,45 +809,41 @@
    "file": "paper_tile@2x.jpg",
    "width": 512,
    "height": 512,
-   "bytes": 21899,
+   "bytes": 22774,
    "scale": 2,
    "logical_size": [
-    512,
-    512
+    256,
+    256
    ],
    "nine_slice_insets": null,
    "nine_slice_insets_pt": null,
    "nine_slice_insets_2x": null,
-   "role": "抽屉纸面无缝贴图（JPEG）。绘制：tile 或 cover，禁止 9-slice 中间。@2x=512² @3x=1024²",
-   "png": "JPEG q90, no alpha",
-   "origin": "D_fix_v2",
+   "role": "抽屉纸面无缝贴图（JPEG，无 alpha）。只允许 tile：1 texel = 1 设备像素（cell = 256pt），禁止 cover/拉伸，禁止 9-slice。@2x 512² / @3x 768²",
+   "png": "JPEG q88-90 4:4:4, no alpha",
+   "origin": "D_fix_v3",
+   "draw_mode": "tile_1to1",
    "variants": {
     "2x": {
      "file": "paper_tile@2x.jpg",
      "width": 512,
      "height": 512,
-     "bytes": 21899,
+     "bytes": 22774,
      "scale": 2
     },
     "3x": {
      "file": "paper_tile@3x.jpg",
-     "width": 1024,
-     "height": 1024,
-     "bytes": 93419,
-     "scale": 3,
-     "note": "1024² tile for denser cover/tile; logical_size still 512pt reference for 1x tile cell"
+     "width": 768,
+     "height": 768,
+     "bytes": 42724,
+     "scale": 3
     }
-   },
-   "logical_size_3x_tile_px": [
-    1024,
-    1024
-   ]
+   }
   },
   {
    "file": "tear_edge@2x.png",
    "width": 1624,
    "height": 64,
-   "bytes": 18605,
+   "bytes": 21600,
    "scale": 2,
    "logical_size": [
     812,
@@ -809,15 +867,17 @@
     96,
     0
    ],
-   "role": "抽屉底撕口条。仅左右 9-slice；高度固定 32pt；宽按屏宽拉伸。覆盖横屏 812pt",
+   "role": "抽屉底撕口条 v3：顶部 14pt 渐隐→透明；纸纹取自 paper_tile 同尺度；硬边齿口 + 独立 3pt 柔影。仅左右 9-slice，中段 stretch；高度固定 32pt；tear_top = paperBottom − 16pt",
    "png": "PNG8 pngquant, light dither, full alpha",
-   "origin": "D_fix_v2",
+   "origin": "D_fix_v3",
+   "center_mode": "stretch",
+   "overlap_pt": 16,
    "variants": {
     "2x": {
      "file": "tear_edge@2x.png",
      "width": 1624,
      "height": 64,
-     "bytes": 18605,
+     "bytes": 21600,
      "scale": 2,
      "nine_slice_insets": [
       96,
@@ -830,7 +890,7 @@
      "file": "tear_edge@3x.png",
      "width": 2436,
      "height": 96,
-     "bytes": 32362,
+     "bytes": 37261,
      "scale": 3,
      "nine_slice_insets": [
       144,
@@ -842,5 +902,13 @@
    }
   }
  ],
- "optional": []
+ "optional": [
+  "row_self_highlight (may also be drawn by code: rgba(252,243,220,0.5), 6pt radius, 1px rgba(110,80,45,0.32) border)"
+ ],
+ "changelog_vs_v2": [
+  "paper_tile: logical_size 512->256pt; @3x 1024²->768² (same 256pt cell as @2x); tile 1:1 only, never cover",
+  "tear_edge: 14pt top fade, paper_tile texture, crisp teeth + separate 3pt shadow; overlap 10->16pt",
+  "strip_parchment: no big stain; tileable 208pt middle",
+  "row_self_highlight: new (pinned 我 footer)"
+ ]
 }

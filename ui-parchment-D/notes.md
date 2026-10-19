@@ -1,73 +1,58 @@
-# D 抽屉 · 紧急修图 D_fix_v2
+# D 抽屉 · D_fix_v3（0.3.6 复核修正）
 
-真机竖缝 + 纸面发糊的根因：旧 `drawer_vellum` 只有 200×140pt，九宫格拉到约 431×424pt，右端接缝和糊都是拉伸造成的。本目录用 **无缝 paper_tile + 独立 tear_edge** 替换纸身九宫格。
+基于 D_fix_v2 复制后修改，D_fix_v2 原样保留。复核报告：`/workspace/shots-036/review/review.md`。
 
-老板已拍板：@2x/@3x 进 ui-parchment 分包按 dpr 加载，不为主包 600KB 压画质；风格入口只保留「风格：… 〉」行；好友柴榜改为**抽屉内第二页**（与风格列表同模型，非弹层）。
+## 相对 v2 的变更（changelog）
+| # | 项 | v2 | v3 | 对应复核 |
+|---|---|---|---|---|
+| 1 | `tear_edge` | 上 2/3 不透明的拉丝纸，无渐隐，齿口软羽化 | 顶 **14pt 渐隐→透明**；纸纹取自 paper_tile（256pt 同尺度，预拉宽 2.2× 抵消竖屏压缩），低对比；**硬边齿口**（1px 抗锯齿 + 0.5pt 墨线 + 2pt 焦边）；**独立 3pt 柔影**，只在纸外。尺寸 812×32pt、insets [48,0,48,0] 不变 | P0-1、P2-1 |
+| 2 | 撕口叠放 | tear_top = paperBottom − 10 | **−16pt**（渐隐区必须全在纸上） | P0-1 |
+| 3 | `paper_tile` | logical 512（与 scale 矛盾）；@3x 1024²=341pt | **logical 256pt**；@2x 512² / @3x **768²**，两档同为 256pt 一格；无缝，无明显周期 | P1-1 |
+| 4 | 纸面绘制 | cover 或 tile | **只平铺 1 texel = 1 设备 px，禁止 cover**（0.3.6 柴榜页 cover 放大 1.82× 导致发糊） | P1-1 |
+| 5 | `strip_parchment` | 中央大块污渍，拉宽后拖影 | 去掉大污渍；中段 208pt 横向无缝：可 stretch（≤2.2× 已验证）或 repeat-x；尺寸和 insets 不变 | P1-8 |
+| 6 | `row_self_highlight` | 无 | **新增** 343×52pt，九宫格 [12,12,12,12]pt，浅羊皮纸半透明 + 6pt 圆角，用于固定页脚「我」 | P1-4 |
+| 7 | 横屏规范 | 顶/底 8pt；左 24；小签被切 | 纸面 y=0 起；撕口下沿 **318pt**；小签 **318–350**；左 = safeArea.left+16 = **60**；右 ≤ 698；无说明文字；「N 根」；视口渐隐和 52pt 页脚 | P1-5/6/7、P2-5/7 |
+| 8 | 竖屏柴榜规范 | 硬裁切，无页脚 | 视口 132–500 上下 16pt 渐隐；固定 52pt「我」页脚 508–560；顶栏 top = 胶囊底 + 12（字顶 ≥94）；撕口 600pt | P1-2/3、P2-4/6 |
+| 9 | 新增 | — | `spec/landscape_style(.png/_clean)`；`portrait_style_clean.png` | — |
+
+## 客户端要点（必读）
+1. **纸身**：`paper_tile` 平铺，cell = 贴图 px ÷ dpr = 256pt；从抽屉原点平铺，不随 clipH 或抽屉高度缩放；禁止 cover 和九宫格。
+2. **撕口**：`tear_edge` 顶 = 纸身底 − 16pt；只拉左右，中段 stretch；高 32pt；阴影已烘焙在条内，不要再加。
+3. **strip_parchment**：中段可 stretch 或 repeat-x（中段 208pt 横向无缝）。横屏选中行 ≤ 300pt。
+4. **柴榜**：sharedCanvas = 视口 pt × dpr；上下 16pt 渐隐；「我」固定页脚始终显示。
+5. **横屏**：撕口下沿 = windowHeight − safeArea 底部 − 36；内容左 = safeArea.left + 16。
 
 ## 目录
 | 路径 | 内容 |
 |---|---|
-| `textures/` | 运行时切片；无 `drawer_vellum`、无 `btn_icon_style` |
-| `manifest.json` | v3.1 规则合并清单（顶层=@2x） |
-| `manifest_validation.md` | 脚本校验 **PASS** |
-| `spec/portrait_drawer.png` | 竖屏展开标注 |
-| `spec/landscape_drawer.png` | 横屏近铺满标注（812×375pt） |
-| `spec/portrait_rank.png` | 竖屏 · 抽屉内柴榜页 |
-| `spec/landscape_rank.png` | 横屏 · 抽屉内柴榜页 |
-| `spec/portrait_style.png` | 竖屏 · 抽屉内风格页 |
-| `spec/*_clean.png` | 无标注成品 |
-| `guide/` `motion/` | 沿用 D_final 引导与卷开动效关键帧（撕口高改为 32pt，见 interaction） |
-| `interaction.md` | 交互（含柴榜内页、纸面合成） |
-| `src/` | 生成脚本 |
+| `textures/` | 运行时切片（19 项，@2x/@3x；panel_vellum 仅 @2x） |
+| `manifest.json` | v3.1 合并清单（顶层 = @2x，每个变体都满足 px/scale = logical_size），含 `changelog_vs_v2` |
+| `manifest_validation.md` | 严格校验 **PASS**（40 行 PASS / 0 FAIL；v2 中 paper_tile 的豁免已删除） |
+| `spec/portrait_{drawer,rank,style}(.png/_clean.png)` | 竖屏标注稿和成品 |
+| `spec/landscape_{drawer,rank,style}(.png/_clean.png)` | 横屏标注稿和成品（812×375pt） |
+| `qa/before_after_tear_junction.png` | 撕口和纸面交界的前后对比（0.3.6 真机 / v2 素材 / v3 素材） |
+| `qa/after_junction_{p,l}_x2.png` | v3 交界 2× 放大（竖屏压缩 / 横屏 1:1） |
+| `qa/qa_strip_row_at3x.png` | strip 原尺寸 / 36pt 高 / 拉伸 2.2× / 平铺，以及「我」行 |
+| `qa/qa_paper_tiled_*` | 纸纹 768² 平铺，周期检查 |
+| `guide/` `motion/` | 沿用 v2，未改。关键帧里的撕口仍是 v2 外观，仅作时序参考 |
+| `src/make_v3_assets.py` | v3 切片生成；`make_specs.py` 生成规范图；`build_manifest.py` 生成清单并校验；`qa_*.py` 生成 QA 图 |
 
-## 接缝原因与新画法（客户端必读）
+## 验证
+- 交界处无接缝：横屏 1:1 合成中，交界区最大行均值跳变 0.36，纸面内部 0.25，同量级；v2 素材在真机上是明显的纹理带（见 qa 对比图）。
+- paper_tile 无缝：原图卷绕处差值 1.00，内部相邻差值 0.90；JPEG 后卷绕处 1.47，与 JPEG 块边界的 1.28 相当，肉眼不可见。
+- 平铺周期：纸纹没有可辨认的斑块地标（异常值已做 tanh 压缩），横屏 812pt 宽重复约 3.2 次，看不出重复。
+- 色调：纸面均色约 (215,192,151)，和 v2、真机一致；撕口不透明区和纸面均色差 < 1。
 
-**旧：** `drawer_vellum` 九宫格，左右 inset 28pt 在宽屏被拉出竖缝；纸心分辨率不够 → 糊。
+## 切片体积（KB）
+| 切片 | @2x | @3x | v2 @2x / @3x |
+|---|---|---|---|
+| paper_tile | 22.2（512²） | 41.7（768²） | 21.4 / 91.2 |
+| tear_edge | 21.1 | 36.4 | 18.2 / 31.6 |
+| strip_parchment | 22.3 | 45.0 | 28.0 / 52.5 |
+| row_self_highlight（新） | 1.2 | 1.7 | — |
+| **整套** | **313.1** | **416.3** | 313.8 / 466.8 |
 
-**新合成（每帧）：**
-1. 纸身矩形：`paper_tile` **cover 或 tile** 填满（禁止九宫格纸心）。竖屏可用 cover；横屏 812pt 宽建议 **tile**（@3x 1024²，约 0.8 次水平重复），单张 cover 放大勿超过 ~1.5×。
-2. 展开动画：对「纸身+撕口」整体做 **高度裁切** `clipH`（与 D_final §5 相同），纸纹不拉伸、不游动。
-3. `tear_edge`：贴在纸身底边，上叠约 10pt；**仅左右九宫格**，高度固定 **32pt**；源逻辑宽 812pt（覆盖横屏）。
-4. `roll_paper` + `roll_shadow`：滚筒中心在 `clipH`；p→1 时淡出，露出撕口。小签挂在滚筒/撕口下沿。
-
-```
-┌─────────────────────────────┐
-│ paper_tile (cover / tile)   │  ← clip top portion while animating
-│                             │
-│············ tear overlap····│
-├──────── tear_edge ──────────┤  ← 9-slice L/R only, h=32pt
-│  (roll sits on clip edge)   │
-└────────── tag ──────────────┘
-```
-
-## 切片 KB
-| 切片 | 逻辑 pt | @2x | @3x | 说明 |
-|---|---|---|---|---|
-| paper_tile | 512² 参考 | 512² · 21.4KB JPG | 1024² · 91.2KB JPG | 无缝；无 alpha |
-| tear_edge | 812×32 | 1624×64 · 18.2KB | 2436×96 · 31.6KB | 九宫格 L/R 48pt |
-| （其余沿用 D_final，已删 style/vellum） | | | | |
-
-- **@2x 套：313.8 KB**
-- **@3x 套：466.8 KB**（panel_vellum 仅 @2x）
-- 两套合计约 781 KB；按分包 dpr 只加载一套即可。
-- 新增 tile+tear 合计 @2x 39.6 / @3x 122.8 KB，远小于一张横屏整图。
-
-## 已删除
-- `drawer_vellum`（全部）
-- `btn_icon_style`（客户端确认未绘制；风格只走条）
-
-## 布局要点
-- 竖屏：三统计 → 免费领取 → 三圆钮（榜/加速/玩法）→ 风格行。加速中写在第三列「下一根 00:50 · 加速中」。
-- 横屏 812×375：近铺满（顶/底各 8pt）；内容重排避刘海与胶囊；统计横排、领取避胶囊、三钮+风格居中。
-- **好友柴榜**：抽屉内页，「‹ 返回」回首页；sharedCanvas 按 dpr 建，嵌在内容区。旧 e_rank 弹层废弃。
-- 用尽文案：日配额 →「明天 0 点恢复」；临时无根 → 显示生长倒计时。
+整套 @3x 比 v2 少 50.5KB。两套合计 729.5KB；按 dpr 分包只加载一套。
 
 ## 素材来源
-- 纸纹：程序周期噪声 + Towneley / oldpapertex 高频纤维（PD），无品牌/文字。
-- 其余切片同源 D_final / ui-parchment-v2。
-
-## 待客户端 0.3.5
-1. 换纸面绘制路径（tile/cover + tear + roll）。
-2. 柴榜改为抽屉内页。
-3. 删 btn_icon_style 引用。
-4. 真机验收：竖屏满宽、横屏铺满、无竖缝、字 ≥11pt。
+程序生成噪声，加 Towneley 扫描（PD）的高频纤维。无品牌、文字或标志。
