@@ -1,5 +1,5 @@
 /**
- * 0.3.5 drawer-hires-landscape — portrait 375×812 + landscape 812×375 @ DPR3
+ * 0.3.6 rank-page-tall — portrait tall rank + scroll + landscape rank
  */
 import { createServer } from "node:http";
 import {
@@ -71,7 +71,7 @@ function startServer() {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const outDir = join(ARTIFACTS, "minigame-035");
+const outDir = join(ARTIFACTS, "minigame-036");
 mkdirSync(outDir, { recursive: true });
 
 const server = await startServer();
@@ -89,9 +89,6 @@ page.on("console", (m) => {
     return;
   }
   console.log("[page]", m.type(), t);
-});
-page.on("requestfailed", (req) => {
-  if (req.url().includes("@")) warn404++;
 });
 
 async function waitReady() {
@@ -113,7 +110,7 @@ async function prepBase() {
       await new Promise((r) => setTimeout(r, 200));
     }
   });
-  await sleep(600);
+  await sleep(500);
   await page.evaluate(() => {
     window.__fw.economy().skipGuide();
     window.__fw.economy().setRemaining(12);
@@ -123,83 +120,64 @@ async function prepBase() {
   await sleep(400);
 }
 
-async function shootPortrait() {
-  await page.setViewport({ width: 375, height: 812, deviceScaleFactor: 3 });
-  await page.goto(`http://127.0.0.1:${PORT}/harness/index.html`, {
-    waitUntil: "domcontentloaded",
-    timeout: 120000,
-  });
-  await waitReady();
-  await sleep(1200);
-  await prepBase();
+await page.setViewport({ width: 375, height: 812, deviceScaleFactor: 3 });
+await page.goto(`http://127.0.0.1:${PORT}/harness/index.html`, {
+  waitUntil: "domcontentloaded",
+  timeout: 120000,
+});
+await waitReady();
+await sleep(1200);
+await prepBase();
 
-  await page.screenshot({ path: join(outDir, "p01_idle.png"), type: "png" });
+// main drawer for comparison
+await page.evaluate(() => {
+  window.__fw.economy().setDrawerQ(1);
+  window.__fw.economy().setDrawerPage("main");
+});
+await sleep(500);
+await page.screenshot({ path: join(outDir, "p01_main_drawer.png"), type: "png" });
 
-  await page.evaluate(() => window.__fw.economy().setDrawerQ(1));
-  await sleep(450);
-  await page.screenshot({ path: join(outDir, "p02_drawer.png"), type: "png" });
+// tall rank top
+await page.evaluate(() => {
+  window.__fw.economy().setDrawerPage("rank");
+  window.__fw.economy().setRankScroll?.(0);
+});
+await sleep(700); // allow height morph 250ms + settle
+const rankMeta = await page.evaluate(() => ({
+  h1: window.__fw.economy().getDrawerH1?.(),
+  rows: window.__fw.economy().getRankRows?.()?.length,
+  scroll: window.__fw.economy().getRankScroll?.(),
+}));
+console.log("rank meta", rankMeta);
+await page.screenshot({ path: join(outDir, "p02_rank_top.png"), type: "png" });
 
-  // seam close-up: crop bottom tear region of drawer
-  await page.screenshot({
-    path: join(outDir, "p02b_seam_closeup.png"),
-    type: "png",
-    clip: { x: 0, y: 350, width: 375, height: 80 },
-  });
+// scrolled
+await page.evaluate(() => {
+  window.__fw.economy().setRankScroll?.(320);
+});
+await sleep(400);
+await page.screenshot({ path: join(outDir, "p03_rank_scrolled.png"), type: "png" });
 
-  await page.evaluate(() => window.__fw.economy().setDrawerPage("rank"));
-  await sleep(450);
-  await page.screenshot({ path: join(outDir, "p03_rank.png"), type: "png" });
-
-  await page.evaluate(() => window.__fw.economy().setDrawerPage("style"));
-  await sleep(450);
-  await page.screenshot({ path: join(outDir, "p04_style.png"), type: "png" });
-}
-
-async function shootLandscape() {
-  await page.setViewport({ width: 812, height: 375, deviceScaleFactor: 3 });
-  // force resize path
-  await page.evaluate(() => {
-    window.dispatchEvent(new Event("resize"));
-  });
-  await sleep(800);
-  await page.evaluate(() => {
-    window.__fw.economy().skipGuide();
-    window.__fw.economy().setRemaining(12);
-    window.__fw.economy().openPanel("none");
-    window.__fw.economy().closeDrawer?.();
-  });
-  await sleep(500);
-
-  await page.screenshot({ path: join(outDir, "l01_idle.png"), type: "png" });
-
-  await page.evaluate(() => window.__fw.economy().setDrawerQ(1));
-  await sleep(500);
-  await page.screenshot({ path: join(outDir, "l02_drawer.png"), type: "png" });
-
-  await page.screenshot({
-    path: join(outDir, "l02b_seam_closeup.png"),
-    type: "png",
-    clip: { x: 0, y: 300, width: 812, height: 60 },
-  });
-
-  await page.evaluate(() => window.__fw.economy().setDrawerPage("rank"));
-  await sleep(500);
-  await page.screenshot({ path: join(outDir, "l03_rank.png"), type: "png" });
-
-  await page.evaluate(() => window.__fw.economy().setDrawerPage("style"));
-  await sleep(500);
-  await page.screenshot({ path: join(outDir, "l04_style.png"), type: "png" });
-}
-
-await shootPortrait();
-await shootLandscape();
+// landscape rank
+await page.setViewport({ width: 812, height: 375, deviceScaleFactor: 3 });
+await page.evaluate(() => window.dispatchEvent(new Event("resize")));
+await sleep(800);
+await page.evaluate(() => {
+  window.__fw.economy().skipGuide();
+  window.__fw.economy().setRemaining(12);
+  window.__fw.economy().setDrawerQ(1);
+  window.__fw.economy().setDrawerPage("rank");
+  window.__fw.economy().setRankScroll?.(0);
+});
+await sleep(600);
+await page.screenshot({ path: join(outDir, "l01_rank.png"), type: "png" });
 
 const version = require("../version.js");
 const meta = await page.evaluate(() => {
   const c = document.getElementById("fw-hud");
   return {
-    snap: window.__fw.economy().snapshot(),
-    guide: window.__fw.economy().guideStep(),
+    h1: window.__fw.economy().getDrawerH1?.(),
+    rows: window.__fw.economy().getRankRows?.()?.length,
     hud: c
       ? {
           w: c.width,
@@ -209,13 +187,13 @@ const meta = await page.evaluate(() => {
           dpr: c.width / window.innerWidth,
         }
       : null,
-    orientation: window.innerWidth > window.innerHeight ? "landscape" : "portrait",
   };
 });
 meta.version = version;
 meta.warn404 = warn404;
 meta.deviceOrientation = require("../game.json").deviceOrientation;
+meta.portraitRankMeta = rankMeta;
 writeFileSync(join(outDir, "meta.json"), JSON.stringify(meta, null, 2));
-console.log("wrote", outDir, "hud", meta.hud, "404-ish", warn404);
+console.log("wrote", outDir, meta);
 await browser.close();
 server.close();

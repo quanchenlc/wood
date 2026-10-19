@@ -45,10 +45,21 @@ export {
 export {
   OPEN_MS,
   CLOSE_MS,
+  HEIGHT_MORPH_MS,
+  H1_PORTRAIT_MAIN,
+  H1_PORTRAIT_RANK_FRAC,
   invertEase,
   layoutFor,
   isLandscape,
   adaptMotion,
+  targetDrawerH1,
+  easeUnroll,
   type DrawerMotion,
   type DrawerLayout,
 } from "./motion";
+export {
+  buildMockRankRows,
+  RANK_ROW_H,
+  RANK_PIN_H,
+  type RankRow,
+} from "./rankMock";

@@ -1,6 +1,6 @@
 {
   "appid": "wx3371f99b1b0e73d1",
-  "mainPackageBytes": 1179860,
+  "mainPackageBytes": 1182857,
   "mainPackage": "1.13 MB",
   "mainUnder4MB": true,
   "assetsSubpackageBytes": 5500988,
@@ -33,11 +33,11 @@
   },
   "subpackagesTotalBytes": 14015768,
   "subpackagesTotal": "13.37 MB",
-  "bundle": "1.06 MB",
+  "bundle": "1.07 MB",
   "largestMain": [
     {
       "file": "js/game.bundle.js",
-      "size": "1.06 MB"
+      "size": "1.07 MB"
     },
     {
       "file": "adapter/audio.js",

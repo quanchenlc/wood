@@ -2,15 +2,22 @@
 
 export const OPEN_MS = 350;
 export const CLOSE_MS = 250;
+/** main ↔ rank 纸面高度 morph（与 unroll 同 open ease） */
+export const HEIGHT_MORPH_MS = 250;
 const OPEN_EASE = [0.4, 0.3, 0.4, 1] as const;
 const CLOSE_EASE = [0.55, 0, 0.8, 0.35] as const;
 const H0_PORTRAIT = 20;
-const H1_PORTRAIT = 400;
+/** 竖屏首页 / 风格页 */
+export const H1_PORTRAIT_MAIN = 400;
+/** 竖屏柴榜页：约屏高 78%，留树桩顶 + 小签 */
+export const H1_PORTRAIT_RANK_FRAC = 0.78;
 const D0 = 40;
 const D1 = 14;
 /** 横屏近铺满：顶/底各 8pt（D_fix_v2） */
 export const LANDSCAPE_INSET = 8;
 const TEAR_H = 32;
+
+export type DrawerPageKind = "main" | "style" | "rank";
 
 function bezier(x1: number, y1: number, x2: number, y2: number) {
   return (t: number) => {
@@ -32,6 +39,11 @@ function bezier(x1: number, y1: number, x2: number, y2: number) {
 const easeOpen = bezier(...OPEN_EASE);
 const easeClose = bezier(...CLOSE_EASE);
 
+/** 打开曲线采样（main↔rank 高度 morph 复用） */
+export function easeUnroll(t: number): number {
+  return easeOpen(Math.max(0, Math.min(1, t)));
+}
+
 export interface DrawerLayout {
   landscape: boolean;
   screenW: number;
@@ -48,24 +60,38 @@ export interface DrawerLayout {
   capsuleLeft: number;
   contentLeft: number;
   contentRight: number;
+  page: DrawerPageKind;
 }
 
 export function isLandscape(w: number, h: number): boolean {
   return w > h;
 }
 
+/** 目标纸底高度（pt）：竖屏 rank≈78% 屏高；横屏近铺满 */
+export function targetDrawerH1(
+  screenH: number,
+  landscape: boolean,
+  page: DrawerPageKind = "main",
+): number {
+  if (landscape) return screenH - LANDSCAPE_INSET;
+  if (page === "rank") return Math.round(screenH * H1_PORTRAIT_RANK_FRAC);
+  return H1_PORTRAIT_MAIN;
+}
+
 export function layoutFor(
   w: number,
   h: number,
   capsule?: { top?: number; left?: number; bottom?: number } | null,
+  opts?: { page?: DrawerPageKind; h1?: number },
 ): DrawerLayout {
   const landscape = isLandscape(w, h);
+  const page = opts?.page ?? "main";
   const capTop = capsule?.top ?? (landscape ? 18 : 48);
   const capLeft = capsule?.left ?? (landscape ? w - 7 - 87 : w - 7 - 87);
+  const h1 = opts?.h1 ?? targetDrawerH1(h, landscape, page);
   if (landscape) {
-    const h1 = h - LANDSCAPE_INSET;
     const paperY = LANDSCAPE_INSET;
-    const bodyH = h1 - paperY - 18;
+    const bodyH = Math.max(80, h1 - paperY - 18);
     const left = 24;
     const right = Math.min(w - 24, capLeft - 20);
     return {
@@ -84,28 +110,32 @@ export function layoutFor(
       capsuleLeft: capLeft,
       contentLeft: left,
       contentRight: Math.max(left + 200, right),
+      page,
     };
   }
+  const paperY = -8;
+  const bodyH = Math.max(80, h1 - paperY - 22);
   return {
     landscape: false,
     screenW: w,
     screenH: h,
     h0: H0_PORTRAIT,
-    h1: H1_PORTRAIT,
-    paperY: -8,
+    h1,
+    paperY,
     paperX: -16,
     paperMode: "cover",
-    bodyH: H1_PORTRAIT - 22,
+    bodyH,
     tearH: TEAR_H,
     tearOverlap: 10,
     capsuleTop: capTop,
     capsuleLeft: capLeft,
     contentLeft: 24,
     contentRight: w - 24,
+    page,
   };
 }
 
-export function clipH(p: number, h0 = H0_PORTRAIT, h1 = H1_PORTRAIT) {
+export function clipH(p: number, h0 = H0_PORTRAIT, h1 = H1_PORTRAIT_MAIN) {
   return h0 + (h1 - h0) * p;
 }
 export function diam(p: number) {
@@ -114,7 +144,7 @@ export function diam(p: number) {
 export function rollAlpha(p: number) {
   return p < 0.93 ? 1 : Math.max(0, (1 - p) / 0.07);
 }
-export function tagTop(p: number, h0 = H0_PORTRAIT, h1 = H1_PORTRAIT, minY = 48) {
+export function tagTop(p: number, h0 = H0_PORTRAIT, h1 = H1_PORTRAIT_MAIN, minY = 48) {
   return Math.max(minY, clipH(p, h0, h1) - 16 + 1.25 * (diam(p) - D1));
 }
 export function contentAlphaOpen(ms: number) {
@@ -153,7 +183,7 @@ export function stateOpen(q: number, layout?: DrawerLayout): DrawerMotion {
   const ms = q * OPEN_MS;
   const p = easeOpen(q);
   const h0 = layout?.h0 ?? H0_PORTRAIT;
-  const h1 = layout?.h1 ?? H1_PORTRAIT;
+  const h1 = layout?.h1 ?? H1_PORTRAIT_MAIN;
   const minY = layout?.capsuleTop ?? 48;
   return {
     p,
@@ -178,7 +208,7 @@ export function stateClose(q: number, layout?: DrawerLayout): DrawerMotion {
   let ra = rollAlpha(p);
   if (ms >= 210) ra *= Math.max(0, 1 - (ms - 210) / 40);
   const h0 = layout?.h0 ?? H0_PORTRAIT;
-  const h1 = layout?.h1 ?? H1_PORTRAIT;
+  const h1 = layout?.h1 ?? H1_PORTRAIT_MAIN;
   const minY = layout?.capsuleTop ?? 48;
   return {
     p,
@@ -215,7 +245,7 @@ export function motionAt(
   layout?: DrawerLayout,
 ): DrawerMotion {
   const h0 = layout?.h0 ?? H0_PORTRAIT;
-  const h1 = layout?.h1 ?? H1_PORTRAIT;
+  const h1 = layout?.h1 ?? H1_PORTRAIT_MAIN;
   const minY = layout?.capsuleTop ?? 48;
   return {
     p,

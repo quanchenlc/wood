@@ -13,6 +13,12 @@ import {
   stateOpen,
 } from "./motion";
 import { drawNineSlice, snapPt, snapRect, type Insets } from "./nineSlice";
+import {
+  buildMockRankRows,
+  RANK_PIN_H,
+  RANK_ROW_H,
+  type RankRow,
+} from "./rankMock";
 
 /** rank 弹层已废弃；保留类型以防旧调用 */
 export type PanelMode = "none" | "exhausted" | "rank";
@@ -39,6 +45,11 @@ export interface ParchmentUiState {
   drawerOpening?: boolean;
   drawerPage?: DrawerPage;
   drawerMotion?: DrawerMotion | null;
+  /** 当前纸面目标高度（含 main↔rank morph 中的插值） */
+  drawerH1?: number | null;
+  /** 柴榜列表滚动偏移（pt，向下为正） */
+  rankScrollY?: number;
+  rankRows?: RankRow[];
   showRedDot?: boolean;
   styleId?: string;
   styleLabel?: string;
@@ -58,6 +69,7 @@ export type UiHit =
   | "rank_open"
   | "rank_close"
   | "rank_back"
+  | "rank_list"
   | "help_open"
   | "style_open"
   | "style_back"
@@ -512,6 +524,48 @@ function paintDrawerBackHeader(
   ctx.stroke();
 }
 
+function paintRankRow(
+  ctx: CanvasRenderingContext2D,
+  row: RankRow,
+  x: number,
+  y: number,
+  w: number,
+  rowH: number,
+  opts?: { compact?: boolean; pinned?: boolean },
+) {
+  const ay = y + rowH / 2;
+  const r = opts?.compact ? 12 : 14;
+  const ax = x + (opts?.compact ? 16 : 18);
+  if (opts?.pinned) {
+    ctx.fillStyle = "rgba(243,230,200,0.92)";
+    ctx.fillRect(x, y, w, rowH);
+    ctx.strokeStyle = "rgba(58,42,24,0.22)";
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + w, y);
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.arc(ax, ay, r, 0, Math.PI * 2);
+  ctx.fillStyle = row.self ? "#c4a882" : "#b4966e";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(58,42,24,0.45)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.fillStyle = INK;
+  ctx.font = fontSans(11, "700");
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(String(row.rank), ax, ay);
+  ctx.font = fontSans(opts?.compact ? 13 : 14);
+  ctx.textAlign = "left";
+  ctx.fillText(row.name, x + (opts?.compact ? 36 : 42), ay);
+  ctx.textAlign = "right";
+  ctx.font = fontSerif(opts?.compact ? 13 : 14, "600");
+  ctx.fillStyle = INK_SOFT;
+  ctx.fillText(`${row.pieces} 根`, x + w - 4, ay);
+}
+
 function paintRankPage(
   ctx: CanvasRenderingContext2D,
   layout: DrawerLayout,
@@ -522,16 +576,19 @@ function paintRankPage(
 ) {
   const left = layout.contentLeft;
   const right = layout.contentRight;
-  const headerY = layout.landscape ? 58 : 100;
+  const listW = right - left;
+  const headerY = layout.landscape ? 52 : 96;
+  // 顶栏固定：返回不随列表滚
   paintDrawerBackHeader(ctx, layout, "好友柴榜", "rank_back", hits, headerY);
 
-  // sharedCanvas @ device dpr，嵌在内容区
-  const listTop = headerY + 24;
+  const listTop = headerY + 22;
   const listBottom = layout.landscape
-    ? layout.screenH - 40
-    : Math.min(layout.h1 - 48, layout.screenH * 0.48);
+    ? Math.min(layout.h1 - 36, layout.screenH - 28)
+    : layout.h1 - 44;
   const listH = Math.max(120, listBottom - listTop);
-  const listW = right - left;
+  const pinReserve = RANK_PIN_H + 4;
+  const scrollViewH = Math.max(80, listH - pinReserve);
+
   try {
     const wx = (globalThis as {
       wx?: {
@@ -541,7 +598,7 @@ function paintRankPage(
     const od = wx?.getOpenDataContext?.();
     if (od?.canvas) {
       od.canvas.width = Math.floor(listW * dpr);
-      od.canvas.height = Math.floor(listH * dpr);
+      od.canvas.height = Math.floor(scrollViewH * dpr);
     }
   } catch {
     /* ignore */
@@ -549,93 +606,78 @@ function paintRankPage(
 
   const pieces = state.selfRank?.pieces ?? state.economy?.state.total_pieces ?? 0;
   const selfName = state.selfRank?.name ?? "我";
-  const rows = [
-    { rk: "1", name: "林间樵夫", sc: Math.max(pieces + 200, 1280) },
-    { rk: "2", name: selfName, sc: Math.max(pieces, 960), self: true },
-    { rk: "3", name: "雾里砍柴", sc: Math.max(pieces - 40, 740) },
-    { rk: "4", name: "晚风", sc: Math.max(pieces - 80, 510) },
-    { rk: "5", name: "小斧头", sc: Math.max(pieces - 120, 380) },
-    { rk: "6", name: "松果", sc: Math.max(pieces - 160, 220) },
-  ];
+  const rows =
+    state.rankRows && state.rankRows.length > 0
+      ? state.rankRows
+      : buildMockRankRows(pieces, selfName);
+  const selfRow = rows.find((r) => r.self) || null;
+  const rowH = layout.landscape ? 48 : RANK_ROW_H;
+  const contentH = rows.length * rowH;
+  const maxScroll = Math.max(0, contentH - scrollViewH);
+  const scrollY = Math.max(0, Math.min(maxScroll, state.rankScrollY ?? 0));
+
+  // 列表滚动热区（不含顶栏）
+  pushHit(hits, "rank_list", left, listTop, listW, listH);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(left, listTop, listW, scrollViewH);
+  ctx.clip();
 
   if (layout.landscape) {
+    // 横屏双列 + 纵向滚动
     const colW = (listW - 20) / 2;
-    rows.forEach((row, i) => {
+    const colRows = Math.ceil(rows.length / 2);
+    for (let i = 0; i < rows.length; i++) {
       const col = i % 2;
       const rowI = Math.floor(i / 2);
+      const y = listTop + rowI * rowH - scrollY;
+      if (y + rowH < listTop || y > listTop + scrollViewH) continue;
       const x0 = left + col * (colW + 20);
-      const y = listTop + 8 + rowI * 40;
-      const ax = x0 + 16;
-      const ay = y + 12;
-      ctx.beginPath();
-      ctx.arc(ax, ay, 12, 0, Math.PI * 2);
-      ctx.fillStyle = row.self ? "#c4a882" : "#b4966e";
-      ctx.fill();
-      ctx.strokeStyle = "rgba(58,42,24,0.45)";
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.fillStyle = INK;
-      ctx.font = fontSans(11, "700");
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(row.rk, ax, ay);
-      ctx.font = fontSans(13);
-      ctx.textAlign = "left";
-      ctx.fillText(row.name, x0 + 36, ay);
-      ctx.textAlign = "right";
-      ctx.font = fontSerif(13, "600");
-      ctx.fillStyle = INK_SOFT;
-      ctx.fillText(String(row.sc), x0 + colW - 4, ay);
-    });
-    ctx.fillStyle = INK_SOFT;
-    ctx.font = fontSans(11);
-    ctx.textAlign = "center";
-    ctx.fillText(
-      "开放数据域 · sharedCanvas 按设备 dpr 创建",
-      (left + right) / 2,
-      layout.screenH - 28,
-    );
+      paintRankRow(ctx, rows[i], x0, y, colW, rowH, { compact: true });
+    }
+    void colRows;
   } else {
-    rows.slice(0, 5).forEach((row, i) => {
-      const y = listTop + 8 + i * 44;
-      const ax = left + 16;
-      const ay = y + 14;
-      ctx.beginPath();
-      ctx.arc(ax, ay, 14, 0, Math.PI * 2);
-      ctx.fillStyle = row.self ? "#c4a882" : "#b4966e";
-      ctx.fill();
-      ctx.strokeStyle = "rgba(58,42,24,0.45)";
-      ctx.stroke();
-      ctx.fillStyle = INK;
-      ctx.font = fontSans(11, "700");
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(row.rk, ax, ay);
-      ctx.font = fontSans(14);
-      ctx.textAlign = "left";
-      ctx.fillText(row.name, left + 42, ay);
-      ctx.textAlign = "right";
-      ctx.font = fontSerif(14, "600");
-      ctx.fillStyle = INK_SOFT;
-      ctx.fillText(`${row.sc} 根`, right, ay);
-      if (i < 4) {
-        ctx.strokeStyle = "rgba(58,42,24,0.16)";
-        ctx.beginPath();
-        ctx.moveTo(left + 42, y + 36);
-        ctx.lineTo(right, y + 36);
-        ctx.stroke();
+    rows.forEach((row, i) => {
+      const y = listTop + i * rowH - scrollY;
+      if (y + rowH < listTop || y > listTop + scrollViewH) return;
+      paintRankRow(ctx, row, left, y, listW, rowH);
+      if (i < rows.length - 1) {
+        const ly = y + rowH - 1;
+        if (ly >= listTop && ly <= listTop + scrollViewH) {
+          ctx.strokeStyle = "rgba(58,42,24,0.14)";
+          ctx.beginPath();
+          ctx.moveTo(left + 42, ly);
+          ctx.lineTo(right, ly);
+          ctx.stroke();
+        }
       }
     });
-    ctx.fillStyle = INK_SOFT;
-    ctx.font = fontSans(11);
-    ctx.textAlign = "center";
-    ctx.fillText(
-      "列表在开放数据域绘制 · sharedCanvas@dpr",
-      layout.screenW / 2,
-      listTop + 8 + 5 * 44 + 16,
-    );
+  }
+  ctx.restore();
+
+  // 若「我」不在可视区，钉在列表底
+  if (selfRow) {
+    const selfIndex = rows.findIndex((r) => r.self);
+    let selfVisible = false;
+    if (layout.landscape) {
+      const rowI = Math.floor(selfIndex / 2);
+      const y = listTop + rowI * rowH - scrollY;
+      selfVisible = y + rowH > listTop + 4 && y < listTop + scrollViewH - 4;
+    } else {
+      const y = listTop + selfIndex * rowH - scrollY;
+      selfVisible = y + rowH > listTop + 4 && y < listTop + scrollViewH - 4;
+    }
+    if (!selfVisible) {
+      const pinY = listTop + scrollViewH;
+      paintRankRow(ctx, selfRow, left, pinY, listW, RANK_PIN_H, {
+        compact: layout.landscape,
+        pinned: true,
+      });
+    }
   }
   void tex;
+  void maxScroll;
 }
 
 function paintStylePage(
@@ -1020,7 +1062,7 @@ export function paintParchmentLoading(
   ctx.fillText(`${status || COPY_C.loading} ${pct}%`, w / 2, barY + 28);
   ctx.globalAlpha = 0.35;
   ctx.font = fontSans(11);
-  ctx.fillText("v0.3.5 · 抽屉高清横屏", w / 2, h - 24);
+  ctx.fillText("v0.3.6 · 柴榜加高", w / 2, h - 24);
   ctx.globalAlpha = 1;
 }
 
@@ -1354,11 +1396,20 @@ export function paintParchmentUi(
   const panelOpen = state.panel === "exhausted";
   const cap = capsuleRect(state.capsuleTop ?? 48, w);
   const capTop = state.capsuleTop ?? cap.top;
-  const layout = layoutFor(w, h, {
-    top: capTop,
-    left: cap.left,
-    bottom: cap.bottom,
-  });
+  const page = state.drawerPage || "main";
+  const layout = layoutFor(
+    w,
+    h,
+    {
+      top: capTop,
+      left: cap.left,
+      bottom: cap.bottom,
+    },
+    {
+      page,
+      h1: state.drawerH1 ?? undefined,
+    },
+  );
   const snap = state.economy;
   const remain = snap?.state.daily_remaining ?? 0;
   const exhausted = Boolean(snap && remain <= 0);

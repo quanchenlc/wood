@@ -42,16 +42,21 @@ import { COPY_C, DESIGN_C, getEconomy } from "./economy";
 import { ScenePresenter } from "./core/scenePresent";
 import {
   CLOSE_MS,
+  HEIGHT_MORPH_MS,
   OPEN_MS,
+  buildMockRankRows,
   capsuleTopPt,
+  easeUnroll,
   invertEase,
   isGuideDone,
+  isLandscape,
   loadParchmentTextures,
   markGuide,
   motionAt,
   resetGuideForTests,
   stateClose,
   stateOpen,
+  targetDrawerH1,
   trackGuide,
   writeStyleId,
 } from "./ui/parchment";
@@ -60,6 +65,7 @@ import type {
   GuideTargets,
   PanelMode,
   ParchmentUiState,
+  RankRow,
 } from "./ui/parchment";
 import { ART_SET_CATALOG } from "./art/registry";
 import { formatCountdown } from "./economy/time";
@@ -121,6 +127,16 @@ let drawerAnimFromQ = 0;
 let drawerAnimDur = OPEN_MS;
 let drawerPage: DrawerPage = "main";
 let drawerDragP: number | null = null;
+/** 纸面高度（pt）：main↔rank morph 插值后的当前值 */
+let drawerH1: number | null = null;
+let heightMorphFrom = 0;
+let heightMorphTo = 0;
+let heightMorphStart = 0;
+let heightMorphActive = false;
+let rankScrollY = 0;
+let rankRowsCache: RankRow[] = [];
+let rankScrollDragging = false;
+let rankScrollLastY = 0;
 let claimFlash: string | null = null;
 let claimFlashUntil = 0;
 let showRedDot = false;
@@ -188,6 +204,64 @@ function refreshRedDot(openingDrawer = false) {
   }
 }
 
+function screenSize() {
+  return {
+    w: window.innerWidth || 375,
+    h: window.innerHeight || 812,
+  };
+}
+
+function ensureRankRows() {
+  if (rankRowsCache.length >= 15) return rankRowsCache;
+  const snap = economy.snapshot();
+  rankRowsCache = buildMockRankRows(snap.state.total_pieces, "我");
+  return rankRowsCache;
+}
+
+function currentTargetH1(page: DrawerPage = drawerPage): number {
+  const { w, h } = screenSize();
+  return targetDrawerH1(h, isLandscape(w, h), page);
+}
+
+function resolveDrawerH1(): number {
+  if (heightMorphActive) {
+    const t = Math.min(
+      1,
+      (performance.now() - heightMorphStart) / HEIGHT_MORPH_MS,
+    );
+    const e = easeUnroll(t);
+    drawerH1 = heightMorphFrom + (heightMorphTo - heightMorphFrom) * e;
+    if (t >= 1) {
+      heightMorphActive = false;
+      drawerH1 = heightMorphTo;
+    }
+    return drawerH1;
+  }
+  if (drawerH1 == null) drawerH1 = currentTargetH1();
+  return drawerH1;
+}
+
+/** 切抽屉内页：竖屏 main↔rank 做 250ms 高度 morph；横屏近铺满不变 */
+function setDrawerPage(page: DrawerPage) {
+  const { w, h } = screenSize();
+  const landscape = isLandscape(w, h);
+  const from = resolveDrawerH1();
+  drawerPage = page;
+  if (page === "rank") ensureRankRows();
+  else rankScrollY = 0;
+  const to = targetDrawerH1(h, landscape, page);
+  if (!landscape && Math.abs(from - to) > 0.5) {
+    heightMorphFrom = from;
+    heightMorphTo = to;
+    heightMorphStart = performance.now();
+    heightMorphActive = true;
+  } else {
+    heightMorphActive = false;
+    drawerH1 = to;
+  }
+  syncParchmentHud();
+}
+
 function openDrawer(src: "tap" | "drag" | "guide" = "tap", fromP?: number) {
   if (uiPanel !== "none") return;
   const snap = economy.snapshot();
@@ -207,6 +281,9 @@ function openDrawer(src: "tap" | "drag" | "guide" = "tap", fromP?: number) {
   drawerQ = q0;
   drawerDragP = null;
   drawerPage = "main";
+  rankScrollY = 0;
+  heightMorphActive = false;
+  drawerH1 = currentTargetH1("main");
   syncParchmentHud();
 }
 
@@ -217,6 +294,9 @@ function closeDrawer(instant = false) {
     drawerAnimating = false;
     drawerDragP = null;
     drawerPage = "main";
+    rankScrollY = 0;
+    heightMorphActive = false;
+    drawerH1 = currentTargetH1("main");
     syncParchmentHud();
     return;
   }
@@ -265,12 +345,19 @@ function syncParchmentHud() {
     motion = drawerOpening ? stateOpen(drawerQ) : stateClose(1 - drawerQ);
   }
 
+  const selfPieces = snap.state.total_pieces;
+  const rows = drawerPage === "rank" ? ensureRankRows() : rankRowsCache;
+  const selfIdx = rows.findIndex((r) => r.self);
   const state: ParchmentUiState = {
     panel: uiPanel,
     toast: uiToast,
     loading: null,
     economy: snap,
-    selfRank: { name: "我", pieces: snap.state.total_pieces, rank: 5 },
+    selfRank: {
+      name: "我",
+      pieces: selfPieces,
+      rank: selfIdx >= 0 ? selfIdx + 1 : 5,
+    },
     guideStep,
     guideTargets,
     adRemaining: Math.max(0, adLeft),
@@ -278,6 +365,9 @@ function syncParchmentHud() {
     drawerOpening,
     drawerPage,
     drawerMotion: motion,
+    drawerH1: resolveDrawerH1(),
+    rankScrollY,
+    rankRows: rows,
     showRedDot,
     styleId,
     styleLabel,
@@ -402,13 +492,15 @@ async function handleParchmentHit() {
     return true;
   }
   if (hit === "style_open") {
-    drawerPage = "style";
-    syncParchmentHud();
+    setDrawerPage("style");
     return true;
   }
   if (hit === "style_back") {
-    drawerPage = "main";
-    syncParchmentHud();
+    setDrawerPage("main");
+    return true;
+  }
+  if (hit === "rank_list") {
+    // 点击落在列表上：不关抽屉；滚动由 pointer 手势处理
     return true;
   }
   if (hit === "style_pick") {
@@ -435,16 +527,14 @@ async function handleParchmentHit() {
     return true;
   }
   if (hit === "rank_open") {
-    // 0.3.5：柴榜为抽屉内页，不收起、不弹层
-    drawerPage = "rank";
+    // 0.3.5+：柴榜为抽屉内页；0.3.6 加高纸面
     uiPanel = "none";
-    syncParchmentHud();
+    setDrawerPage("rank");
     return true;
   }
   if (hit === "rank_back" || hit === "rank_close") {
-    drawerPage = "main";
     uiPanel = "none";
-    syncParchmentHud();
+    setDrawerPage("main");
     return true;
   }
   if (hit === "panel") return true;
@@ -752,6 +842,55 @@ window.addEventListener("resize", () => {
 document.addEventListener("contextmenu", (e) => e.preventDefault());
 document.addEventListener("selectstart", (e) => e.preventDefault());
 
+/** 柴榜列表拖拽滚动：占指针，不关抽屉、不转视角 */
+function rankListMaxScroll(): number {
+  const rows = ensureRankRows();
+  const { w, h } = screenSize();
+  const landscape = isLandscape(w, h);
+  const rowH = landscape ? 48 : 54;
+  const h1 = resolveDrawerH1();
+  const headerY = landscape ? 52 : 96;
+  const listTop = headerY + 22;
+  const listBottom = landscape ? Math.min(h1 - 36, h - 28) : h1 - 44;
+  const listH = Math.max(120, listBottom - listTop);
+  const scrollViewH = Math.max(80, listH - 56);
+  const cols = landscape ? 2 : 1;
+  const contentH = Math.ceil(rows.length / cols) * rowH;
+  return Math.max(0, contentH - scrollViewH);
+}
+
+function onRankPointerDown(e: PointerEvent) {
+  if (drawerPage !== "rank" || drawerQ == null) return;
+  const hud = ensureHud();
+  if (!hud?.hitTestParchment) return;
+  const hit = hud.hitTestParchment(e.clientX, e.clientY);
+  if (hit !== "rank_list") return;
+  rankScrollDragging = true;
+  rankScrollLastY = e.clientY;
+  controller.capturePointerForUi();
+  e.preventDefault();
+}
+
+function onRankPointerMove(e: PointerEvent) {
+  if (!rankScrollDragging) return;
+  const dy = e.clientY - rankScrollLastY;
+  rankScrollLastY = e.clientY;
+  rankScrollY = Math.max(0, Math.min(rankListMaxScroll(), rankScrollY - dy));
+  syncParchmentHud();
+  e.preventDefault();
+}
+
+function onRankPointerUp() {
+  if (!rankScrollDragging) return;
+  rankScrollDragging = false;
+  controller.releaseUiCapture();
+}
+
+window.addEventListener("pointerdown", onRankPointerDown, { capture: true });
+window.addEventListener("pointermove", onRankPointerMove, { capture: true });
+window.addEventListener("pointerup", onRankPointerUp, { capture: true });
+window.addEventListener("pointercancel", onRankPointerUp, { capture: true });
+
 window.addEventListener("beforeunload", () => {
   game?.dispose();
   axe.dispose();
@@ -801,8 +940,17 @@ function frame() {
         drawerQ = null;
         drawerAnimating = false;
         drawerPage = "main";
+        rankScrollY = 0;
+        heightMorphActive = false;
+        drawerH1 = currentTargetH1("main");
       }
     }
+    syncParchmentHud();
+  }
+
+  // main↔rank 纸面高度 morph
+  if (heightMorphActive) {
+    resolveDrawerH1();
     syncParchmentHud();
   }
 
@@ -825,6 +973,8 @@ function frame() {
 
   const needHud =
     drawerAnimating ||
+    heightMorphActive ||
+    rankScrollDragging ||
     drawerDragP != null ||
     guideStep === 1 ||
     guideStep === 3 ||
@@ -926,13 +1076,21 @@ if (enableDebugHooks) {
           syncParchmentHud();
         },
         setDrawerPage: (p: DrawerPage) => {
-          drawerPage = p;
           if (drawerQ == null) {
             drawerQ = 1;
             drawerOpening = true;
+            drawerAnimating = false;
+            drawerH1 = currentTargetH1("main");
           }
+          setDrawerPage(p);
+        },
+        setRankScroll: (y: number) => {
+          rankScrollY = Math.max(0, y);
           syncParchmentHud();
         },
+        getRankScroll: () => rankScrollY,
+        getRankRows: () => ensureRankRows(),
+        getDrawerH1: () => resolveDrawerH1(),
         showExhaustedBubble: () => {
           const snap = economy.snapshot();
           exhaustedBubble = {
