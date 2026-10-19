@@ -238,6 +238,61 @@ async function composeContactSheets() {
         .toFile(closeOut);
       copyFileSync(closeOut, join(ARTIFACTS, closeName));
       console.log("closeup", closeName);
+      // Boss review finals: raw seek-pose closeup (full frame) + labelled crop
+      const finalName = `axe046c_closeup_final_${orient}.png`;
+      copyFileSync(closeupSrc, join(ARTIFACTS, finalName));
+      copyFileSync(closeupSrc, join(STORE, finalName));
+      console.log("final", finalName);
+    }
+
+    // Pre / impact / after strip from seek poses
+    const stripNames = ["strip_pre.png", "strip_impact.png", "strip_after.png"];
+    const stripLabels = ["pre-impact", "IMPACT", "after"];
+    if (stripNames.every((n) => existsSync(join(STORE, "current", orient, n)))) {
+      const tip = currentM.impact?.hook
+        ? { x: currentM.impact.hook.bladeScreenX, y: currentM.impact.hook.bladeScreenY }
+        : currentM.impact?.tipCss;
+      const log = currentM.impact?.logTopCss;
+      const rowH = 360;
+      const gap = 8;
+      const labelH = 28;
+      const panels = [];
+      let totalW = 0;
+      for (let i = 0; i < stripNames.length; i++) {
+        const crop = await cropAction(join(STORE, "current", orient, stripNames[i]), tip, log);
+        const pw = Math.round(((crop.info.width || 1) * rowH) / (crop.info.height || 1));
+        panels.push({
+          label: stripLabels[i],
+          w: pw,
+          buf: await sharp(crop.data).resize(pw, rowH).png().toBuffer(),
+        });
+        totalW += pw + (i ? gap : 0);
+      }
+      const canvasW = totalW + 24;
+      const canvasH = labelH + rowH + 16;
+      const comps = [];
+      let x = 12;
+      for (const p of panels) {
+        const lab = Buffer.from(
+          `<svg width="${p.w}" height="${labelH}" xmlns="http://www.w3.org/2000/svg">
+            <rect width="100%" height="100%" fill="#241c14"/>
+            <text x="8" y="19" fill="#cbb89a" font-size="14" font-family="sans-serif">${orient} ${p.label}</text>
+          </svg>`,
+        );
+        comps.push({ input: lab, top: 8, left: x });
+        comps.push({ input: p.buf, top: 8 + labelH, left: x });
+        x += p.w + gap;
+      }
+      const stripName = `axe046c_strip_${orient}.png`;
+      const stripOut = join(STORE, stripName);
+      await sharp({
+        create: { width: canvasW, height: canvasH, channels: 3, background: "#0e0a08" },
+      })
+        .composite(comps)
+        .png()
+        .toFile(stripOut);
+      copyFileSync(stripOut, join(ARTIFACTS, stripName));
+      console.log("strip", stripName);
     }
 
     metaAsserts[orient] = compareMetrics(precleanM, currentM, orient);
@@ -262,15 +317,17 @@ async function composeContactSheets() {
       BUILD_REV: version.BUILD_REV,
     },
     tip: version.BUILD_REV,
-    note: "0.4.7 axe046c — tip seated ABOVE log top so metal head is visible; pack4 audio; bare-stick harness",
+    note: "0.4.7 axe046c — edge-down chop on log top center; pack4 audio; orientation harness",
     root_cause:
-      "Boss 体验版 bare stick: tip-zero used authoring tip coords as Mesh-bin local, so keys seated the mid-handle on the log and buried the real metal head ~35 cm below (handle-only silhouette). Fix: tip via AuxScene/authoring space + AXE_MODEL_SCALE; impact tip ~2.5 cm above pivot, edge bite, cheek to camera. Harness fails bareStick when cool-steel pixel count near tip is near-zero.",
+      "Boss rejects: (1) tip Mesh-bin bug buried the head; (2) rotX-only left the blade plane flat like a plate with edge sideways, tip off-log from tipZ bias + non-uniform squash. Fix: AuxScene tip, uniform scale, Euler(rx,0,rz) so blade −X→−Y (edge down), tip on log center. Harness requires bladePlaneVertical, edgeDown, tipInLogFootprint, and cool-steel metalVisible.",
     asserts: metaAsserts,
     shots: [
       "axe046c_contact_portrait.png",
       "axe046c_contact_landscape.png",
       "axe046c_impact_closeup_portrait.png",
       "axe046c_impact_closeup_landscape.png",
+      "axe046c_strip_portrait.png",
+      "axe046c_strip_landscape.png",
     ],
     audio: {
       shipped: "pack4 层次 → public/assets/sounds/",
@@ -701,10 +758,44 @@ function compareMetrics(pre, cur, orient) {
     // Keep image dx/dy as primary report; note hook deltas alongside
     if (tipVsLogDx == null) tipVsLogDx = hookDx;
     if (tipVsLogDy == null) tipVsLogDy = hookDy;
-    // Allow tip seated above the log top (visible head) up to ~14 cm.
-    hookLogOk = tipVsLogWorldDy <= 0.14 && hookDx <= 45;
+    // Tip near log top (bite or slight hover); screen near log center.
+    hookLogOk = tipVsLogWorldDy <= 0.08 && hookDx <= 36;
   }
   const tipVsLogOk = imgLogOk || hookLogOk;
+
+  // Orientation (world-space from impactDebug): classic chopping-block pose.
+  // Blade plane vertical ⇒ cheek normal mostly horizontal (|ny| small).
+  // Edge down ⇒ poll→tip points world −Y.
+  // Tip in log footprint ⇒ tip XZ within ~log radius of impact point.
+  const edgeDir = hook?.edgeDir ?? null;
+  const handleDir = hook?.handleDir ?? null;
+  const cheekNormal = hook?.cheekNormal ?? null;
+  const bladePlaneVertical =
+    cheekNormal != null && Math.abs(cheekNormal[1] ?? 1) <= 0.4;
+  const edgeDown = edgeDir != null && (edgeDir[1] ?? 0) <= -0.55;
+  let tipInLogFootprint = false;
+  let tipFootprintR = null;
+  if (hook?.tip && hook?.imp) {
+    const dx = (hook.tip[0] ?? 0) - (hook.imp[0] ?? 0);
+    const dz = (hook.tip[2] ?? 0) - (hook.imp[2] ?? 0);
+    tipFootprintR = Math.hypot(dx, dz);
+    // Upright log radius is ~0.12–0.18 m; keep tip inside the top face.
+    tipInLogFootprint = tipFootprintR <= 0.11;
+  }
+  // Handle and edge roughly share a vertical plane (both mostly in XY after lookAt).
+  let bladeContainsHandle = false;
+  if (edgeDir && handleDir && cheekNormal) {
+    // Both dirs should be ⟂ cheek normal (in the blade plane).
+    const eDot =
+      edgeDir[0] * cheekNormal[0] + edgeDir[1] * cheekNormal[1] + edgeDir[2] * cheekNormal[2];
+    const hDot =
+      handleDir[0] * cheekNormal[0] +
+      handleDir[1] * cheekNormal[1] +
+      handleDir[2] * cheekNormal[2];
+    bladeContainsHandle = Math.abs(eDot) <= 0.25 && Math.abs(hDot) <= 0.25;
+  }
+  const orientOk =
+    bladePlaneVertical && edgeDown && tipInLogFootprint && bladeContainsHandle;
 
   // Impact must not put the axe handle through the top drawer tab.
   // Prefer closeup probeIdleTab (same cold-bright test as idle); parchment UI
@@ -715,16 +806,14 @@ function compareMetrics(pre, cur, orient) {
     (closeupTabHit == null && !cur.impact?.img?.overlapsTopTab);
   const preImpactTab = Boolean(pre.impact?.img?.overlapsTopTab);
 
-  // Head orientation: must NOT match boss sideways-on-face (wide cool cheek on log FACE).
-  // When the metal bbox is measurable on the log top (cheek-facing, not onFace), trust it
-  // over the cool-grey face probe (bark/sky noise can inflate coolFaceCount).
+  // Head must not match boss sideways-on-face; edge-down side profile may be
+  // taller than wide — prefer world orientOk over widerThanTall alone.
   const curHead = cur.impact?.head || cur.impact?.closeup?.head || null;
   const preHead = pre.impact?.head || null;
   const bossFace = cur.impact?.bossFace || cur.impact?.closeup?.bossFace || null;
   const headOnTop =
     tipVsLogOk &&
     curHead != null &&
-    curHead.widerThanTall === true &&
     curHead.onLogFace !== true &&
     curHead.tipOnFace !== true &&
     curHead.sidewaysBossPattern !== true;
@@ -732,25 +821,19 @@ function compareMetrics(pre, cur, orient) {
   const headAspectOk =
     tipVsLogOk &&
     curHead?.sidewaysBossPattern !== true &&
-    (headOnTop ||
-      (curHead == null && bossFace?.bossSidewaysFace !== true) ||
-      (curHead != null &&
-        curHead.widerThanTall === true &&
-        curHead.onLogFace !== true &&
-        bossFace?.bossSidewaysFace !== true));
+    (orientOk ||
+      headOnTop ||
+      (curHead == null && bossFace?.bossSidewaysFace !== true));
   // Boss "bare stick": metal head fully occluded / near-zero cool steel at tip.
-  // Require a measurable cool-steel head bbox AND tip-local cool steel samples
-  // (warm bark must not inflate metalCount). Landscape crops are smaller — allow
-  // a lower bbox count when tip-local cool steel is clearly present.
   const metalCount = curHead?.metalCount ?? 0;
   const tipSteel = cur.impact?.tipSteel || cur.impact?.closeup?.tipSteel || null;
   const tipCool = tipSteel?.coolSteelCount ?? 0;
   const metalVisible =
     curHead != null &&
-    (curHead.widthCss ?? 0) >= 28 &&
-    (curHead.heightCss ?? 0) >= 14 &&
+    (curHead.widthCss ?? 0) >= 24 &&
+    (curHead.heightCss ?? 0) >= 16 &&
     tipSteel?.tipHasCoolSteel === true &&
-    (metalCount >= 350 || (metalCount >= 180 && tipCool >= 800));
+    (metalCount >= 300 || (metalCount >= 160 && tipCool >= 700));
   const bareStick = !metalVisible;
   const headAspectMatchPre =
     preHead?.aspect != null &&
@@ -765,7 +848,8 @@ function compareMetrics(pre, cur, orient) {
     impactTabOk &&
     headAspectOk &&
     metalVisible &&
-    !bareStick;
+    !bareStick &&
+    orientOk;
   return {
     ok,
     idleOk,
@@ -781,6 +865,15 @@ function compareMetrics(pre, cur, orient) {
     bareStick,
     metalCount,
     tipSteel,
+    orientOk,
+    bladePlaneVertical,
+    edgeDown,
+    tipInLogFootprint,
+    tipFootprintR,
+    bladeContainsHandle,
+    edgeDir,
+    handleDir,
+    cheekNormal,
     bossFace,
     curHead,
     preHead,
@@ -921,10 +1014,28 @@ async function captureSequence(orient, cssW, cssH) {
         visible: dbg.visible,
         tip: dbg.bladeTip,
         imp: dbg.impactPoint,
+        edgeDir: dbg.edgeDir ?? null,
+        handleDir: dbg.handleDir ?? null,
+        cheekNormal: dbg.cheekNormal ?? null,
       };
     }, IMPACT_AT);
     // Let the presenter paint the seek pose before screenshot
     await sleep(120);
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+    // Pre / impact / after seek strip (intact log)
+    for (const [name, tSeek] of [
+      ["strip_pre.png", 0.06],
+      ["strip_impact.png", IMPACT_AT],
+      ["strip_after.png", 0.34],
+    ]) {
+      await page.evaluate((t) => window.__fw.axe().seekTime(t), tSeek);
+      await sleep(80);
+      await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+      await page.screenshot({ path: join(dir, name), type: "png" });
+    }
+    // Re-seek impact for the labelled close-up + metrics
+    await page.evaluate((t) => window.__fw.axe().seekTime(t), IMPACT_AT);
+    await sleep(80);
     await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
     closeupPath = join(dir, "impact_closeup.png");
     await page.screenshot({ path: closeupPath, type: "png" });

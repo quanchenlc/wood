@@ -1188,6 +1188,9 @@ if (enableDebugHooks) {
             pivot: d.pivot.toArray() as [number, number, number],
             elapsed: d.elapsed,
             visible: d.visible,
+            edgeDir: d.edgeDir.toArray() as [number, number, number],
+            handleDir: d.handleDir.toArray() as [number, number, number],
+            cheekNormal: d.cheekNormal.toArray() as [number, number, number],
           };
         },
         withAxeModel: (fn: (root: THREE.Object3D) => void) => axe.withAxeModel(fn),

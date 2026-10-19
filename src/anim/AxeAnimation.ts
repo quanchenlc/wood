@@ -7,29 +7,24 @@ import {
   AXE_ANIM_DURATION,
   AXE_ANIM_FADE,
   AXE_ANIM_IMPACT_AT,
+  AXE_HANDLE_TOP_LOCAL,
   AXE_KEYS,
-  AXE_MODEL_SCALE_X,
-  AXE_MODEL_SCALE_Y,
-  AXE_MODEL_SCALE_Z,
+  AXE_MODEL_SCALE,
+  AXE_POLL_LOCAL,
   AXE_TIP_LOCAL,
 } from "./axeAnimClip";
 
 function applyAxeModelScale(obj: THREE.Object3D | null, fade = 1) {
   if (!obj) return;
-  const f = Math.max(0, fade);
-  obj.scale.set(AXE_MODEL_SCALE_X * f, AXE_MODEL_SCALE_Y * f, AXE_MODEL_SCALE_Z * f);
+  obj.scale.setScalar(AXE_MODEL_SCALE * Math.max(0, fade));
 }
 
 /**
  * 斧头挥砍 —— 项目自撰关键姿态 + smoothstep 插值。
  *
- * 测量目标来自 pre-clean 实机观感（闲置隐藏、落点贴齐木顶、柄自上方落下、
- * 颊面朝相机、不挡顶栏）。不含 ax_anim / screen.toys 的关键帧数据。
- *
- * 模型约定（build_axe_placeholder）：柄 +Y，刃口线 ∥ Y，刃朝 −X，颊面 ±Z。
- * pivot.lookAt 后 local +Z 朝镜头、+X 朝右；animNull 只用 rotX 下劈
- * （勿套用 ax_anim 的复合四元数，否则刃口线会躺平、颊面贴在原木立面上）。
- * 挂模保持 identity（不要 MODEL_YAW），否则颊面转到 ±X，屏幕上只剩窄侧影。
+ * 落点：刃口朝下扎进原木顶心、颊面朝相机、柄斜向上（劈柴墩经典侧影）。
+ * 模型：柄 +Y，刃尖 −X，颊面 ±Z。Impact 用 Euler(rx,0,rz) 把 −X 转到 −Y，
+ * 避免刃面躺平。统一等比缩放（勿非均匀压扁刀头）。不含 ax_anim 曲线。
  */
 const _qa = new THREE.Quaternion();
 const _qb = new THREE.Quaternion();
@@ -166,8 +161,8 @@ export class AxeAnimation {
   private attachAxeModel(root: THREE.Object3D) {
     this.disposeAxeModel();
     this.axeModel = root;
-    // Identity pose: cheek ±Z faces camera after pivot.lookAt (see class note).
-    // Non-uniform scale: big head (X/Z), shorter handle (Y) for tab clearance.
+    // Identity pose: cheek ±Z; impact keys rotate blade down (see axeAnimClip).
+    // Uniform scale only — non-uniform squash flattened the head into a slab.
     this.axeModel.position.set(0, 0, 0);
     this.axeModel.rotation.set(0, 0, 0);
     applyAxeModelScale(this.axeModel, 1);
@@ -240,6 +235,12 @@ export class AxeAnimation {
     pivot: THREE.Vector3;
     elapsed: number;
     visible: boolean;
+    /** Unit vector poll→tip (blade / edge direction) in world space. */
+    edgeDir: THREE.Vector3;
+    /** Unit vector along handle (+Y) in world space. */
+    handleDir: THREE.Vector3;
+    /** Cheek normal (+Z) in world space — blade-plane normal. */
+    cheekNormal: THREE.Vector3;
   } {
     // Tip in AuxScene / authoring space (AXE_TIP_LOCAL). Do NOT apply through
     // Mesh-bin local — Mesh T/S remaps authored points; treating authoring
@@ -249,16 +250,37 @@ export class AxeAnimation {
       AXE_TIP_LOCAL[1],
       AXE_TIP_LOCAL[2],
     );
+    const poll = new THREE.Vector3(
+      AXE_POLL_LOCAL[0],
+      AXE_POLL_LOCAL[1],
+      AXE_POLL_LOCAL[2],
+    );
+    const handleTop = new THREE.Vector3(
+      AXE_HANDLE_TOP_LOCAL[0],
+      AXE_HANDLE_TOP_LOCAL[1],
+      AXE_HANDLE_TOP_LOCAL[2],
+    );
+    const cheekLocal = new THREE.Vector3(0, 0, 1);
     if (this.axeModel) {
       this.axeModel.updateWorldMatrix(true, true);
-      bladeTip.applyMatrix4(this.axeModel.matrixWorld);
+      const m = this.axeModel.matrixWorld;
+      bladeTip.applyMatrix4(m);
+      poll.applyMatrix4(m);
+      handleTop.applyMatrix4(m);
+      // Normal: transform direction (ignore translation)
+      cheekLocal.transformDirection(m).normalize();
     }
+    const edgeDir = bladeTip.clone().sub(poll).normalize();
+    const handleDir = handleTop.clone().sub(poll).normalize();
     return {
       bladeTip,
       impactPoint: this.lastImpactPoint.clone(),
       pivot: this.pivot.position.clone(),
       elapsed: this.elapsed,
       visible: this.pivot.visible && !!this.animScene?.visible,
+      edgeDir,
+      handleDir,
+      cheekNormal: cheekLocal,
     };
   }
 
