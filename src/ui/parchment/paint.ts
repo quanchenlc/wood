@@ -787,22 +787,21 @@ function paintStylePage(
       paintStyleRow(ctx, tex, opt, opt.id === state.styleId, x, y, rowW, rowH, dpr);
       pushHit(hits, "style_pick", x, y, rowW, rowH, opt.id);
     });
-    const styleRows = Math.ceil(opts.length / 2);
-    const headY = listTop + styleRows * colGapY - 6; // ~216 after 3 style rows
-    const stumpY = headY + 22; // ~238
-    if (stumpY + rowH <= footnoteY - 4) {
-      ctx.fillStyle = INK_SOFT;
-      ctx.font = fontSans(12, "600");
-      ctx.textAlign = "left";
-      ctx.textBaseline = "middle";
-      ctx.fillText("木桩", col1X, headY + 8);
-      STUMP_STYLE_OPTS.forEach((opt, i) => {
-        const x = i === 0 ? col1X : col2X;
-        const active = opt.id === stumpId;
-        paintStyleRow(ctx, tex, opt, active, x, stumpY, rowW, rowH, dpr);
-        pushHit(hits, "style_pick", x, stumpY, rowW, rowH, opt.id);
-      });
-    }
+    // After 3 style rows (y 72/122/172): heading + A/B row; keep ≥12pt above tear
+    const styleRows = Math.ceil(Math.max(1, opts.length) / 2);
+    const headY = listTop + styleRows * colGapY - 14; // ~208
+    const stumpY = Math.min(headY + 18, footnoteY - rowH - 4); // ~226, clamp under footnote
+    ctx.fillStyle = INK_SOFT;
+    ctx.font = fontSans(12, "600");
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText("木桩", col1X, headY + 8);
+    STUMP_STYLE_OPTS.forEach((opt, i) => {
+      const x = i === 0 ? col1X : col2X;
+      const active = opt.id === stumpId;
+      paintStyleRow(ctx, tex, opt, active, x, stumpY, rowW, rowH, dpr);
+      pushHit(hits, "style_pick", x, stumpY, rowW, rowH, opt.id);
+    });
     ctx.fillStyle = INK_SOFT;
     ctx.font = fontSans(11);
     ctx.textAlign = "center";
