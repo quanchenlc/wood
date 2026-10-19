@@ -1,32 +1,35 @@
 /**
- * Original authored axe swing (0.4.7).
+ * Original authored axe swing (0.4.8).
  *
- * Impact (classic chopping-block silhouette):
- * - Blade plane vertical (contains handle); cutting tip points world −Y (edge down)
- * - Flat cheek toward camera (side profile: handle up, wedge tapering into log top)
- * - Tip seated on log TOP CENTER (slight bite) — not beside / behind the log
+ * Root cause of live 体验版 cheek-on-face (harness PASS / live FAIL):
+ * harness seeked the intact log TOP, but gameplay seated the axe at
+ * computeSplitPoint's mesh CENTER for small pieces → tip mid-bark.
+ * Fixed in GameController via axeContactPoint (bbox max.y).
  *
- * Mesh (build_axe_placeholder): handle +Y, blade tip −X, cheek ±Z.
- * Impact uses Euler(rx≈16°, 0, rz≈56°) so −X maps mostly to −Y while cheek stays
- * +Z (faces camera after pivot.lookAt). Orientation is rotation-only — never
- * non-uniform scale (that squashed the head into a slab). Tip in AuxScene /
- * authoring space — never Mesh-bin local. No ax_anim_v03 / screen.toys floats.
+ * Orientation technique (early wood / screen.toys pattern — no ax_anim floats):
+ * - Every frame: pivot.lookAt(camera-forward); local +X = camera-right
+ * - MODEL_YAW = π/2 on the mesh: authoring cheek ±Z → ±X (blade in split plane)
+ * - animNull is rotX-only (large compound rz + cheek-to-camera = plate-on-face)
+ * - Tip tip-zeroed onto log TOP CENTER; uniform scale
  */
 
 export const AXE_ANIM_DURATION = 0.78;
 export const AXE_ANIM_FADE = 0.14;
 export const AXE_ANIM_IMPACT_AT = 0.12;
 
-/** Uniform model scale (believable head∶handle proportions). */
-export const AXE_MODEL_SCALE = 0.88;
+/** Uniform model scale. */
+export const AXE_MODEL_SCALE = 1.0;
+
+/**
+ * Rest yaw: cheek ±Z → pivot ±X (camera-right / split normal after lookAt).
+ * Camera sees the wedge biting the top — not cheek plastered on bark.
+ */
+export const AXE_MODEL_YAW = Math.PI / 2;
 
 /** Blade tip in AuxScene / authoring space (build_axe_placeholder XE,y). */
 export const AXE_TIP_LOCAL: readonly [number, number, number] = [-0.162, 0.05, 0];
 
-/**
- * Poll / eye reference in authoring space (toward handle from tip along +X).
- * Used by harness to measure blade direction (poll→tip ≈ −X).
- */
+/** Poll / eye reference (authoring +X from tip). */
 export const AXE_POLL_LOCAL: readonly [number, number, number] = [0.059, 0.05, 0];
 
 /** Handle butt reference (authoring +Y). */
@@ -40,18 +43,18 @@ export type AxeKey = {
 
 /**
  * Five keys; smoothstep between neighbours.
- * Quaternions are Euler(rx, 0, rz) — cheek +Z, blade toward −Y at impact.
- * Tip targets stay on the pivot XZ origin (log top center).
+ * Quaternions are pure Euler(rotX, 0, 0). MODEL_YAW on the mesh does the rest.
+ * Impact ~rotX 48°: edge world −Y, handle up, tip on pivot origin.
  */
 export const AXE_KEYS: readonly AxeKey[] = [
-  // wind-up — raised
-  { t: 0, p: [0.14421, 0.48786, 0.00532], q: [0.06705, -0.01923, 0.27497, 0.95892] },
-  // pre-strike
-  { t: 0.06, p: [0.13192, 0.26817, 0.01449], q: [0.09657, -0.04, 0.38059, 0.91882] },
-  // impact — tip on log center (+1.5 cm); edge down; cheek to camera
-  { t: AXE_ANIM_IMPACT_AT, p: [0.1162, 0.10496, 0.0258], q: [0.12288, -0.06534, 0.4649, 0.87435] },
-  // follow-through
-  { t: 0.34, p: [0.10939, 0.09034, 0.0347], q: [0.15038, -0.08682, 0.4924, 0.85287] },
-  // exit
-  { t: AXE_ANIM_DURATION, p: [0.12809, 0.03983, 0.01591], q: [0.09549, -0.04252, 0.40451, 0.90854] },
+  // wind-up — rotX 62°
+  { t: 0, p: [0.02, 0.56956, -0.0602], q: [0.51504, 0, 0, 0.85717] },
+  // pre-strike — rotX 54°
+  { t: 0.06, p: [0.01, 0.26167, -0.10567], q: [0.45399, 0, 0, 0.89101] },
+  // impact — tip on log top center; rotX 48°
+  { t: AXE_ANIM_IMPACT_AT, p: [0, 0.09893, -0.14556], q: [0.40674, 0, 0, 0.91355] },
+  // follow-through — rotX 42°
+  { t: 0.34, p: [0, 0.06324, -0.17385], q: [0.35837, 0, 0, 0.93358] },
+  // exit — rotX 28°
+  { t: AXE_ANIM_DURATION, p: [0.02, 0.00191, -0.21651], q: [0.24192, 0, 0, 0.9703] },
 ];

@@ -10,6 +10,7 @@ import {
   AXE_HANDLE_TOP_LOCAL,
   AXE_KEYS,
   AXE_MODEL_SCALE,
+  AXE_MODEL_YAW,
   AXE_POLL_LOCAL,
   AXE_TIP_LOCAL,
 } from "./axeAnimClip";
@@ -22,9 +23,11 @@ function applyAxeModelScale(obj: THREE.Object3D | null, fade = 1) {
 /**
  * 斧头挥砍 —— 项目自撰关键姿态 + smoothstep 插值。
  *
- * 落点：刃口朝下扎进原木顶心、颊面朝相机、柄斜向上（劈柴墩经典侧影）。
- * 模型：柄 +Y，刃尖 −X，颊面 ±Z。Impact 用 Euler(rx,0,rz) 把 −X 转到 −Y，
- * 避免刃面躺平。统一等比缩放（勿非均匀压扁刀头）。不含 ax_anim 曲线。
+ * 与早期 wood / screen.toys orient 同构（不含 ax_anim 浮点曲线）：
+ * - 每帧 pivot.lookAt(camera-forward)；挂模 MODEL_YAW=π/2 → 颊面沿相机右
+ *   （刃面落在劈面内，尖端朝下扎进顶心）
+ * - animNull 只用 rotX；落点由 axeContactPoint 钉在木块顶面（勿用小块中心）
+ * - 统一等比缩放
  */
 const _qa = new THREE.Quaternion();
 const _qb = new THREE.Quaternion();
@@ -161,10 +164,10 @@ export class AxeAnimation {
   private attachAxeModel(root: THREE.Object3D) {
     this.disposeAxeModel();
     this.axeModel = root;
-    // Identity pose: cheek ±Z; impact keys rotate blade down (see axeAnimClip).
-    // Uniform scale only — non-uniform squash flattened the head into a slab.
+    // MODEL_YAW puts cheek on ±X (camera-right / split normal after lookAt).
+    // Swing is rotX-only on animNull. Uniform scale only.
     this.axeModel.position.set(0, 0, 0);
-    this.axeModel.rotation.set(0, 0, 0);
+    this.axeModel.rotation.set(0, AXE_MODEL_YAW, 0);
     applyAxeModelScale(this.axeModel, 1);
     this.prepareAxeMaterials(this.axeModel);
     this.animNull?.add(this.axeModel);
@@ -239,8 +242,12 @@ export class AxeAnimation {
     edgeDir: THREE.Vector3;
     /** Unit vector along handle (+Y) in world space. */
     handleDir: THREE.Vector3;
-    /** Cheek normal (+Z) in world space — blade-plane normal. */
+    /** Cheek normal (+Z authoring) in world space — blade-plane normal. */
     cheekNormal: THREE.Vector3;
+    /** |cheek · cameraRight| — should be ~1 when blade lies in the split plane. */
+    cheekAlongRight: number;
+    /** |cheek · cameraForward| — high means boss cheek-on-face (toward camera). */
+    cheekTowardCamera: number;
   } {
     // Tip in AuxScene / authoring space (AXE_TIP_LOCAL). Do NOT apply through
     // Mesh-bin local — Mesh T/S remaps authored points; treating authoring
@@ -272,6 +279,8 @@ export class AxeAnimation {
     }
     const edgeDir = bladeTip.clone().sub(poll).normalize();
     const handleDir = handleTop.clone().sub(poll).normalize();
+    const camRight = this.cameraController.getRight(new THREE.Vector3());
+    const camFwd = new THREE.Vector3(-camRight.z, 0, camRight.x);
     return {
       bladeTip,
       impactPoint: this.lastImpactPoint.clone(),
@@ -281,6 +290,8 @@ export class AxeAnimation {
       edgeDir,
       handleDir,
       cheekNormal: cheekLocal,
+      cheekAlongRight: Math.abs(cheekLocal.dot(camRight)),
+      cheekTowardCamera: Math.abs(cheekLocal.dot(camFwd)),
     };
   }
 

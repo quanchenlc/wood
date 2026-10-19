@@ -317,9 +317,9 @@ async function composeContactSheets() {
       BUILD_REV: version.BUILD_REV,
     },
     tip: version.BUILD_REV,
-    note: "0.4.7 axe046c — edge-down chop on log top center; pack4 audio; orientation harness",
+    note: "0.4.8 axe046c — axeContactPoint top seating + MODEL_YAW/rotX; pack4 audio",
     root_cause:
-      "Boss rejects: (1) tip Mesh-bin bug buried the head; (2) rotX-only left the blade plane flat like a plate with edge sideways, tip off-log from tipZ bias + non-uniform squash. Fix: AuxScene tip, uniform scale, Euler(rx,0,rz) so blade −X→−Y (edge down), tip on log center. Harness requires bladePlaneVertical, edgeDown, tipInLogFootprint, and cool-steel metalVisible.",
+      "Live 体验版 cheek-on-face: computeSplitPoint returns mesh CENTER for small pieces, so the axe seated mid-bark while harness seeked the intact log TOP and PASSed. Fix: axeContactPoint lifts VFX to bbox max.y; MODEL_YAW=π/2 + rotX-only (early-wood technique) puts blade in the split plane with edge down. Harness uses default azimuth and asserts tipOnTop + bladeInSplitPlane + !cheekOnFace.",
     asserts: metaAsserts,
     shots: [
       "axe046c_contact_portrait.png",
@@ -763,39 +763,56 @@ function compareMetrics(pre, cur, orient) {
   }
   const tipVsLogOk = imgLogOk || hookLogOk;
 
-  // Orientation (world-space from impactDebug): classic chopping-block pose.
-  // Blade plane vertical ⇒ cheek normal mostly horizontal (|ny| small).
-  // Edge down ⇒ poll→tip points world −Y.
-  // Tip in log footprint ⇒ tip XZ within ~log radius of impact point.
+  // Orientation + seating (must match LIVE gameplay, not only seek-on-intact-log).
+  // Boss cheek-on-face: tip at mesh CENTER (mid-bark). Fix: axeContactPoint → top.
+  // Blade in split plane: cheek ≈ ±cameraRight; edge down; handle up; tip on top.
   const edgeDir = hook?.edgeDir ?? null;
   const handleDir = hook?.handleDir ?? null;
   const cheekNormal = hook?.cheekNormal ?? null;
+  const cheekAlongRight = hook?.cheekAlongRight ?? null;
+  const cheekTowardCamera = hook?.cheekTowardCamera ?? null;
   const bladePlaneVertical =
     cheekNormal != null && Math.abs(cheekNormal[1] ?? 1) <= 0.4;
-  const edgeDown = edgeDir != null && (edgeDir[1] ?? 0) <= -0.55;
+  const edgeDown = edgeDir != null && (edgeDir[1] ?? 0) <= -0.5;
+  const handleUp = handleDir != null && (handleDir[1] ?? 0) >= 0.4;
+  const bladeInSplitPlane = cheekAlongRight != null && cheekAlongRight >= 0.7;
   let tipInLogFootprint = false;
   let tipFootprintR = null;
+  let tipOnTop = false;
+  let tipVsTopDy = null;
   if (hook?.tip && hook?.imp) {
     const dx = (hook.tip[0] ?? 0) - (hook.imp[0] ?? 0);
     const dz = (hook.tip[2] ?? 0) - (hook.imp[2] ?? 0);
     tipFootprintR = Math.hypot(dx, dz);
-    // Upright log radius is ~0.12–0.18 m; keep tip inside the top face.
     tipInLogFootprint = tipFootprintR <= 0.11;
+    tipVsTopDy = Math.abs((hook.tip[1] ?? 0) - (hook.imp[1] ?? 0));
+    tipOnTop = tipVsTopDy <= 0.06;
   }
-  // Handle and edge roughly share a vertical plane (both mostly in XY after lookAt).
+  // Boss FAIL: tip mid-face (well below top) OR cheek fully toward camera while tip off-top.
+  const cheekOnFace =
+    (tipOnTop === false && tipVsTopDy != null && tipVsTopDy > 0.08) ||
+    (cheekTowardCamera != null &&
+      cheekTowardCamera >= 0.7 &&
+      (cheekAlongRight == null || cheekAlongRight < 0.4));
   let bladeContainsHandle = false;
   if (edgeDir && handleDir && cheekNormal) {
-    // Both dirs should be ⟂ cheek normal (in the blade plane).
     const eDot =
       edgeDir[0] * cheekNormal[0] + edgeDir[1] * cheekNormal[1] + edgeDir[2] * cheekNormal[2];
     const hDot =
       handleDir[0] * cheekNormal[0] +
       handleDir[1] * cheekNormal[1] +
       handleDir[2] * cheekNormal[2];
-    bladeContainsHandle = Math.abs(eDot) <= 0.25 && Math.abs(hDot) <= 0.25;
+    bladeContainsHandle = Math.abs(eDot) <= 0.3 && Math.abs(hDot) <= 0.3;
   }
   const orientOk =
-    bladePlaneVertical && edgeDown && tipInLogFootprint && bladeContainsHandle;
+    bladePlaneVertical &&
+    edgeDown &&
+    handleUp &&
+    tipInLogFootprint &&
+    tipOnTop &&
+    bladeContainsHandle &&
+    bladeInSplitPlane &&
+    !cheekOnFace;
 
   // Impact must not put the axe handle through the top drawer tab.
   // Prefer closeup probeIdleTab (same cold-bright test as idle); parchment UI
@@ -849,7 +866,8 @@ function compareMetrics(pre, cur, orient) {
     headAspectOk &&
     metalVisible &&
     !bareStick &&
-    orientOk;
+    orientOk &&
+    !cheekOnFace;
   return {
     ok,
     idleOk,
@@ -868,9 +886,16 @@ function compareMetrics(pre, cur, orient) {
     orientOk,
     bladePlaneVertical,
     edgeDown,
+    handleUp,
     tipInLogFootprint,
+    tipOnTop,
+    tipVsTopDy,
     tipFootprintR,
     bladeContainsHandle,
+    bladeInSplitPlane,
+    cheekOnFace,
+    cheekAlongRight,
+    cheekTowardCamera,
     edgeDir,
     handleDir,
     cheekNormal,
@@ -956,7 +981,9 @@ async function captureSequence(orient, cssW, cssH) {
     window.__fw.economy?.()?.skipGuide?.();
     window.__fw.economy?.()?.setRemaining?.(50);
     window.__fw.economy?.()?.closeDrawer?.();
-    window.__fw.look?.(12);
+    // Default shipping azimuth (π/2) — do NOT look(12); that masked the
+    // cheek-on-face failure that live 体验版 showed under the real camera.
+    window.__fw.look?.(90);
   });
   await sleep(500);
   await waitIdle();
@@ -1017,6 +1044,8 @@ async function captureSequence(orient, cssW, cssH) {
         edgeDir: dbg.edgeDir ?? null,
         handleDir: dbg.handleDir ?? null,
         cheekNormal: dbg.cheekNormal ?? null,
+        cheekAlongRight: dbg.cheekAlongRight ?? null,
+        cheekTowardCamera: dbg.cheekTowardCamera ?? null,
       };
     }, IMPACT_AT);
     // Let the presenter paint the seek pose before screenshot

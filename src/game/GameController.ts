@@ -9,6 +9,7 @@ import type { FirewoodPile } from "../pile/FirewoodPile";
 import { createLog } from "../wood/logFactory";
 import type { WoodMaterials } from "../wood/materials";
 import {
+  axeContactPoint,
   computeSplitPoint,
   isTooThinToSplit,
   pickSplittable,
@@ -419,7 +420,8 @@ export class GameController {
           if (isTooThinToSplit(hit.piece.mesh, sliceNormal)) {
             this.d.controller.nudgeAzimuth(click.x < 0 ? -1 : 1);
           } else {
-            this.d.axe.playFromImpact(worldPoint, sliceNormal);
+            // Split cut uses worldPoint; axe VFX seats on the top end-grain.
+            this.d.axe.playFromImpact(axeContactPoint(hit.piece.mesh, worldPoint), sliceNormal);
             this.pendingSplit = {
               piece: hit.piece,
               worldPoint,
@@ -465,7 +467,7 @@ export class GameController {
     const normal = splitPlaneNormal(this.d.controller.getRight());
     const point = computeSplitPoint(hit.piece.mesh, hit.point, normal);
     if (isTooThinToSplit(hit.piece.mesh, normal)) return;
-    this.d.axe.playFromImpact(point, normal);
+    this.d.axe.playFromImpact(axeContactPoint(hit.piece.mesh, point), normal);
     this.pendingSplit = { piece: hit.piece, worldPoint: point, sliceNormal: normal, timer: 0.1 };
   }
 

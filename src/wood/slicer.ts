@@ -336,6 +336,22 @@ export function computeSplitPoint(
   return localPoint.applyMatrix4(mesh.matrixWorld);
 }
 
+/**
+ * Axe VFX contact point: keep the split's XZ, but seat the tip on the piece's
+ * world-space TOP end-grain (bbox max.y).
+ *
+ * `computeSplitPoint` returns the mesh center for small pieces (volume ≤ 2×
+ * firewood). Playing the axe from that center plastered the cheek mid-face on
+ * rectangular halves — the live 体验版 boss fail — while the harness always
+ * seeked the intact log's top and falsely PASSed.
+ */
+export function axeContactPoint(mesh: SplittableMesh, splitPoint: THREE.Vector3): THREE.Vector3 {
+  mesh.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(mesh);
+  const topY = Number.isFinite(box.max.y) ? box.max.y : splitPoint.y;
+  return new THREE.Vector3(splitPoint.x, topY, splitPoint.z);
+}
+
 function constrainedLocalSplitPoint(
   mesh: SplittableMesh,
   localHit: THREE.Vector3,
