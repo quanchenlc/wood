@@ -1194,6 +1194,7 @@ if (enableDebugHooks) {
             cheekAlongRight: d.cheekAlongRight,
             cheekTowardCamera: d.cheekTowardCamera,
             handleTowardCamera: d.handleTowardCamera,
+            modelScale: d.modelScale,
           };
         },
         withAxeModel: (fn: (root: THREE.Object3D) => void) => axe.withAxeModel(fn),

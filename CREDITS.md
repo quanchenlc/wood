@@ -1,4 +1,4 @@
-# Credits & licences — Firewood 0.4.9 axe-swing-clip+orientToCamera + pack4-audio
+# Credits & licences — Firewood 0.4.10 axe-exit-no-shrink + swing-clip + pack4-audio
 
 All previously unlicensed screen.toys/firewood assets were removed in 0.4.0.
 Replacement sources below were verified on the download date **2026-10-19**.

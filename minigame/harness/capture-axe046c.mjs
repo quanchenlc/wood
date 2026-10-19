@@ -41,7 +41,7 @@ const CHROME =
   );
 
 const FRAME_COUNT = 12; // swing samples
-const SWING_MS = 900; // cover full 0.78s authored clip + margin
+const SWING_MS = 1100; // cover full 0.95s clip + margin (exit off-screen)
 const IMPACT_AT = 0.12;
 
 const MIME = {
@@ -245,10 +245,23 @@ async function composeContactSheets() {
       console.log("final", finalName);
     }
 
-    // Pre / impact / after strip from seek poses
-    const stripNames = ["strip_pre.png", "strip_impact.png", "strip_after.png"];
-    const stripLabels = ["pre-impact", "IMPACT", "after"];
-    if (stripNames.every((n) => existsSync(join(STORE, "current", orient, n)))) {
+    // Impact → exit strip (no shrink): pre / impact / after / exit-mid / exit
+    const stripNames = [
+      "strip_pre.png",
+      "strip_impact.png",
+      "strip_after.png",
+      "strip_exit_mid.png",
+      "strip_exit.png",
+    ];
+    const stripLabels = ["pre", "IMPACT", "follow", "exit-mid", "exit"];
+    // Older captures may lack exit frames — fall back to 3-panel.
+    const stripPresent = stripNames.filter((n) => existsSync(join(STORE, "current", orient, n)));
+    const useStrip = stripPresent.length >= 3 ? stripPresent : [];
+    const useLabels =
+      useStrip.length === stripNames.length
+        ? stripLabels
+        : ["pre-impact", "IMPACT", "after"].slice(0, useStrip.length);
+    if (useStrip.length >= 3) {
       const tip = currentM.impact?.hook
         ? { x: currentM.impact.hook.bladeScreenX, y: currentM.impact.hook.bladeScreenY }
         : currentM.impact?.tipCss;
@@ -258,11 +271,11 @@ async function composeContactSheets() {
       const labelH = 28;
       const panels = [];
       let totalW = 0;
-      for (let i = 0; i < stripNames.length; i++) {
-        const crop = await cropAction(join(STORE, "current", orient, stripNames[i]), tip, log);
+      for (let i = 0; i < useStrip.length; i++) {
+        const crop = await cropAction(join(STORE, "current", orient, useStrip[i]), tip, log);
         const pw = Math.round(((crop.info.width || 1) * rowH) / (crop.info.height || 1));
         panels.push({
-          label: stripLabels[i],
+          label: useLabels[i],
           w: pw,
           buf: await sharp(crop.data).resize(pw, rowH).png().toBuffer(),
         });
@@ -317,9 +330,9 @@ async function composeContactSheets() {
       BUILD_REV: version.BUILD_REV,
     },
     tip: version.BUILD_REV,
-    note: "0.4.9 axe046c — clip+mixer+orientToCamera (self-authored axe_swing_clip) + axeContactPoint; pack4 audio",
+    note: "0.4.10 axe046c — no scale fade; follow-through exits off-screen; clip+orientToCamera + axeContactPoint; pack4 audio",
     root_cause:
-      "0.4.8 MODEL_YAW/Euler keys passed harness but failed live vs orig_impact_01. Restore early-wood architecture: load self-authored axe_swing_clip.glb, AnimationMixer, orientToCamera every frame; axe mesh identity-parented to anim. Keep axeContactPoint (bbox max.y). Assert tipOnTop + edgeDown + bladeInSplitPlane + handleTowardCam + !cheekOnFace.",
+      "0.4.9 orientation OK; boss rejected CLIP_FADE scale-to-zero (缩小像元宝). Exit via clip follow-through rotation/translation off-frame, then visible=false. Impact local blade pose + orientToCamera + axeContactPoint unchanged.",
     asserts: metaAsserts,
     shots: [
       "axe046c_contact_portrait.png",
@@ -390,12 +403,12 @@ async function composeContactSheets() {
   }
   if (bossPath && existsSync(ourPortrait)) {
     meta.shots.push(
-      await sideBySide(bossPath, ourPortrait, "boss FAIL (cheek mid-face)", "0.4.9 clip+mixer tip-on-top", "axe046c_vs_boss.png"),
+      await sideBySide(bossPath, ourPortrait, "boss FAIL (cheek mid-face)", "0.4.10 tip-on-top (no shrink)", "axe046c_vs_boss.png"),
     );
   }
   if (origPath && existsSync(ourPortrait)) {
     meta.shots.push(
-      await sideBySide(origPath, ourPortrait, "orig_impact_01 (screen.toys)", "0.4.9 ours", "axe046c_vs_orig.png"),
+      await sideBySide(origPath, ourPortrait, "orig_impact_01 (screen.toys)", "0.4.10 ours", "axe046c_vs_orig.png"),
     );
   }
 
@@ -1118,16 +1131,32 @@ async function captureSequence(orient, cssW, cssH) {
     // Let the presenter paint the seek pose before screenshot
     await sleep(120);
     await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
-    // Pre / impact / after seek strip (intact log)
+    // Impact → exit strip: full-size follow-through (no yuanbao shrink).
+    const exitStrip = [];
     for (const [name, tSeek] of [
       ["strip_pre.png", 0.06],
       ["strip_impact.png", IMPACT_AT],
-      ["strip_after.png", 0.34],
+      ["strip_after.png", 0.28],
+      ["strip_exit_mid.png", 0.55],
+      ["strip_exit.png", 0.85],
     ]) {
-      await page.evaluate((t) => window.__fw.axe().seekTime(t), tSeek);
+      const scaleSample = await page.evaluate((t) => {
+        window.__fw.axe().seekTime(t);
+        return window.__fw.axe().impactDebug()?.modelScale ?? null;
+      }, tSeek);
       await sleep(80);
       await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
       await page.screenshot({ path: join(dir, name), type: "png" });
+      exitStrip.push({ name, tSeek, modelScale: scaleSample });
+    }
+    writeFileSync(join(dir, "exit_scale.json"), `${JSON.stringify(exitStrip, null, 2)}\n`);
+    // Assert: never shrink during exit (scale stays ~1).
+    for (const s of exitStrip) {
+      if (s.modelScale != null && s.modelScale < 0.92) {
+        throw new Error(
+          `${LABEL} ${orient} yuanbao shrink at ${s.name} t=${s.tSeek}: modelScale=${s.modelScale}`,
+        );
+      }
     }
     // Re-seek impact for the labelled close-up + metrics
     await page.evaluate((t) => window.__fw.axe().seekTime(t), IMPACT_AT);

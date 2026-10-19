@@ -5,7 +5,6 @@ import { createGltfLoader } from "../core/gltf";
 import type { ProgressFn } from "../core/loading";
 import {
   AXE_ANIM_DURATION,
-  AXE_ANIM_FADE,
   AXE_ANIM_IMPACT_AT,
   AXE_HANDLE_TOP_LOCAL,
   AXE_MODEL_SCALE,
@@ -13,9 +12,10 @@ import {
   AXE_TIP_LOCAL,
 } from "./axeAnimClip";
 
-function applyAxeModelScale(obj: THREE.Object3D | null, fade = 1) {
+/** Keep uniform model scale — never fade-to-zero (boss: 缩小像元宝). */
+function applyAxeModelScale(obj: THREE.Object3D | null) {
   if (!obj) return;
-  obj.scale.setScalar(AXE_MODEL_SCALE * Math.max(0, fade));
+  obj.scale.setScalar(AXE_MODEL_SCALE);
 }
 
 /**
@@ -24,7 +24,7 @@ function applyAxeModelScale(obj: THREE.Object3D | null, fade = 1) {
  * 与 early wood / screen.toys 控制流同构（不含 ax_anim 浮点曲线）：
  * - 加载 `axe_swing_clip.glb` 提供 `anim` 节点与 clip
  * - 自研木柄斧挂到 `anim`；每帧 pivot.lookAt(camera-right)
- * - 无 clip 时才走 procedural fallback
+ * - 击中后顺势旋转离屏，再 visible=false（不缩小）
  * - 落点由 axeContactPoint 钉在木块顶面（bbox max.y）
  */
 export class AxeAnimation {
@@ -174,7 +174,7 @@ export class AxeAnimation {
     this.axeModel.position.set(0, 0, 0);
     this.axeModel.rotation.set(0, 0, 0);
     this.axeModel.quaternion.identity();
-    applyAxeModelScale(this.axeModel, 1);
+    applyAxeModelScale(this.axeModel);
     this.prepareAxeMaterials(this.axeModel);
     this.animNull?.add(this.axeModel);
   }
@@ -223,7 +223,7 @@ export class AxeAnimation {
     else this.lastSliceNormal.normalize();
     this.pivot.position.copy(point);
     this.orientToCamera();
-    applyAxeModelScale(this.axeModel, 1);
+    applyAxeModelScale(this.axeModel);
     this.animNull.rotation.set(0, 0, 0);
     this.animNull.position.set(0, 0, 0);
     this.animNull.scale.setScalar(1);
@@ -251,11 +251,7 @@ export class AxeAnimation {
       this.action.time = this.elapsed;
       this.action.paused = true;
       this.mixer.update(0);
-      const remaining = this.duration - this.elapsed;
-      applyAxeModelScale(
-        this.axeModel,
-        remaining <= AXE_ANIM_FADE ? Math.max(0, remaining / AXE_ANIM_FADE) : 1,
-      );
+      applyAxeModelScale(this.axeModel);
       return;
     }
     this.applyProceduralAt(this.elapsed);
@@ -274,6 +270,8 @@ export class AxeAnimation {
     cheekTowardCamera: number;
     /** |handle · cameraForward| — orig foreshortened handle, not vertical stick. */
     handleTowardCamera: number;
+    /** Uniform model scale — must stay ~1 (no yuanbao shrink fade). */
+    modelScale: number;
   } {
     const bladeTip = new THREE.Vector3(
       AXE_TIP_LOCAL[0],
@@ -315,6 +313,7 @@ export class AxeAnimation {
       cheekAlongRight: Math.abs(cheekLocal.dot(camRight)),
       cheekTowardCamera: Math.abs(cheekLocal.dot(camFwd)),
       handleTowardCamera: Math.abs(handleDir.dot(camFwd)),
+      modelScale: this.axeModel?.scale.x ?? AXE_MODEL_SCALE,
     };
   }
 
@@ -329,11 +328,8 @@ export class AxeAnimation {
       }
       this.mixer.update(dt);
       this.elapsed = this.action.time;
+      applyAxeModelScale(this.axeModel);
       const remaining = this.action.getClip().duration - this.action.time;
-      applyAxeModelScale(
-        this.axeModel,
-        remaining <= AXE_ANIM_FADE ? Math.max(0, remaining / AXE_ANIM_FADE) : 1,
-      );
       if (this.action.paused || remaining <= 0) this.finish();
       return;
     }
@@ -347,28 +343,28 @@ export class AxeAnimation {
   private applyProceduralAt(t: number) {
     if (!this.animNull) return;
     const tt = Math.max(0, Math.min(AXE_ANIM_DURATION, t));
-    const u = tt / AXE_ANIM_DURATION;
-    // Simple raised → tip-zeroed impact → settle (edge-down / cheek +X family).
     const qImpact = new THREE.Quaternion(0.51, 0.53, 0.41, 0.54).normalize();
     const qWind = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.72).multiply(qImpact);
-    const qExit = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -0.42).multiply(qImpact);
+    const qExit = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -1.55).multiply(qImpact);
     let q: THREE.Quaternion;
+    let extraY = 0;
+    let extraZ = 0;
     if (tt <= AXE_ANIM_IMPACT_AT) {
       const e = tt / AXE_ANIM_IMPACT_AT;
       q = qWind.clone().slerp(qImpact, e * e * (3 - 2 * e));
+      extraY = 0.42 * (1 - e);
     } else {
       const e = (tt - AXE_ANIM_IMPACT_AT) / (AXE_ANIM_DURATION - AXE_ANIM_IMPACT_AT);
       q = qImpact.clone().slerp(qExit, e);
+      // Carry off-camera: down + toward cam (no shrink).
+      extraY = -1.15 * e;
+      extraZ = 1.05 * e;
     }
     this.animNull.quaternion.copy(q);
     const tip = new THREE.Vector3(AXE_TIP_LOCAL[0], AXE_TIP_LOCAL[1], AXE_TIP_LOCAL[2]).applyQuaternion(q);
-    this.animNull.position.set(-tip.x, -tip.y + (u < 0.15 ? 0.42 * (1 - u / 0.15) : 0), -tip.z);
+    this.animNull.position.set(-tip.x, -tip.y + extraY, -tip.z + extraZ);
     this.animNull.scale.setScalar(1);
-    const remaining = AXE_ANIM_DURATION - tt;
-    applyAxeModelScale(
-      this.axeModel,
-      remaining <= AXE_ANIM_FADE ? Math.max(0, remaining / AXE_ANIM_FADE) : 1,
-    );
+    applyAxeModelScale(this.axeModel);
   }
 
   private orientToCamera() {
@@ -389,7 +385,7 @@ export class AxeAnimation {
       this.animNull.quaternion.identity();
       this.animNull.scale.setScalar(1);
     }
-    applyAxeModelScale(this.axeModel, 1);
+    applyAxeModelScale(this.axeModel);
   }
 
   dispose() {

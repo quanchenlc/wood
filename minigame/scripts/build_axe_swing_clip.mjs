@@ -78,9 +78,11 @@ function tipZeroTranslation(q) {
   return [-t[0], -t[1], -t[2]];
 }
 
-// Swing: wind-up (blade raised, rotated back around camera-right = world +X),
-// strike to impact, hold, follow-through (slightly past), settle.
-const DUR = 0.8;
+// Swing: wind-up → strike → impact (unchanged local blade pose) → follow-through
+// that rotates the axe off-camera. NO scale-to-zero fade (boss: 缩小像元宝).
+// Exit carries the mesh toward camera (+Z) and down (−Y) so it leaves the
+// frame at full size; runtime then sets visible=false.
+const DUR = 0.95;
 const IMPACT_AT = 0.12;
 
 const windupQ = normalizeQuat(
@@ -90,23 +92,27 @@ const preQ = normalizeQuat(
   quatMul(quatFromAxisAngle([1, 0, 0], 0.28), Q_IMPACT),
 );
 const followQ = normalizeQuat(
-  quatMul(quatFromAxisAngle([1, 0, 0], -0.18), Q_IMPACT),
+  quatMul(quatFromAxisAngle([1, 0, 0], -0.35), Q_IMPACT),
+);
+const exitMidQ = normalizeQuat(
+  quatMul(quatFromAxisAngle([1, 0, 0], -0.95), Q_IMPACT),
 );
 const exitQ = normalizeQuat(
-  quatMul(quatFromAxisAngle([1, 0, 0], -0.42), Q_IMPACT),
+  quatMul(quatFromAxisAngle([1, 0, 0], -1.55), Q_IMPACT),
 );
 
-function lift(q, extraY) {
+function lift(q, extraY, extraZ = 0) {
   const t = tipZeroTranslation(q);
-  return [t[0], t[1] + extraY, t[2]];
+  return [t[0], t[1] + extraY, t[2] + extraZ];
 }
 
 const keys = [
   { t: 0, q: windupQ, p: lift(windupQ, 0.42) },
   { t: 0.06, q: preQ, p: lift(preQ, 0.12) },
   { t: IMPACT_AT, q: Q_IMPACT, p: tipZeroTranslation(Q_IMPACT) },
-  { t: 0.36, q: followQ, p: lift(followQ, -0.04) },
-  { t: DUR, q: exitQ, p: lift(exitQ, -0.1) },
+  { t: 0.28, q: followQ, p: lift(followQ, -0.06, 0.08) },
+  { t: 0.55, q: exitMidQ, p: lift(exitMidQ, -0.55, 0.55) },
+  { t: DUR, q: exitQ, p: lift(exitQ, -1.15, 1.05) },
 ];
 
 // Round to 4 decimals — clean self-authored literals, not ax_anim windows.
