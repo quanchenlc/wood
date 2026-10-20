@@ -1,18 +1,18 @@
 /**
- * Self-authored axe swing clip metadata (0.4.10).
+ * Self-authored axe swing clip metadata (0.4.11).
  *
  * Runtime plays `public/assets/axe_swing_clip.glb` via AnimationMixer +
  * orientToCamera (same control flow as early wood / screen.toys). Clip TRS
  * lives in the GLB only — built by `minigame/scripts/build_axe_swing_clip.mjs`
  * from our wood-handle axe axes. No ax_anim_v03 floats.
  *
- * 0.4.10: no scale-to-zero fade after impact (boss: 缩小像元宝). Exit is
- * follow-through rotation that carries the axe off-frame, then visible=false.
+ * 0.4.10: no scale-to-zero fade; exit via follow-through off-frame.
+ * 0.4.11: same leave poses, ~33% shorter post-hit arc (snappier 下落收尾).
  * Keep axeContactPoint (bbox max.y) + impact local blade orientation.
  */
 
 /** Must match build_axe_swing_clip.mjs DUR. */
-export const AXE_ANIM_DURATION = 0.95;
+export const AXE_ANIM_DURATION = 0.68;
 
 /** Must match build_axe_swing_clip.mjs IMPACT_AT. */
 export const AXE_ANIM_IMPACT_AT = 0.12;

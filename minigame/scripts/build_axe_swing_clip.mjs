@@ -82,7 +82,10 @@ function tipZeroTranslation(q) {
 // that rotates the axe off-camera. NO scale-to-zero fade (boss: 缩小像元宝).
 // Exit carries the mesh toward camera (+Z) and down (−Y) so it leaves the
 // frame at full size; runtime then sets visible=false.
-const DUR = 0.95;
+//
+// 0.4.11: snappier 下落收尾 — same post-impact poses, ~33% shorter leave arc
+// (post-hit 0.83s → 0.56s). Wind-up + IMPACT_AT unchanged.
+const DUR = 0.68;
 const IMPACT_AT = 0.12;
 
 const windupQ = normalizeQuat(
@@ -110,8 +113,9 @@ const keys = [
   { t: 0, q: windupQ, p: lift(windupQ, 0.42) },
   { t: 0.06, q: preQ, p: lift(preQ, 0.12) },
   { t: IMPACT_AT, q: Q_IMPACT, p: tipZeroTranslation(Q_IMPACT) },
-  { t: 0.28, q: followQ, p: lift(followQ, -0.06, 0.08) },
-  { t: 0.55, q: exitMidQ, p: lift(exitMidQ, -0.55, 0.55) },
+  // Post-hit keys compressed vs 0.4.10 (0.28/0.55/0.95 → 0.22/0.40/0.68).
+  { t: 0.22, q: followQ, p: lift(followQ, -0.06, 0.08) },
+  { t: 0.4, q: exitMidQ, p: lift(exitMidQ, -0.55, 0.55) },
   { t: DUR, q: exitQ, p: lift(exitQ, -1.15, 1.05) },
 ];
 

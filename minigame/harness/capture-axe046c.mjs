@@ -41,7 +41,7 @@ const CHROME =
   );
 
 const FRAME_COUNT = 12; // swing samples
-const SWING_MS = 1100; // cover full 0.95s clip + margin (exit off-screen)
+const SWING_MS = 850; // cover full 0.68s clip + margin (snappier exit)
 const IMPACT_AT = 0.12;
 
 const MIME = {
@@ -330,9 +330,9 @@ async function composeContactSheets() {
       BUILD_REV: version.BUILD_REV,
     },
     tip: version.BUILD_REV,
-    note: "0.4.10 axe046c — no scale fade; follow-through exits off-screen; clip+orientToCamera + axeContactPoint; pack4 audio",
+    note: "0.4.11 axe046c — snappier post-hit exit (~33% shorter leave arc); no shrink; clip+orientToCamera + axeContactPoint; pack4 audio",
     root_cause:
-      "0.4.9 orientation OK; boss rejected CLIP_FADE scale-to-zero (缩小像元宝). Exit via clip follow-through rotation/translation off-frame, then visible=false. Impact local blade pose + orientToCamera + axeContactPoint unchanged.",
+      "0.4.10 exit look OK but 下落收尾 felt slow. Compress post-impact clip keys only (0.28/0.55/0.95 → 0.22/0.40/0.68); same poses, no scale fade. Impact local blade pose + orientToCamera + axeContactPoint unchanged.",
     asserts: metaAsserts,
     shots: [
       "axe046c_contact_portrait.png",
@@ -403,12 +403,12 @@ async function composeContactSheets() {
   }
   if (bossPath && existsSync(ourPortrait)) {
     meta.shots.push(
-      await sideBySide(bossPath, ourPortrait, "boss FAIL (cheek mid-face)", "0.4.10 tip-on-top (no shrink)", "axe046c_vs_boss.png"),
+      await sideBySide(bossPath, ourPortrait, "boss FAIL (cheek mid-face)", "0.4.11 tip-on-top (snappy exit)", "axe046c_vs_boss.png"),
     );
   }
   if (origPath && existsSync(ourPortrait)) {
     meta.shots.push(
-      await sideBySide(origPath, ourPortrait, "orig_impact_01 (screen.toys)", "0.4.10 ours", "axe046c_vs_orig.png"),
+      await sideBySide(origPath, ourPortrait, "orig_impact_01 (screen.toys)", "0.4.11 ours", "axe046c_vs_orig.png"),
     );
   }
 
@@ -1136,9 +1136,9 @@ async function captureSequence(orient, cssW, cssH) {
     for (const [name, tSeek] of [
       ["strip_pre.png", 0.06],
       ["strip_impact.png", IMPACT_AT],
-      ["strip_after.png", 0.28],
-      ["strip_exit_mid.png", 0.55],
-      ["strip_exit.png", 0.85],
+      ["strip_after.png", 0.22],
+      ["strip_exit_mid.png", 0.4],
+      ["strip_exit.png", 0.62],
     ]) {
       const scaleSample = await page.evaluate((t) => {
         window.__fw.axe().seekTime(t);
