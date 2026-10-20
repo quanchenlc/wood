@@ -1,0 +1,117 @@
+{
+  "id": "set1",
+  "label": "晨林写实",
+  "version": 1,
+  "files": {
+    "axe": "axe.gltf",
+    "stump": "stump.gltf",
+    "stumpLod": "stump_lod.gltf",
+    "barkColor": "outsidebark.jpg",
+    "barkNormal": "outsidebark_n.png",
+    "endColor": "top.jpg",
+    "endNormal": "top_n.png",
+    "innerColor": "insidegrain.jpg",
+    "innerNormal": "insidegrain_n.png"
+  },
+  "sky": "#c9dbe8",
+  "fog": "#c9dbe8",
+  "ground": "#526531",
+  "grass": {
+    "deep": [
+      0.07,
+      0.17,
+      0.05
+    ],
+    "fresh": [
+      0.26,
+      0.46,
+      0.12
+    ],
+    "dry": [
+      0.4,
+      0.38,
+      0.16
+    ]
+  },
+  "styleDescription": "晨林写实：半写实原创。暖色晨光，橡树皮（竖向沟壑+地衣），旧砧板树桩顶（年轮+斧痕+细裂），修剪草地+零星木屑/小石子。斧头为木柄斧精修版（蜂蜜色橡木柄+皮革缠握把）。",
+  "triangles": 7362,
+  "trianglesByFile": {
+    "axe": 2376,
+    "stump": 4386,
+    "stumpLod": 600
+  },
+  "totalBytes": 2009152,
+  "zipBytes": 1792841,
+  "bytes": {
+    "axe.bin": 61840,
+    "axe.gltf": 2935,
+    "axe_baseColor.jpg": 90351,
+    "axe_orm.png": 1762,
+    "insidegrain.jpg": 81664,
+    "insidegrain_n.png": 118001,
+    "outsidebark.jpg": 56798,
+    "outsidebark_n.png": 186368,
+    "stump.bin": 246932,
+    "stump.gltf": 2345,
+    "stump_baseColor.jpg": 129838,
+    "stump_lod.bin": 20540,
+    "stump_lod.gltf": 2401,
+    "stump_normal.png": 441005,
+    "top.jpg": 125164,
+    "top_n.png": 441208
+  },
+  "alignment": {
+    "stumpTopY": [
+      0,
+      0
+    ],
+    "stumpTopRadiusMean": 0.294,
+    "groundYmedian": -0.3187,
+    "axeBBox": [
+      [
+        -0.162,
+        -0.003,
+        -0.02
+      ],
+      [
+        0.059,
+        1.098,
+        0.0314
+      ]
+    ],
+    "reference": {
+      "stumpTopY": 0.0026,
+      "stumpTopRadiusMean": 0.284,
+      "groundYmedian": -0.3249,
+      "axeBBox": [
+        [
+          -0.162,
+          -0.003,
+          -0.02
+        ],
+        [
+          0.059,
+          1.098,
+          0.0314
+        ]
+      ]
+    }
+  },
+  "validation": {
+    "axe.gltf": {
+      "errors": 0,
+      "warnings": 0,
+      "threeGLTFLoader": "ok"
+    },
+    "stump.gltf": {
+      "errors": 0,
+      "warnings": 1,
+      "threeGLTFLoader": "ok"
+    },
+    "stump_lod.gltf": {
+      "errors": 0,
+      "warnings": 1,
+      "threeGLTFLoader": "ok"
+    }
+  }
+}

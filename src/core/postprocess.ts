@@ -3,7 +3,7 @@ import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { BokehPass } from "three/examples/jsm/postprocessing/BokehPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
-import { POST } from "../config/constants";
+import { IS_MINIGAME, POST } from "../config/constants";
 
 export interface Post {
   composer: EffectComposer;
@@ -21,6 +21,23 @@ export function createPost(
   scene: THREE.Scene,
   camera: THREE.Camera,
 ): Post {
+  const hidden: THREE.Object3D[] = [];
+
+  // 小游戏：跳过 EffectComposer（省全屏 RT + blit 显存），直出 toneMapping
+  if (IS_MINIGAME) {
+    const passthrough = {
+      render: () => {
+        renderer.render(scene, camera);
+      },
+    };
+    return {
+      composer: passthrough as unknown as EffectComposer,
+      setSize: (w, h) => renderer.setSize(w, h),
+      excludeFromDepth: () => {},
+      dispose: () => {},
+    };
+  }
+
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
 
@@ -30,7 +47,6 @@ export function createPost(
     maxblur: POST.maxBlur,
   });
 
-  const hidden: THREE.Object3D[] = [];
   const originalRender = bokeh.render.bind(bokeh);
   bokeh.render = (...args: Parameters<typeof originalRender>) => {
     const wasVisible = hidden.map((o) => o.visible);

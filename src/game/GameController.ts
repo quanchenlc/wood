@@ -9,6 +9,7 @@ import type { FirewoodPile } from "../pile/FirewoodPile";
 import { createLog } from "../wood/logFactory";
 import type { WoodMaterials } from "../wood/materials";
 import {
+  axeContactPoint,
   computeSplitPoint,
   isTooThinToSplit,
   pickSplittable,
@@ -16,7 +17,7 @@ import {
   splitPlaneNormal,
   type SplittableMesh,
 } from "../wood/slicer";
-import { INCH } from "../config/constants";
+import { INCH, IS_MINIGAME } from "../config/constants";
 
 export type GameState = "SPAWNING" | "IDLE" | "SPLITTING" | "SETTLING" | "STACKING";
 
@@ -48,6 +49,19 @@ interface SettleCandidate {
   isStationary?: boolean;
 }
 
+export interface EconomyHooks {
+  /** 是否允许主动劈（日额度 > 0 且 UI 未挡） */
+  canActiveChop: () => boolean;
+  /** 入垛后是否禁止再刷出下一根（额度耗尽） */
+  shouldBlockSpawn?: () => boolean;
+  /** 当前根按几何规则劈完并开始入垛时回调（计 1 树根） */
+  onRootStacked: () => void;
+  /** 额度耗尽时回调 */
+  onQuotaBlocked?: () => void;
+  /** 一次有效劈砍结算（引导用） */
+  onChopSettled?: () => void;
+}
+
 export interface GameDeps {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
@@ -60,7 +74,10 @@ export interface GameDeps {
   audio: AudioManager;
   materials: WoodMaterials;
   stumpTopY: number;
+  economy?: EconomyHooks;
 }
+
+// materials 在热换时会被替换；deps 保持可变引用
 
 /**
  * 游戏主循环的状态机。
@@ -85,10 +102,25 @@ export class GameController {
   private pendingSplit: PendingSplit | null = null;
   private stacked = 0;
   private lastSplitTime = 0;
+  /** 当前树根已有效刀数（仅诊断；不参与伐倒判定） */
+  private chopsOnRoot = 0;
+  private rootsFelled = 0;
 
   constructor(deps: GameDeps) {
     this.d = deps;
     this.spawn();
+  }
+
+  setEconomyHooks(hooks: EconomyHooks | undefined) {
+    this.d.economy = hooks;
+  }
+
+  get rootsFelledCount(): number {
+    return this.rootsFelled;
+  }
+
+  get chopsOnCurrentRoot(): number {
+    return this.chopsOnRoot;
   }
 
   get currentState(): GameState {
@@ -112,6 +144,16 @@ export class GameController {
   }
 
   private spawn() {
+    if (this.d.economy?.shouldBlockSpawn?.()) {
+      this.d.economy.onQuotaBlocked?.();
+      this.state = "IDLE";
+      this.logPieces = [];
+      this.firewoodPieces = [];
+      this.firewoodOnGround = [];
+      this.pendingSplit = null;
+      this.chopsOnRoot = 0;
+      return;
+    }
     const { materials, scene, animator, audio } = this.d;
     const log = createLog(materials);
     log.mesh.position.set(0, 6 * INCH, 0);
@@ -121,6 +163,7 @@ export class GameController {
     this.firewoodPieces = [];
     this.firewoodOnGround = [];
     this.pendingSplit = null;
+    this.chopsOnRoot = 0;
     this.state = "SPAWNING";
   }
 
@@ -244,8 +287,10 @@ export class GameController {
     }
 
     audio.play(thrown.length > 0 ? "splitBreak" : "split", thrown.length > 0 ? 0.6 : 0.8);
+    this.chopsOnRoot += 1;
     this.state = "SETTLING";
     this.lastSplitTime = performance.now();
+    this.d.economy?.onChopSettled?.();
   }
 
   private addNeighborReactions(
@@ -301,6 +346,7 @@ export class GameController {
   private startStacking() {
     const { physics, pile } = this.d;
     this.state = "STACKING";
+    // 原版：仅在无可劈块时入垛；不再 early force-fell / convertRemaining
     const pieces = [...this.firewoodOnGround];
     for (const log of this.logPieces) {
       if (log.mesh.userData.isFirewood) pieces.push({ mesh: log.mesh, physicsEntry: null });
@@ -318,6 +364,10 @@ export class GameController {
       },
     );
     this.stacked += pieces.length;
+    // 几何劈完 → 入垛即计 1 树根（不要求固定刀数）
+    this.rootsFelled += 1;
+    this.d.economy?.onRootStacked();
+    this.chopsOnRoot = 0;
   }
 
   update(dt: number) {
@@ -359,6 +409,8 @@ export class GameController {
     if (click) {
       if (this.pendingSplit || this.state === "SETTLING") {
         // 与原站一致：SETTLING 中消费点击但不触发动作。
+      } else if (this.d.economy && !this.d.economy.canActiveChop()) {
+        this.d.economy.onQuotaBlocked?.();
       } else {
         const hit = this.raycastForSplittable(click);
         if (hit) {
@@ -368,7 +420,8 @@ export class GameController {
           if (isTooThinToSplit(hit.piece.mesh, sliceNormal)) {
             this.d.controller.nudgeAzimuth(click.x < 0 ? -1 : 1);
           } else {
-            this.d.axe.playFromImpact(worldPoint, sliceNormal);
+            // Split cut uses worldPoint; axe VFX seats on the top end-grain.
+            this.d.axe.playFromImpact(axeContactPoint(hit.piece.mesh, worldPoint), sliceNormal);
             this.pendingSplit = {
               piece: hit.piece,
               worldPoint,
@@ -391,6 +444,8 @@ export class GameController {
   }
 
   private updateHover() {
+    // Shipping minigame: never show the red tip/slice debug ray.
+    if (IS_MINIGAME) return this.d.debugLine.hide();
     const hover = this.d.controller.getHoverNdc();
     if (!hover) return this.d.debugLine.hide();
     const hit = this.raycastForSplittable(hover);
@@ -403,27 +458,54 @@ export class GameController {
   /** 开发期自动化入口：把屏幕中心当点击位置。 */
   handleClick() {
     if (this.state !== "IDLE" || this.pendingSplit) return;
+    if (this.d.economy && !this.d.economy.canActiveChop()) {
+      this.d.economy.onQuotaBlocked?.();
+      return;
+    }
     const hit = this.raycastForSplittable(new THREE.Vector2());
     if (!hit) return;
     const normal = splitPlaneNormal(this.d.controller.getRight());
     const point = computeSplitPoint(hit.piece.mesh, hit.point, normal);
     if (isTooThinToSplit(hit.piece.mesh, normal)) return;
-    this.d.axe.playFromImpact(point, normal);
+    this.d.axe.playFromImpact(axeContactPoint(hit.piece.mesh, point), normal);
     this.pendingSplit = { piece: hit.piece, worldPoint: point, sliceNormal: normal, timer: 0.1 };
   }
 
   dispose() {
-    for (const { mesh } of [
-      ...this.logPieces,
-      ...this.firewoodPieces,
-      ...this.firewoodOnGround,
-    ]) {
+    this.clearWorldPieces();
+  }
+
+  /** 清场上所有可劈/在飞/待码木块（几何 dispose） */
+  clearWorldPieces() {
+    this.pendingSplit = null;
+    for (const { mesh, physicsEntry } of this.firewoodPieces) {
+      if (physicsEntry) this.d.physics.removeBody(physicsEntry);
+      this.d.scene.remove(mesh);
+      mesh.geometry.dispose();
+    }
+    for (const { mesh, physicsEntry } of this.firewoodOnGround) {
+      if (physicsEntry) this.d.physics.removeBody(physicsEntry);
+      this.d.scene.remove(mesh);
+      mesh.geometry.dispose();
+    }
+    for (const { mesh } of this.logPieces) {
       this.d.scene.remove(mesh);
       mesh.geometry.dispose();
     }
     this.logPieces = [];
     this.firewoodPieces = [];
     this.firewoodOnGround = [];
+  }
+
+  /**
+   * 美术套装热换：换材质、清场、重新掉落一根原木。
+   * 需在 IDLE/非劈砍动画时调用。
+   */
+  applyArtMaterials(materials: WoodMaterials) {
+    this.clearWorldPieces();
+    this.d.materials = materials;
+    this.d.pile.setMaterials(materials);
+    this.spawn();
   }
 }
 

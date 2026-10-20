@@ -1,0 +1,39 @@
+{
+  "id": "set4",
+  "label": "羊皮纸",
+  "version": 2,
+  "files": {
+    "axe": "axe.gltf",
+    "stump": "stump.gltf",
+    "stumpLod": "stump_lod.gltf",
+    "barkColor": "outsidebark.jpg",
+    "barkNormal": "outsidebark_n.png",
+    "endColor": "top.jpg",
+    "endNormal": "top_n.png",
+    "innerColor": "insidegrain.jpg",
+    "innerNormal": "insidegrain_n.png",
+    "groundColor": "ground.jpg",
+    "background": "bg_parchment.jpg"
+  },
+  "sky": "#e6d7b8",
+  "fog": "#e6d7b8",
+  "ground": "#d8c8a4",
+  "grass": {
+    "deep": [
+      0.28,
+      0.22,
+      0.12
+    ],
+    "fresh": [
+      0.4,
+      0.34,
+      0.2
+    ],
+    "dry": [
+      0.48,
+      0.4,
+      0.26
+    ]
+  },
+  "styleDescription": "羊皮纸 v2 polish：浅赭纸地+墨线草；插画化 stump/斧；暖雾消地平线硬缝；描边+阴影排线。"
+}

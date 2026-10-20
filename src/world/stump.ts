@@ -1,8 +1,9 @@
 import * as THREE from "three";
 import { MODELS } from "../config/assets";
-import { GROUND_Y, INCH } from "../config/constants";
+import { IS_MINIGAME, GROUND_Y, INCH, FOOT } from "../config/constants";
 import { createGltfLoader } from "../core/gltf";
 import type { ProgressFn } from "../core/loading";
+import { assetUrl } from "../platform/env";
 
 export interface Stump {
   root: THREE.Object3D;
@@ -32,57 +33,110 @@ function createFallbackStump(): THREE.Object3D {
   return mesh;
 }
 
+function prepareStumpMaterials(root: THREE.Object3D, opts: { castShadow: boolean }) {
+  root.traverse((obj) => {
+    if (!(obj as THREE.Mesh).isMesh) return;
+    const mesh = obj as THREE.Mesh;
+    mesh.castShadow = opts.castShadow;
+    mesh.receiveShadow = true;
+    const mat = mesh.material as THREE.MeshStandardMaterial;
+    if (!mat) return;
+    if (mat.map) {
+      mat.map.colorSpace = THREE.SRGBColorSpace;
+      mat.map.flipY = false;
+      mat.map.wrapS = THREE.ClampToEdgeWrapping;
+      mat.map.wrapT = THREE.ClampToEdgeWrapping;
+      mat.map.needsUpdate = true;
+    }
+    if (mat.normalMap) {
+      mat.normalMap.flipY = false;
+      mat.normalMap.wrapS = THREE.ClampToEdgeWrapping;
+      mat.normalMap.wrapT = THREE.ClampToEdgeWrapping;
+      mat.normalMap.needsUpdate = true;
+    }
+    if (mat.emissiveMap) {
+      mat.emissiveMap.colorSpace = THREE.SRGBColorSpace;
+      mat.emissiveMap.wrapS = THREE.ClampToEdgeWrapping;
+      mat.emissiveMap.wrapT = THREE.ClampToEdgeWrapping;
+      mat.emissiveMap.needsUpdate = true;
+    }
+    mat.color.setRGB(1.08, 1.02, 0.92);
+    mat.roughness = Math.max(mat.roughness, 0.78);
+    mat.metalness = 0;
+    mat.side = THREE.DoubleSide;
+    if (mat.normalScale) mat.normalScale.set(1.05, 1.05);
+  });
+}
+
+export interface StumpLoadUrls {
+  stump?: string;
+  stumpLod?: string;
+  stumpData?: string;
+}
+
+/**
+ * 近处砍伐树桩保持全精度；远处副本用 build 产出的 stump_lod（同贴图、少三角），
+ * 且不投影 —— 画像显示 stump×2 ≈ 场景 87% tris。
+ */
 export async function loadStump(
   scene: THREE.Scene,
   renderer: THREE.WebGLRenderer,
   onProgress?: ProgressFn,
+  urls?: StumpLoadUrls,
 ): Promise<Stump> {
   const loader = createGltfLoader(renderer);
   let root: THREE.Object3D;
+  let farRoot: THREE.Object3D | null = null;
+  const stumpUrl = urls?.stump || MODELS.stump;
+  const dataUrl = urls?.stumpData || MODELS.stumpData;
+  const lodUrl = urls?.stumpLod || (IS_MINIGAME ? assetUrl("/assets/stump_lod.gltf") : null);
 
   try {
     const [main, data] = await Promise.all([
-      loader.loadAsync(MODELS.stump).then((g) => (onProgress?.(), g)),
-      loader.loadAsync(MODELS.stumpData).then((g) => (onProgress?.(), g)),
+      loader.loadAsync(stumpUrl).then((g) => (onProgress?.(), g)),
+      loader.loadAsync(dataUrl).then((g) => (onProgress?.(), g)),
     ]);
 
     root = main.scene;
-    root.traverse((obj) => {
-      if (!(obj as THREE.Mesh).isMesh) return;
-      const mesh = obj as THREE.Mesh;
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      const mat = mesh.material as THREE.MeshStandardMaterial;
-      if (!mat) return;
-      if (mat.map) mat.map.colorSpace = THREE.SRGBColorSpace;
-      if (mat.emissiveMap) mat.emissiveMap.colorSpace = THREE.SRGBColorSpace;
-      // glTF 的 baseColor 会与贴图相乘。强制白色，避免素材自带 tint 把树皮染灰。
-      mat.color.set(0xffffff);
-      // 原模型烘焙过高光,这里压平一点让它吃场景光而不是自带反射
-      mat.roughness = Math.max(mat.roughness, 0.7);
-      mat.metalness = 0;
-    });
+    prepareStumpMaterials(root, { castShadow: true });
 
-    // data GLB 里放着副本树桩的摆放点,复制一个摆在旁边做前景
     const placement = data.scene.getObjectByName("instance");
-    {
-      const clone = root.clone(true);
-      if (placement) {
-        placement.updateWorldMatrix(true, false);
-        placement.matrixWorld.decompose(clone.position, clone.quaternion, clone.scale);
-      } else {
-        // 线上 data GLB 没有 instance 节点时，原站仍会摆一棵镜像的远景树桩。
-        clone.position.set(-5.3, 0, 0);
-        clone.scale.set(-1, 1, 1);
+
+    // 小游戏：远景用 LOD；Web / 缺 LOD 时退回全模 clone
+    if (IS_MINIGAME && lodUrl) {
+      try {
+        const lodGltf = await loader.loadAsync(lodUrl);
+        farRoot = lodGltf.scene;
+        prepareStumpMaterials(farRoot, { castShadow: false });
+      } catch (err) {
+        console.warn("stump_lod 加载失败,远景退回全模 clone:", err);
+        farRoot = root.clone(true);
+        prepareStumpMaterials(farRoot, { castShadow: false });
       }
-      clone.traverse((o) => {
-        if ((o as THREE.Mesh).isMesh) {
-          o.castShadow = true;
-          o.receiveShadow = true;
-        }
-      });
-      scene.add(clone);
+    } else {
+      farRoot = root.clone(true);
+      // Web 远景仍投影；小游戏已关
+      prepareStumpMaterials(farRoot, { castShadow: IS_MINIGAME ? false : true });
     }
+
+    if (placement) {
+      placement.updateWorldMatrix(true, false);
+      placement.matrixWorld.decompose(farRoot.position, farRoot.quaternion, farRoot.scale);
+    } else {
+      // Behind-left, well inside leafy disc; sink into GROUND_Y
+      farRoot.position.set(-1.2, -0.08, -0.7);
+      farRoot.scale.set(-1, 1, 1);
+    }
+    // Stay clear of disc rim so silhouette doesn't read as floating over sky
+    const groundR = 14 * FOOT * 0.55;
+    const dist = Math.hypot(farRoot.position.x, farRoot.position.z);
+    if (dist > groundR) {
+      const s = groundR / dist;
+      farRoot.position.x *= s;
+      farRoot.position.z *= s;
+    }
+    if (farRoot.position.y > -0.05) farRoot.position.y = -0.08;
+    scene.add(farRoot);
   } catch (err) {
     console.warn("树桩模型加载失败,改用兜底几何体:", err);
     onProgress?.();
@@ -98,14 +152,47 @@ export async function loadStump(
     topRadius: STUMP_TOP_RADIUS,
     dispose() {
       scene.remove(root);
-      root.traverse((o) => {
-        const mesh = o as THREE.Mesh;
-        if (mesh.isMesh) {
-          mesh.geometry?.dispose();
-          const m = mesh.material;
-          Array.isArray(m) ? m.forEach((x) => x.dispose()) : m?.dispose();
+      if (farRoot) scene.remove(farRoot);
+      // LOD 可能是独立加载或 clone；用 Set 避免贴图/材质/几何 double-dispose
+      const seenGeo = new Set<THREE.BufferGeometry>();
+      const seenMat = new Set<THREE.Material>();
+      const seenTex = new Set<THREE.Texture>();
+      const disposeMat = (mat: THREE.Material) => {
+        if (seenMat.has(mat)) return;
+        seenMat.add(mat);
+        const std = mat as THREE.MeshStandardMaterial;
+        for (const key of [
+          "map",
+          "normalMap",
+          "roughnessMap",
+          "metalnessMap",
+          "aoMap",
+          "emissiveMap",
+          "alphaMap",
+        ] as const) {
+          const tex = std[key] as THREE.Texture | null | undefined;
+          if (tex && !seenTex.has(tex)) {
+            seenTex.add(tex);
+            tex.dispose();
+          }
         }
-      });
+        mat.dispose();
+      };
+      const disposeTree = (o: THREE.Object3D) => {
+        o.traverse((child) => {
+          const mesh = child as THREE.Mesh;
+          if (!mesh.isMesh) return;
+          if (mesh.geometry && !seenGeo.has(mesh.geometry)) {
+            seenGeo.add(mesh.geometry);
+            mesh.geometry.dispose();
+          }
+          const m = mesh.material;
+          if (Array.isArray(m)) m.forEach(disposeMat);
+          else if (m) disposeMat(m);
+        });
+      };
+      disposeTree(root);
+      if (farRoot && farRoot !== root) disposeTree(farRoot);
     },
   };
 }

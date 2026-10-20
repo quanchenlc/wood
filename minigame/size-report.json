@@ -1,0 +1,71 @@
+{
+  "appid": "wx3371f99b1b0e73d1",
+  "mainPackageBytes": 1191453,
+  "mainPackage": "1.14 MB",
+  "mainUnder4MB": true,
+  "assetsSubpackageBytes": 2386233,
+  "assetsSubpackage": "2.28 MB",
+  "subpackages": {
+    "assets": {
+      "bytes": 2386233,
+      "size": "2.28 MB"
+    },
+    "ui-parchment": {
+      "bytes": 768401,
+      "size": "0.73 MB"
+    },
+    "art-set1": {
+      "bytes": 2622053,
+      "size": "2.50 MB"
+    },
+    "art-set2": {
+      "bytes": 722247,
+      "size": "0.69 MB"
+    },
+    "art-set3": {
+      "bytes": 2224127,
+      "size": "2.12 MB"
+    },
+    "art-set4": {
+      "bytes": 2131757,
+      "size": "2.03 MB"
+    }
+  },
+  "subpackagesTotalBytes": 10854818,
+  "subpackagesTotal": "10.35 MB",
+  "bundle": "1.07 MB",
+  "largestMain": [
+    {
+      "file": "js/game.bundle.js",
+      "size": "1.07 MB"
+    },
+    {
+      "file": "adapter/audio.js",
+      "size": "0.01 MB"
+    },
+    {
+      "file": "adapter/index.js",
+      "size": "0.01 MB"
+    },
+    {
+      "file": "adapter/fetch.js",
+      "size": "0.01 MB"
+    },
+    {
+      "file": "adapter/abort.js",
+      "size": "0.00 MB"
+    },
+    {
+      "file": "adapter/document.js",
+      "size": "0.00 MB"
+    },
+    {
+      "file": "adapter/xhr.js",
+      "size": "0.00 MB"
+    },
+    {
+      "file": "adapter/blob.js",
+      "size": "0.00 MB"
+    }
+  ]
+}

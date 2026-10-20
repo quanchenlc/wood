@@ -73,8 +73,12 @@ export function sliceWood(
     });
   } catch (err) {
     console.warn("切割失败:", err);
+    destructible.geometry?.dispose();
     return null;
   }
+
+  // toDestructible 克隆的几何体用完即释，避免每刀泄漏一份 non-indexed 网格
+  destructible.geometry?.dispose();
 
   if (pieces.length < 2) {
     console.warn(`切割只产出 ${pieces.length} 块,放弃`);
@@ -330,6 +334,22 @@ export function computeSplitPoint(
   const localNormal = worldNormal.clone().transformDirection(inverse).normalize();
   const localPoint = constrainedLocalSplitPoint(mesh, localHit, localNormal);
   return localPoint.applyMatrix4(mesh.matrixWorld);
+}
+
+/**
+ * Axe VFX contact point: keep the split's XZ, but seat the tip on the piece's
+ * world-space TOP end-grain (bbox max.y).
+ *
+ * `computeSplitPoint` returns the mesh center for small pieces (volume ≤ 2×
+ * firewood). Playing the axe from that center plastered the cheek mid-face on
+ * rectangular halves — the live 体验版 boss fail — while the harness always
+ * seeked the intact log's top and falsely PASSed.
+ */
+export function axeContactPoint(mesh: SplittableMesh, splitPoint: THREE.Vector3): THREE.Vector3 {
+  mesh.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(mesh);
+  const topY = Number.isFinite(box.max.y) ? box.max.y : splitPoint.y;
+  return new THREE.Vector3(splitPoint.x, topY, splitPoint.z);
 }
 
 function constrainedLocalSplitPoint(

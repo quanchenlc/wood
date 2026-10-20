@@ -51,7 +51,7 @@ export class FirewoodPile {
   private readonly scene: THREE.Scene;
   private readonly onLand?: () => void;
   /** 与原木一致的 side / top / inner 三材质 */
-  private readonly materials: THREE.Material[];
+  private materials: THREE.Material[];
 
   private tierLevel = 0;
   private startAngle = PILE.startAngle;
@@ -409,6 +409,30 @@ export class FirewoodPile {
       this.merged.geometry.dispose();
       this.merged = null;
     }
+  }
+
+  /** 美术套装热换：清视觉并换材质引用（不 dispose 材质本体，由调用方管） */
+  setMaterials(materials: WoodMaterials) {
+    this.clearVisuals();
+    this.materials = [materials.side, materials.top, materials.inner];
+  }
+
+  clearVisuals() {
+    this.animations = [];
+    this.isAnimating = false;
+    this.pending.length = 0;
+    if (this.merged) {
+      this.scene.remove(this.merged);
+      this.merged.geometry.dispose();
+      this.merged = null;
+    }
+    this.settledPieces = [];
+    this.filledSlots.clear();
+    this.slotTops.clear();
+    this.tierLevel = 0;
+    this.maxGx = -1;
+    this.minGx = 1;
+    this.maxPhysicalHeight = 0;
   }
 }
 

@@ -1,0 +1,22 @@
+node_modules/
+dist/
+.DS_Store
+
+# 美术预览图不进仓库/包（体积大；构建也会 skip）
+art-sets/**/preview.png
+art-sets/**/preview_*.png
+
+# 羊皮纸 UI 大图 mockups 不进仓（overview 可留作参照）
+ui-parchment-v2/mockups/0*.png
+ui-parchment-v2/export_v3/mockups/
+ui-parchment-export-v3/
+ui-parchment-D/spec/
+ui-parchment-D/guide/
+ui-parchment-D/motion/
+ui-parchment-D/review-033/
+ui-parchment-D/src/__pycache__/
+ui-parchment-D/src/_work/
+*.tar.gz
+*.tar_00b3.gz
+*.tar_4401.gz
+*.tar_b6af.gz

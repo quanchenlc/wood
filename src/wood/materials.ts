@@ -12,8 +12,28 @@ export interface WoodMaterials {
   dispose(): void;
 }
 
-export async function loadWoodMaterials(onProgress?: ProgressFn): Promise<WoodMaterials> {
+export interface WoodTextureUrls {
+  barkColor: string;
+  barkNormal: string;
+  endColor: string;
+  endNormal: string;
+  innerColor: string;
+  innerNormal: string;
+}
+
+export async function loadWoodMaterials(
+  onProgress?: ProgressFn,
+  urls?: WoodTextureUrls,
+): Promise<WoodMaterials> {
   const loader = new THREE.TextureLoader();
+  const u: WoodTextureUrls = urls || {
+    barkColor: TEXTURES.barkColor,
+    barkNormal: TEXTURES.barkNormal,
+    endColor: TEXTURES.endColor,
+    endNormal: TEXTURES.endNormal,
+    innerColor: TEXTURES.innerColor,
+    innerNormal: TEXTURES.innerNormal,
+  };
 
   const load = (url: string, srgb: boolean, repeat = false) =>
     loader.loadAsync(url).then((tex) => {
@@ -25,20 +45,23 @@ export async function loadWoodMaterials(onProgress?: ProgressFn): Promise<WoodMa
     });
 
   const [barkColor, barkNormal, endColor, endNormal, innerColor, innerNormal] = await Promise.all([
-    load(TEXTURES.barkColor, true, true),
-    load(TEXTURES.barkNormal, false, true),
-    load(TEXTURES.endColor, true),
-    load(TEXTURES.endNormal, false),
-    load(TEXTURES.innerColor, true, true),
-    load(TEXTURES.innerNormal, false, true),
+    load(u.barkColor, true, true),
+    load(u.barkNormal, false, true),
+    load(u.endColor, true),
+    load(u.endNormal, false),
+    load(u.innerColor, true, true),
+    load(u.innerNormal, false, true),
   ]);
 
   const side = new THREE.MeshStandardMaterial({
     map: barkColor,
     normalMap: barkNormal,
-    normalScale: new THREE.Vector2(2, 2),
-    roughness: 0.7,
+    // Keep modest — strong normals + sky hemi read as a cool/blue cast
+    normalScale: new THREE.Vector2(1.05, 1.05),
+    roughness: 0.88,
     metalness: 0,
+    // Warm tint so NeutralToneMapping + blue sky doesn't push bark lilac
+    color: new THREE.Color(1.1, 1.02, 0.9),
     side: THREE.DoubleSide,
   });
 

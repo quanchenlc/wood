@@ -1,0 +1,172 @@
+{
+ "asset": {
+  "version": "2.0",
+  "generator": "firewood art-sets procedural generator (original work)"
+ },
+ "scene": 0,
+ "scenes": [
+  {
+   "name": "AuxScene",
+   "nodes": [
+    0
+   ]
+  }
+ ],
+ "nodes": [
+  {
+   "name": "AuxScene",
+   "children": [
+    1
+   ]
+  },
+  {
+   "name": "stump_mesh",
+   "extras": {
+    "name": "stump_mesh"
+   },
+   "mesh": 0
+  }
+ ],
+ "meshes": [
+  {
+   "name": "stump_mesh",
+   "primitives": [
+    {
+     "attributes": {
+      "POSITION": 0,
+      "NORMAL": 1,
+      "TEXCOORD_0": 2,
+      "COLOR_0": 3
+     },
+     "indices": 4,
+     "material": 0,
+     "mode": 4
+    }
+   ]
+  }
+ ],
+ "materials": [
+  {
+   "name": "Mat.2",
+   "pbrMetallicRoughness": {
+    "baseColorTexture": {
+     "index": 0
+    },
+    "metallicFactor": 0,
+    "roughnessFactor": 0.95
+   },
+   "normalTexture": {
+    "index": 1,
+    "scale": 1
+   }
+  }
+ ],
+ "accessors": [
+  {
+   "bufferView": 0,
+   "componentType": 5126,
+   "count": 388,
+   "type": "VEC3",
+   "min": [
+    -0.3862341642379761,
+    -0.3700000047683716,
+    -0.42863720655441284
+   ],
+   "max": [
+    0.36243611574172974,
+    0,
+    0.3996128439903259
+   ]
+  },
+  {
+   "bufferView": 1,
+   "componentType": 5126,
+   "count": 388,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 2,
+   "componentType": 5126,
+   "count": 388,
+   "type": "VEC2"
+  },
+  {
+   "bufferView": 3,
+   "componentType": 5126,
+   "count": 388,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 4,
+   "componentType": 5123,
+   "count": 1890,
+   "type": "SCALAR"
+  }
+ ],
+ "bufferViews": [
+  {
+   "buffer": 0,
+   "byteOffset": 0,
+   "byteLength": 4656,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 4656,
+   "byteLength": 4656,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 9312,
+   "byteLength": 3104,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 12416,
+   "byteLength": 4656,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 17072,
+   "byteLength": 3780,
+   "target": 34963
+  }
+ ],
+ "buffers": [
+  {
+   "uri": "stump_lod.bin",
+   "byteLength": 20852
+  }
+ ],
+ "images": [
+  {
+   "uri": "stump_baseColor.jpg",
+   "mimeType": "image/jpeg"
+  },
+  {
+   "uri": "stump_normal.png",
+   "mimeType": "image/png"
+  }
+ ],
+ "textures": [
+  {
+   "source": 0,
+   "sampler": 0
+  },
+  {
+   "source": 1,
+   "sampler": 0
+  }
+ ],
+ "samplers": [
+  {
+   "magFilter": 9729,
+   "minFilter": 9987,
+   "wrapS": 33071,
+   "wrapT": 33071
+  }
+ ]
+}

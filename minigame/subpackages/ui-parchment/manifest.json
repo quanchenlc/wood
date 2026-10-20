@@ -1,0 +1,914 @@
+{
+ "name": "ui-parchment-D-drawer-fix-v3",
+ "version": "3.1-D-fix-v3",
+ "based_on": "D_fix_v2 + 0.3.6 review fixes (tear fade, paper 256pt tile, strip w/o stain, row_self_highlight)",
+ "design_space": "portrait 375x812 pt; landscape 812x375 pt; specs rendered @2x",
+ "density_note": "scale = texels per pt. Top-level fields = the @2x file (scale 2). Draw size (pt) = px / scale = logical_size. 9-slice: source insets px = nine_slice_insets of the variant actually loaded; destination insets = nine_slice_insets_pt. Snap all dest rects to device pixels.",
+ "variant_rule": "dpr>=2.5 -> variants.3x if present else 2x; otherwise 2x. panel_vellum has 2x only. paper_tile: @2x 512² / @3x 768², both = 256pt cell.",
+ "nine_slice_convention": "[left, top, right, bottom]",
+ "drawer_draw_note": "DO NOT 9-slice or cover the paper body. Fill drawer rect by TILING paper_tile at 1 texel = 1 device px (cell = 256pt; repeat from drawer origin, do not scale with drawer height). Clip by height during unroll. tear_edge: top = paperBottom - 16pt (its 14pt top fade must lie over paper), 9-slice L/R only (center stretch), fixed height 32pt. roll_paper on the revealed bottom edge. Landscape: paper from y=0, tear bottom = windowHeight - safeBottom - 36 (318pt on iPhone X), tag hangs below it.",
+ "removed": [
+  "drawer_vellum (was 200x140 9-slice — caused vertical seam + blur)",
+  "btn_icon_style (unused; style entry is strip row only)"
+ ],
+ "textures": [
+  {
+   "file": "btn_icon_ad@2x.png",
+   "width": 104,
+   "height": 104,
+   "bytes": 8045,
+   "scale": 2,
+   "logical_size": [
+    52,
+    52
+   ],
+   "nine_slice_insets": null,
+   "nine_slice_insets_pt": null,
+   "nine_slice_insets_2x": null,
+   "role": "抽屉圆钮「看短片加速」(角标=今日剩余次数，代码绘制)",
+   "png": "PNG8 pngquant, light dither, full alpha",
+   "origin": "v3.1",
+   "variants": {
+    "2x": {
+     "file": "btn_icon_ad@2x.png",
+     "width": 104,
+     "height": 104,
+     "bytes": 8045,
+     "scale": 2
+    },
+    "3x": {
+     "file": "btn_icon_ad@3x.png",
+     "width": 156,
+     "height": 156,
+     "bytes": 15346,
+     "scale": 3
+    }
+   }
+  },
+  {
+   "file": "btn_icon_help@2x.png",
+   "width": 104,
+   "height": 104,
+   "bytes": 7635,
+   "scale": 2,
+   "logical_size": [
+    52,
+    52
+   ],
+   "nine_slice_insets": null,
+   "nine_slice_insets_pt": null,
+   "nine_slice_insets_2x": null,
+   "role": "抽屉圆钮「玩法」(重看引导)",
+   "png": "PNG8 pngquant, light dither, full alpha",
+   "origin": "v3.1",
+   "variants": {
+    "2x": {
+     "file": "btn_icon_help@2x.png",
+     "width": 104,
+     "height": 104,
+     "bytes": 7635,
+     "scale": 2
+    },
+    "3x": {
+     "file": "btn_icon_help@3x.png",
+     "width": 156,
+     "height": 156,
+     "bytes": 15768,
+     "scale": 3
+    }
+   }
+  },
+  {
+   "file": "btn_icon_rank@2x.png",
+   "width": 104,
+   "height": 104,
+   "bytes": 8266,
+   "scale": 2,
+   "logical_size": [
+    52,
+    52
+   ],
+   "nine_slice_insets": null,
+   "nine_slice_insets_pt": null,
+   "nine_slice_insets_2x": null,
+   "role": "抽屉圆钮「好友柴榜」→ 抽屉内第二页（非弹层）",
+   "png": "PNG8 pngquant, light dither, full alpha",
+   "origin": "v3.1",
+   "variants": {
+    "2x": {
+     "file": "btn_icon_rank@2x.png",
+     "width": 104,
+     "height": 104,
+     "bytes": 8266,
+     "scale": 2
+    },
+    "3x": {
+     "file": "btn_icon_rank@3x.png",
+     "width": 156,
+     "height": 156,
+     "bytes": 15826,
+     "scale": 3
+    }
+   }
+  },
+  {
+   "file": "btn_leather@2x.png",
+   "width": 440,
+   "height": 120,
+   "bytes": 32489,
+   "scale": 2,
+   "logical_size": [
+    220,
+    60
+   ],
+   "nine_slice_insets": [
+    52,
+    36,
+    52,
+    36
+   ],
+   "nine_slice_insets_pt": [
+    26,
+    18,
+    26,
+    18
+   ],
+   "nine_slice_insets_2x": [
+    52,
+    36,
+    52,
+    36
+   ],
+   "role": "主 CTA：免费领取 / 看短片 / 引导确认",
+   "png": "PNG8 pngquant, light dither, full alpha",
+   "origin": "v3.1",
+   "variants": {
+    "2x": {
+     "file": "btn_leather@2x.png",
+     "width": 440,
+     "height": 120,
+     "bytes": 32489,
+     "scale": 2,
+     "nine_slice_insets": [
+      52,
+      36,
+      52,
+      36
+     ]
+    },
+    "3x": {
+     "file": "btn_leather@3x.png",
+     "width": 660,
+     "height": 180,
+     "bytes": 65345,
+     "scale": 3,
+     "nine_slice_insets": [
+      78,
+      54,
+      78,
+      54
+     ]
+    }
+   }
+  },
+  {
+   "file": "guide_bubble@2x.png",
+   "width": 400,
+   "height": 128,
+   "bytes": 32311,
+   "scale": 2,
+   "logical_size": [
+    200,
+    64
+   ],
+   "nine_slice_insets": [
+    36,
+    32,
+    36,
+    32
+   ],
+   "nine_slice_insets_pt": [
+    18,
+    16,
+    18,
+    16
+   ],
+   "nine_slice_insets_2x": [
+    36,
+    32,
+    36,
+    32
+   ],
+   "role": "引导气泡 9-slice（文字运行时绘制）",
+   "png": "PNG8 pngquant, light dither, full alpha",
+   "origin": "v3.1",
+   "variants": {
+    "2x": {
+     "file": "guide_bubble@2x.png",
+     "width": 400,
+     "height": 128,
+     "bytes": 32311,
+     "scale": 2,
+     "nine_slice_insets": [
+      36,
+      32,
+      36,
+      32
+     ]
+    },
+    "3x": {
+     "file": "guide_bubble@3x.png",
+     "width": 600,
+     "height": 192,
+     "bytes": 62664,
+     "scale": 3,
+     "nine_slice_insets": [
+      54,
+      48,
+      54,
+      48
+     ]
+    }
+   }
+  },
+  {
+   "file": "guide_hand@2x.png",
+   "width": 128,
+   "height": 128,
+   "bytes": 2082,
+   "scale": 2,
+   "logical_size": [
+    64,
+    64
+   ],
+   "nine_slice_insets": null,
+   "nine_slice_insets_pt": null,
+   "nine_slice_insets_2x": null,
+   "role": "引导手势",
+   "png": "PNG8 pngquant, light dither, full alpha",
+   "origin": "v3.1",
+   "variants": {
+    "2x": {
+     "file": "guide_hand@2x.png",
+     "width": 128,
+     "height": 128,
+     "bytes": 2082,
+     "scale": 2
+    },
+    "3x": {
+     "file": "guide_hand@3x.png",
+     "width": 192,
+     "height": 192,
+     "bytes": 2926,
+     "scale": 3
+    }
+   }
+  },
+  {
+   "file": "guide_ring@2x.png",
+   "width": 192,
+   "height": 192,
+   "bytes": 4125,
+   "scale": 2,
+   "logical_size": [
+    96,
+    96
+   ],
+   "nine_slice_insets": null,
+   "nine_slice_insets_pt": null,
+   "nine_slice_insets_2x": null,
+   "role": "引导椭圆环（仅步骤1）",
+   "png": "PNG8 pngquant, light dither, full alpha",
+   "origin": "v3.1",
+   "variants": {
+    "2x": {
+     "file": "guide_ring@2x.png",
+     "width": 192,
+     "height": 192,
+     "bytes": 4125,
+     "scale": 2
+    },
+    "3x": {
+     "file": "guide_ring@3x.png",
+     "width": 288,
+     "height": 288,
+     "bytes": 6530,
+     "scale": 3
+    }
+   }
+  },
+  {
+   "file": "guide_tail@2x.png",
+   "width": 56,
+   "height": 36,
+   "bytes": 696,
+   "scale": 2,
+   "logical_size": [
+    28,
+    18
+   ],
+   "nine_slice_insets": null,
+   "nine_slice_insets_pt": null,
+   "nine_slice_insets_2x": null,
+   "role": "气泡尾巴",
+   "png": "PNG8 pngquant, light dither, full alpha",
+   "origin": "v3.1",
+   "variants": {
+    "2x": {
+     "file": "guide_tail@2x.png",
+     "width": 56,
+     "height": 36,
+     "bytes": 696,
+     "scale": 2
+    },
+    "3x": {
+     "file": "guide_tail@3x.png",
+     "width": 84,
+     "height": 54,
+     "bytes": 842,
+     "scale": 3
+    }
+   }
+  },
+  {
+   "file": "icon_check@2x.png",
+   "width": 34,
+   "height": 28,
+   "bytes": 732,
+   "scale": 2,
+   "logical_size": [
+    17,
+    14
+   ],
+   "nine_slice_insets": null,
+   "nine_slice_insets_pt": null,
+   "nine_slice_insets_2x": null,
+   "role": "风格列表勾选（v3c 裁到勾本身，17×14pt 框内不变形）",
+   "png": "PNG8 pngquant, light dither, full alpha",
+   "origin": "D_final→v3c",
+   "variants": {
+    "2x": {
+     "file": "icon_check@2x.png",
+     "width": 34,
+     "height": 28,
+     "bytes": 732,
+     "scale": 2
+    },
+    "3x": {
+     "file": "icon_check@3x.png",
+     "width": 51,
+     "height": 42,
+     "bytes": 1237,
+     "scale": 3
+    }
+   }
+  },
+  {
+   "file": "panel_vellum@2x.png",
+   "width": 600,
+   "height": 450,
+   "bytes": 94671,
+   "scale": 2,
+   "logical_size": [
+    300,
+    225
+   ],
+   "nine_slice_insets": [
+    80,
+    80,
+    80,
+    80
+   ],
+   "nine_slice_insets_pt": [
+    40,
+    40,
+    40,
+    40
+   ],
+   "nine_slice_insets_2x": [
+    80,
+    80,
+    80,
+    80
+   ],
+   "role": "树根用尽弹层 9-slice（仅 @2x）",
+   "png": "PNG8 pngquant, light dither, full alpha",
+   "origin": "v3.1",
+   "variants": {
+    "2x": {
+     "file": "panel_vellum@2x.png",
+     "width": 600,
+     "height": 450,
+     "bytes": 94671,
+     "scale": 2,
+     "nine_slice_insets": [
+      80,
+      80,
+      80,
+      80
+     ]
+    }
+   }
+  },
+  {
+   "file": "ribbon_madder@2x.png",
+   "width": 520,
+   "height": 104,
+   "bytes": 27777,
+   "scale": 2,
+   "logical_size": [
+    260,
+    52
+   ],
+   "nine_slice_insets": [
+    96,
+    24,
+    96,
+    24
+   ],
+   "nine_slice_insets_pt": [
+    48,
+    12,
+    48,
+    12
+   ],
+   "nine_slice_insets_2x": [
+    96,
+    24,
+    96,
+    24
+   ],
+   "role": "用尽面板飘带",
+   "png": "PNG8 pngquant, light dither, full alpha",
+   "origin": "v3.1",
+   "variants": {
+    "2x": {
+     "file": "ribbon_madder@2x.png",
+     "width": 520,
+     "height": 104,
+     "bytes": 27777,
+     "scale": 2,
+     "nine_slice_insets": [
+      96,
+      24,
+      96,
+      24
+     ]
+    },
+    "3x": {
+     "file": "ribbon_madder@3x.png",
+     "width": 780,
+     "height": 156,
+     "bytes": 50427,
+     "scale": 3,
+     "nine_slice_insets": [
+      144,
+      36,
+      144,
+      36
+     ]
+    }
+   }
+  },
+  {
+   "file": "roll_paper@2x.png",
+   "width": 320,
+   "height": 48,
+   "bytes": 11014,
+   "scale": 2,
+   "logical_size": [
+    160,
+    24
+   ],
+   "nine_slice_insets": [
+    32,
+    0,
+    32,
+    0
+   ],
+   "nine_slice_insets_pt": [
+    16,
+    0,
+    16,
+    0
+   ],
+   "nine_slice_insets_2x": [
+    32,
+    0,
+    32,
+    0
+   ],
+   "role": "卷筒 3-slice（端头随直径缩放）",
+   "png": "PNG8 pngquant, light dither, full alpha",
+   "origin": "D_final",
+   "variants": {
+    "2x": {
+     "file": "roll_paper@2x.png",
+     "width": 320,
+     "height": 48,
+     "bytes": 11014,
+     "scale": 2,
+     "nine_slice_insets": [
+      32,
+      0,
+      32,
+      0
+     ]
+    },
+    "3x": {
+     "file": "roll_paper@3x.png",
+     "width": 480,
+     "height": 72,
+     "bytes": 20401,
+     "scale": 3,
+     "nine_slice_insets": [
+      48,
+      0,
+      48,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "file": "roll_shadow@2x.png",
+   "width": 4,
+   "height": 32,
+   "bytes": 185,
+   "scale": 2,
+   "logical_size": [
+    2,
+    16
+   ],
+   "nine_slice_insets": null,
+   "nine_slice_insets_pt": null,
+   "nine_slice_insets_2x": null,
+   "role": "卷筒投影（横向拉伸）",
+   "png": "PNG8 pngquant, light dither, full alpha",
+   "origin": "D_final",
+   "variants": {
+    "2x": {
+     "file": "roll_shadow@2x.png",
+     "width": 4,
+     "height": 32,
+     "bytes": 185,
+     "scale": 2
+    },
+    "3x": {
+     "file": "roll_shadow@3x.png",
+     "width": 6,
+     "height": 48,
+     "bytes": 131,
+     "scale": 3
+    }
+   }
+  },
+  {
+   "file": "strip_parchment@2x.png",
+   "width": 480,
+   "height": 96,
+   "bytes": 22864,
+   "scale": 2,
+   "logical_size": [
+    240,
+    48
+   ],
+   "nine_slice_insets": [
+    32,
+    24,
+    32,
+    24
+   ],
+   "nine_slice_insets_pt": [
+    16,
+    12,
+    16,
+    12
+   ],
+   "nine_slice_insets_2x": [
+    32,
+    24,
+    32,
+    24
+   ],
+   "role": "次级条：风格行 / 选中风格行。v3：无大污渍；中段 208pt 横向无缝，可 stretch（≤2.2× 已验证）或 repeat-x",
+   "png": "PNG8 pngquant, light dither, full alpha",
+   "origin": "D_fix_v3",
+   "center_mode": "stretch_or_repeat_x",
+   "center_period_pt": 208,
+   "variants": {
+    "2x": {
+     "file": "strip_parchment@2x.png",
+     "width": 480,
+     "height": 96,
+     "bytes": 22864,
+     "scale": 2,
+     "nine_slice_insets": [
+      32,
+      24,
+      32,
+      24
+     ]
+    },
+    "3x": {
+     "file": "strip_parchment@3x.png",
+     "width": 720,
+     "height": 144,
+     "bytes": 46128,
+     "scale": 3,
+     "nine_slice_insets": [
+      48,
+      36,
+      48,
+      36
+     ]
+    }
+   }
+  },
+  {
+   "file": "row_self_highlight@2x.png",
+   "width": 686,
+   "height": 104,
+   "bytes": 1271,
+   "scale": 2,
+   "logical_size": [
+    343,
+    52
+   ],
+   "nine_slice_insets": [
+    24,
+    24,
+    24,
+    24
+   ],
+   "nine_slice_insets_pt": [
+    12,
+    12,
+    12,
+    12
+   ],
+   "nine_slice_insets_2x": [
+    24,
+    24,
+    24,
+    24
+   ],
+   "role": "柴榜固定页脚「我」行底（浅羊皮纸，6pt 圆角，半透明）。9-slice，宽=内容宽，高 52pt",
+   "png": "PNG8 pngquant, light dither, full alpha",
+   "origin": "D_fix_v3",
+   "variants": {
+    "2x": {
+     "file": "row_self_highlight@2x.png",
+     "width": 686,
+     "height": 104,
+     "bytes": 1271,
+     "scale": 2,
+     "nine_slice_insets": [
+      24,
+      24,
+      24,
+      24
+     ]
+    },
+    "3x": {
+     "file": "row_self_highlight@3x.png",
+     "width": 1029,
+     "height": 156,
+     "bytes": 1777,
+     "scale": 3,
+     "nine_slice_insets": [
+      36,
+      36,
+      36,
+      36
+     ]
+    }
+   }
+  },
+  {
+   "file": "tag_parchment@2x.png",
+   "width": 208,
+   "height": 80,
+   "bytes": 11956,
+   "scale": 2,
+   "logical_size": [
+    104,
+    40
+   ],
+   "nine_slice_insets": [
+    28,
+    24,
+    28,
+    24
+   ],
+   "nine_slice_insets_pt": [
+    14,
+    12,
+    14,
+    12
+   ],
+   "nine_slice_insets_2x": [
+    28,
+    24,
+    28,
+    24
+   ],
+   "role": "顶部小签常态（含 4pt 投影边）",
+   "png": "PNG8 pngquant, light dither, full alpha",
+   "origin": "D_final",
+   "variants": {
+    "2x": {
+     "file": "tag_parchment@2x.png",
+     "width": 208,
+     "height": 80,
+     "bytes": 11956,
+     "scale": 2,
+     "nine_slice_insets": [
+      28,
+      24,
+      28,
+      24
+     ]
+    },
+    "3x": {
+     "file": "tag_parchment@3x.png",
+     "width": 312,
+     "height": 120,
+     "bytes": 23082,
+     "scale": 3,
+     "nine_slice_insets": [
+      42,
+      36,
+      42,
+      36
+     ]
+    }
+   }
+  },
+  {
+   "file": "tag_madder@2x.png",
+   "width": 208,
+   "height": 80,
+   "bytes": 10211,
+   "scale": 2,
+   "logical_size": [
+    104,
+    40
+   ],
+   "nine_slice_insets": [
+    28,
+    24,
+    28,
+    24
+   ],
+   "nine_slice_insets_pt": [
+    14,
+    12,
+    14,
+    12
+   ],
+   "nine_slice_insets_2x": [
+    28,
+    24,
+    28,
+    24
+   ],
+   "role": "顶部小签用尽态",
+   "png": "PNG8 pngquant, light dither, full alpha",
+   "origin": "D_final",
+   "variants": {
+    "2x": {
+     "file": "tag_madder@2x.png",
+     "width": 208,
+     "height": 80,
+     "bytes": 10211,
+     "scale": 2,
+     "nine_slice_insets": [
+      28,
+      24,
+      28,
+      24
+     ]
+    },
+    "3x": {
+     "file": "tag_madder@3x.png",
+     "width": 312,
+     "height": 120,
+     "bytes": 18439,
+     "scale": 3,
+     "nine_slice_insets": [
+      42,
+      36,
+      42,
+      36
+     ]
+    }
+   }
+  },
+  {
+   "file": "paper_tile@2x.jpg",
+   "width": 512,
+   "height": 512,
+   "bytes": 22774,
+   "scale": 2,
+   "logical_size": [
+    256,
+    256
+   ],
+   "nine_slice_insets": null,
+   "nine_slice_insets_pt": null,
+   "nine_slice_insets_2x": null,
+   "role": "抽屉纸面无缝贴图（JPEG，无 alpha）。只允许 tile：1 texel = 1 设备像素（cell = 256pt），禁止 cover/拉伸，禁止 9-slice。@2x 512² / @3x 768²",
+   "png": "JPEG q88-90 4:4:4, no alpha",
+   "origin": "D_fix_v3",
+   "draw_mode": "tile_1to1",
+   "variants": {
+    "2x": {
+     "file": "paper_tile@2x.jpg",
+     "width": 512,
+     "height": 512,
+     "bytes": 22774,
+     "scale": 2
+    },
+    "3x": {
+     "file": "paper_tile@3x.jpg",
+     "width": 768,
+     "height": 768,
+     "bytes": 42724,
+     "scale": 3
+    }
+   }
+  },
+  {
+   "file": "tear_edge@2x.png",
+   "width": 1624,
+   "height": 64,
+   "bytes": 22506,
+   "scale": 2,
+   "logical_size": [
+    812,
+    32
+   ],
+   "nine_slice_insets": [
+    96,
+    0,
+    96,
+    0
+   ],
+   "nine_slice_insets_pt": [
+    48,
+    0,
+    48,
+    0
+   ],
+   "nine_slice_insets_2x": [
+    96,
+    0,
+    96,
+    0
+   ],
+   "role": "抽屉底撕口条 v3：顶部 14pt 渐隐→透明；纸纹取自 paper_tile 同尺度；硬边齿口 + 独立 3pt 柔影。仅左右 9-slice，中段 stretch；高度固定 32pt；tear_top = paperBottom − 16pt",
+   "png": "PNG8 pngquant, light dither, full alpha",
+   "origin": "D_fix_v3",
+   "center_mode": "stretch",
+   "overlap_pt": 16,
+   "variants": {
+    "2x": {
+     "file": "tear_edge@2x.png",
+     "width": 1624,
+     "height": 64,
+     "bytes": 22506,
+     "scale": 2,
+     "nine_slice_insets": [
+      96,
+      0,
+      96,
+      0
+     ]
+    },
+    "3x": {
+     "file": "tear_edge@3x.png",
+     "width": 2436,
+     "height": 96,
+     "bytes": 39787,
+     "scale": 3,
+     "nine_slice_insets": [
+      144,
+      0,
+      144,
+      0
+     ]
+    }
+   }
+  }
+ ],
+ "optional": [
+  "row_self_highlight (may also be drawn by code: rgba(252,243,220,0.5), 6pt radius, 1px rgba(110,80,45,0.32) border)"
+ ],
+ "changelog_vs_v2": [
+  "paper_tile: logical_size 512->256pt; @3x 1024²->768² (same 256pt cell as @2x); tile 1:1 only, never cover",
+  "tear_edge: 14pt top fade, paper_tile texture, crisp teeth + separate 3pt shadow; overlap 10->16pt",
+  "strip_parchment: no big stain; tileable 208pt middle",
+  "row_self_highlight: new (pinned 我 footer)"
+ ]
+}

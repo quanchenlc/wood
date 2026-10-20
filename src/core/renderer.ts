@@ -1,14 +1,23 @@
 import * as THREE from "three";
+import { IS_MINIGAME } from "../config/constants";
+import { isMinigame } from "../platform/env";
 
 export function createRenderer(): THREE.WebGLRenderer {
+  // 微信小游戏适配层会预先 wx.createCanvas() 并挂到 globalThis.canvas
+  const existing =
+    typeof globalThis !== "undefined" ? (globalThis.canvas as HTMLCanvasElement | undefined) : undefined;
+
   const renderer = new THREE.WebGLRenderer({
-    antialias: true,
+    canvas: existing,
+    // 小游戏关 MSAA：省带宽/显存，近处模型靠贴图观感
+    antialias: !IS_MINIGAME,
     powerPreference: "high-performance",
   });
 
-  // 高 DPI 屏上限制到 2x,再高对这个场景没有肉眼收益,只是白烧 GPU
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  // 初值；小游戏由 ScenePresenter 把屏缓冲提到设备 DPR，3D 走 ≤1.5 RT
+  const maxDpr = IS_MINIGAME ? 1.5 : 2;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxDpr));
+  renderer.setSize(window.innerWidth, window.innerHeight, false);
 
   renderer.shadowMap.enabled = true;
   // three r186 起移除了 PCFSoftShadowMap,统一用 PCF 配合 shadow.radius 做软化
@@ -18,7 +27,9 @@ export function createRenderer(): THREE.WebGLRenderer {
   renderer.toneMappingExposure = 1;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-  document.body.appendChild(renderer.domElement);
+  if (!existing && !isMinigame()) {
+    document.body.appendChild(renderer.domElement);
+  }
   return renderer;
 }
 

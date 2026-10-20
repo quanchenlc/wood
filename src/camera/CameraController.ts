@@ -20,12 +20,18 @@ export class CameraController {
 
   private pointerId: number | null = null;
   private lastX = 0;
+  private lastY = 0;
   private dragDistancePx = 0;
   /** 本次按下是否已经判定为拖拽 */
   private dragged = false;
+  /** HUD 占用指针（如柴榜列表滚动），禁止转视角与误点 */
+  private uiCapture = false;
   /** 有一次「干净的点击」待消费 */
   private pendingClick = false;
   private readonly lastClickNdc = new THREE.Vector2();
+  /** 最近一次干净点击的 CSS 像素坐标（HUD 命中用） */
+  private lastClickClientX = 0;
+  private lastClickClientY = 0;
 
   /** 光标的归一化设备坐标,射线拾取用 */
   readonly pointerNdc = new THREE.Vector2();
@@ -50,8 +56,10 @@ export class CameraController {
     if (this.pointerId !== null) return;
     this.pointerId = e.pointerId;
     this.lastX = e.clientX;
+    this.lastY = e.clientY;
     this.dragDistancePx = 0;
     this.dragged = false;
+    this.uiCapture = false;
     this.angularVelocity = 0;
     this.autoAzimuthTarget = null;
     this.dom.setPointerCapture(e.pointerId);
@@ -63,9 +71,16 @@ export class CameraController {
     if (e.pointerId !== this.pointerId) return;
 
     const dx = e.clientX - this.lastX;
+    const dy = e.clientY - this.lastY;
     this.lastX = e.clientX;
-    this.dragDistancePx += Math.abs(dx);
+    this.lastY = e.clientY;
+    this.dragDistancePx += Math.abs(dx) + Math.abs(dy);
     if (this.dragDistancePx > CAMERA.clickSlopPx) this.dragged = true;
+
+    if (this.uiCapture) {
+      this.angularVelocity = 0;
+      return;
+    }
 
     if (this.dragged) {
       const delta = (-dx / window.innerWidth) * CAMERA.dragSpeed;
@@ -78,13 +93,37 @@ export class CameraController {
   private onPointerUp = (e: PointerEvent) => {
     if (e.pointerId !== this.pointerId) return;
     this.pointerId = null;
+    const wasUi = this.uiCapture;
+    this.uiCapture = false;
     if (this.dom.hasPointerCapture(e.pointerId)) this.dom.releasePointerCapture(e.pointerId);
-    if (!this.dragged) {
+    if (!this.dragged && !wasUi) {
       this.pendingClick = true;
       this.lastClickNdc.copy(this.pointerNdc);
+      this.lastClickClientX = e.clientX;
+      this.lastClickClientY = e.clientY;
       this.angularVelocity = 0;
     }
   };
+
+  /** 柴榜等 HUD 手势占用本帧指针，相机不再跟手 */
+  capturePointerForUi() {
+    this.uiCapture = true;
+    this.dragged = true;
+    this.angularVelocity = 0;
+    this.pendingClick = false;
+  }
+
+  releaseUiCapture() {
+    this.uiCapture = false;
+  }
+
+  get isPointerDown(): boolean {
+    return this.pointerId !== null;
+  }
+
+  get lastPointerClient(): { x: number; y: number } {
+    return { x: this.lastX, y: this.lastY };
+  }
 
   private updateNdc(e: PointerEvent) {
     this.pointerNdc.set(
@@ -92,6 +131,16 @@ export class CameraController {
       -(e.clientY / window.innerHeight) * 2 + 1,
     );
     this.hasPointer = true;
+  }
+
+  peekClickClient(): { x: number; y: number } | null {
+    if (!this.pendingClick) return null;
+    return { x: this.lastClickClientX, y: this.lastClickClientY };
+  }
+
+  /** 丢弃本次点击（例如点到了 HUD 套装切换） */
+  cancelPendingClick() {
+    this.pendingClick = false;
   }
 
   /** 取走一次点击。取过就没了,保证一次点击只劈一刀。 */

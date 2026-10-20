@@ -7,7 +7,11 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:minigame": "node minigame/scripts/build.mjs",
+    "check:ip": "node scripts/check-ip-hashes.mjs",
+    "harness:minigame": "node minigame/harness/serve.mjs",
+    "capture:minigame": "node minigame/harness/capture.mjs"
   },
   "dependencies": {
     "@dgreenheck/three-pinata": "^2.0.1",
@@ -16,8 +20,11 @@
     "three": "^0.186.0"
   },
   "devDependencies": {
+    "@gltf-transform/cli": "4.5.1",
     "@types/three": "^0.186.0",
+    "esbuild": "^0.25.9",
     "puppeteer-core": "^25.11.0",
+    "sharp": "^0.34.4",
     "typescript": "^5.7.3",
     "vite": "^6.0.11"
   }

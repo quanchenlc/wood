@@ -1,0 +1,172 @@
+{
+ "asset": {
+  "version": "2.0",
+  "generator": "firewood set4 parchment (geometry from set1; textures remapped CC0 parchment)"
+ },
+ "scene": 0,
+ "scenes": [
+  {
+   "name": "AuxScene",
+   "nodes": [
+    0
+   ]
+  }
+ ],
+ "nodes": [
+  {
+   "name": "AuxScene",
+   "children": [
+    1
+   ]
+  },
+  {
+   "name": "stump_mesh",
+   "extras": {
+    "name": "stump_mesh"
+   },
+   "mesh": 0
+  }
+ ],
+ "meshes": [
+  {
+   "name": "stump_mesh",
+   "primitives": [
+    {
+     "attributes": {
+      "POSITION": 0,
+      "NORMAL": 1,
+      "TEXCOORD_0": 2,
+      "COLOR_0": 3
+     },
+     "indices": 4,
+     "material": 0,
+     "mode": 4
+    }
+   ]
+  }
+ ],
+ "materials": [
+  {
+   "name": "Mat.2",
+   "pbrMetallicRoughness": {
+    "baseColorTexture": {
+     "index": 0
+    },
+    "metallicFactor": 0,
+    "roughnessFactor": 0.97
+   },
+   "normalTexture": {
+    "index": 1,
+    "scale": 1
+   }
+  }
+ ],
+ "accessors": [
+  {
+   "bufferView": 0,
+   "componentType": 5126,
+   "count": 6556,
+   "type": "VEC3",
+   "min": [
+    -6,
+    -0.3700000047683716,
+    -6
+   ],
+   "max": [
+    6,
+    0,
+    6
+   ]
+  },
+  {
+   "bufferView": 1,
+   "componentType": 5126,
+   "count": 6556,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 2,
+   "componentType": 5126,
+   "count": 6556,
+   "type": "VEC2"
+  },
+  {
+   "bufferView": 3,
+   "componentType": 5126,
+   "count": 6556,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 4,
+   "componentType": 5123,
+   "count": 21654,
+   "type": "SCALAR"
+  }
+ ],
+ "bufferViews": [
+  {
+   "buffer": 0,
+   "byteOffset": 0,
+   "byteLength": 78672,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 78672,
+   "byteLength": 78672,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 157344,
+   "byteLength": 52448,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 209792,
+   "byteLength": 78672,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 288464,
+   "byteLength": 43308,
+   "target": 34963
+  }
+ ],
+ "buffers": [
+  {
+   "uri": "stump.bin",
+   "byteLength": 331772
+  }
+ ],
+ "images": [
+  {
+   "uri": "stump_baseColor.jpg",
+   "mimeType": "image/jpeg"
+  },
+  {
+   "uri": "stump_normal.png",
+   "mimeType": "image/png"
+  }
+ ],
+ "textures": [
+  {
+   "source": 0,
+   "sampler": 0
+  },
+  {
+   "source": 1,
+   "sampler": 0
+  }
+ ],
+ "samplers": [
+  {
+   "magFilter": 9729,
+   "minFilter": 9987,
+   "wrapS": 33071,
+   "wrapT": 33071
+  }
+ ]
+}

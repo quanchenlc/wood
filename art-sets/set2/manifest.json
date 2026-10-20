@@ -1,0 +1,117 @@
+{
+  "id": "set2",
+  "label": "卡通低多边形",
+  "version": 1,
+  "files": {
+    "axe": "axe.gltf",
+    "stump": "stump.gltf",
+    "stumpLod": "stump_lod.gltf",
+    "barkColor": "outsidebark.jpg",
+    "barkNormal": "outsidebark_n.png",
+    "endColor": "top.jpg",
+    "endNormal": "top_n.png",
+    "innerColor": "insidegrain.jpg",
+    "innerNormal": "insidegrain_n.png"
+  },
+  "sky": "#9fdcff",
+  "fog": "#9fdcff",
+  "ground": "#83cb70",
+  "grass": {
+    "deep": [
+      0.2,
+      0.5,
+      0.16
+    ],
+    "fresh": [
+      0.45,
+      0.8,
+      0.3
+    ],
+    "dry": [
+      0.62,
+      0.8,
+      0.3
+    ]
+  },
+  "styleDescription": "卡通低多边形：flat-shaded 低面数，高饱和糖果色；树皮/年轮/劈开面为纯色色带，法线均为 16px 平面 PNG 占位；薄荷绿草地+小花蘑菇；粗壮卡通斧（红斧头+银刃+青色握把）。包体最小。",
+  "triangles": 3013,
+  "trianglesByFile": {
+    "axe": 282,
+    "stump": 2675,
+    "stumpLod": 56
+  },
+  "totalBytes": 512719,
+  "zipBytes": 165216,
+  "bytes": {
+    "axe.bin": 27932,
+    "axe.gltf": 2439,
+    "axe_baseColor.jpg": 3583,
+    "axe_orm.png": 163,
+    "insidegrain.jpg": 15012,
+    "insidegrain_n.png": 104,
+    "outsidebark.jpg": 13529,
+    "outsidebark_n.png": 104,
+    "stump.bin": 369152,
+    "stump.gltf": 2344,
+    "stump_baseColor.jpg": 49405,
+    "stump_lod.bin": 7728,
+    "stump_lod.gltf": 2398,
+    "stump_normal.png": 104,
+    "top.jpg": 18618,
+    "top_n.png": 104
+  },
+  "alignment": {
+    "stumpTopY": [
+      0,
+      0
+    ],
+    "stumpTopRadiusMean": 0.288,
+    "groundYmedian": -0.3166,
+    "axeBBox": [
+      [
+        -0.162,
+        -0.024,
+        -0.0285
+      ],
+      [
+        0.059,
+        1.098,
+        0.0342
+      ]
+    ],
+    "reference": {
+      "stumpTopY": 0.0026,
+      "stumpTopRadiusMean": 0.284,
+      "groundYmedian": -0.3249,
+      "axeBBox": [
+        [
+          -0.162,
+          -0.003,
+          -0.02
+        ],
+        [
+          0.059,
+          1.098,
+          0.0314
+        ]
+      ]
+    }
+  },
+  "validation": {
+    "axe.gltf": {
+      "errors": 0,
+      "warnings": 0,
+      "threeGLTFLoader": "ok"
+    },
+    "stump.gltf": {
+      "errors": 0,
+      "warnings": 1,
+      "threeGLTFLoader": "ok"
+    },
+    "stump_lod.gltf": {
+      "errors": 0,
+      "warnings": 1,
+      "threeGLTFLoader": "ok"
+    }
+  }
+}

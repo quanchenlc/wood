@@ -5,10 +5,19 @@
  * 所以下面所有尺寸都写成 `<英寸数> * INCH` 的形式,改起来直观。
  */
 
+import { isMinigame } from "../platform/env";
+
 export const INCH = 0.0254;
 export const FOOT = 0.3048;
 
-export const IS_MOBILE = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+/** 小游戏 UA 不含 Mobi，一律按移动端档；Web 仍靠 UA 判断 */
+export const IS_MINIGAME =
+  (typeof import.meta !== "undefined" &&
+    import.meta.env &&
+    import.meta.env.MODE === "minigame") ||
+  isMinigame();
+export const IS_MOBILE =
+  IS_MINIGAME || /Mobi|Android|iPhone|iPad|WeChat MiniGame/i.test(navigator.userAgent);
 
 /** 地面高度。树桩坐在 y=0,草和落地的柴火以此为基准。 */
 export const GROUND_Y = -0.33;
@@ -41,13 +50,17 @@ export const LIGHTING = {
   sunAzimuth: (120 * Math.PI) / 180,
   sunElevation: (30 * Math.PI) / 180,
   sunDistance: 8,
-  shadowMapSize: IS_MOBILE ? 2048 : 4096,
-  /** 正交阴影相机半径,刚好罩住树桩 + 柴堆 */
-  shadowExtent: 6,
+  /**
+   * 阴影图尺寸。小游戏 512：罩住近处树桩+柴即可；
+   * 远景树桩 LOD 不再 castShadow，省填充。
+   */
+  shadowMapSize: IS_MINIGAME ? 512 : IS_MOBILE ? 2048 : 4096,
+  /** 正交阴影相机半径；小游戏收窄到近场 */
+  shadowExtent: IS_MINIGAME ? 3.5 : 6,
   shadowNear: 0.1,
-  shadowFar: 50,
+  shadowFar: IS_MINIGAME ? 24 : 50,
   shadowNormalBias: 0.005,
-  shadowRadius: 4,
+  shadowRadius: IS_MINIGAME ? 2 : 4,
   shadowBlurSamples: 8,
 } as const;
 
@@ -93,17 +106,21 @@ export const PILE = {
 } as const;
 
 export const GRASS = {
-  count: IS_MOBILE ? 4000 : 10000,
+  /**
+   * 近场草优先。小游戏：少而密靠树桩；Web 手机 4k；桌面 10k。
+   * 远草用更高 falloff + 更小 outerRadius 砍掉。
+   */
+  count: IS_MINIGAME ? 1200 : IS_MOBILE ? 4000 : 10000,
   /** 树桩底座半径以内不长草 */
   innerRadius: 12 * INCH + 0.01,
-  outerRadius: 10 * FOOT,
+  outerRadius: IS_MINIGAME ? 5.5 * FOOT : 10 * FOOT,
   bladeWidth: 0.008,
   minHeight: 0.05,
   maxHeight: 0.1,
   /** 草叶自然弯曲量 */
   bend: 0.02,
   /** 密度向外衰减指数,越大越集中在中心 */
-  densityFalloff: 1.5,
+  densityFalloff: IS_MINIGAME ? 2.4 : 1.5,
   windStrength: 0.012,
   windSpeed: 1.2,
 } as const;

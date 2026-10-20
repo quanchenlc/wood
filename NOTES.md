@@ -12,27 +12,24 @@ node scripts/shot.mjs /tmp/a.png   # 无头截图自检,自带 vite,跑完自己
 
 ## 这个项目是怎么来的
 
-它参考了 [screen.toys/firewood](https://screen.toys/firewood/) 的技术方案。做法是
-把那个站点的打包产物当技术文档读 —— 搞清楚它用了哪些库、怎么把 3D 码垛问题降成
-2D、程序化原木怎么生成 —— 然后**从零写一套自己的实现**,而不是反混淆它的代码。
+交互与技术思路参考了公开可观察的劈柴玩法（含历史 demo），**全部代码与运行时素材
+从零实现 / 换用可授权资源**。0.4.0 `ip-clean` 起，仓库内不再包含任何从
+screen.toys/firewood 拷贝的二进制素材。
 
 具体边界:
 
-- 算法和架构是公开的技术方案,学过来自己实现没有问题
-- 所有着色器都是自己写的,没有照搬对方的 GLSL 源码
-- 第三方库全部 `npm install` 装 MIT 原版,一行都没有逆向
-- `site/` 下是抓取的参考素材,**仅供本地学习期间让项目跑起来**,不进构建产物。
-  要发布请换成自己的素材,见下文
+- 算法和架构自行重写（切割、码垛、经济系统、羊皮纸 HUD）
+- 着色器、斧头挥砍关键帧、音效均为本项目原创或合成
+- 第三方库全部 `npm install` 装 MIT 原版
+- 贴图 / 树桩来源见 [CREDITS.md](CREDITS.md)（CC0 + 程序生成）
 
 ## 素材怎么换
 
-全项目只有 [src/config/assets.ts](src/config/assets.ts) 一个地方引用素材路径。
+全项目只有 [src/config/assets.ts](src/config/assets.ts) 一个地方引用默认路径；
+艺术套装与木桩 A/B 变体另有 manifest / `stump-a|b/`。
 
-开发时 [vite.config.ts](vite.config.ts) 里的中间件把 `/assets` 和 `/basis` 映射到
-`site/screen.toys/firewood/` 下的参考素材;这个中间件 `apply: "serve"`,构建时不生效。
-
-换素材:把同名文件放进 `public/assets/`(basis transcoder 放 `public/basis/`),
-或者直接改 `assets.ts` 里的路径。代码其余部分一行都不用动。
+换素材:把同名文件放进 `public/assets/`，或改 `assets.ts`。发版前跑
+`node scripts/check-ip-hashes.mjs`，禁止重新引入已记录的旧哈希。
 
 树桩模型缺失时会退化成一个程序化圆台,斧头模型缺失时直接不显示斧头但游戏照常能玩,
 音效缺失就静音 —— 不会白屏。
